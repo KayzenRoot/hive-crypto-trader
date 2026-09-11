@@ -137,3 +137,9 @@ Status: APPROVED_FOR_DISCOVERY
 Date: 2026-09-11
 
 Decision: V1 will enable live trading only through MEXC Futures. Core HCT domains must use an HCT-owned Exchange Abstraction & Adapter Framework so future Binance and other exchanges can be integrated without rewriting strategy/risk/UI cores. Each venue retains explicit capability, order-semantics, authentication, quota and reconciliation behavior and requires independent HIGH_ASSURANCE production promotion.
+
+## HCT-DEC-0024 — Strategy Builder uses a typed nodal graph as the primary visual authoring model
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: the primary custom-strategy authoring experience will use a ComfyUI-like nodal workflow paradigm adapted to trading. Users compose typed market/indicator/logic/timeframe/decision/position-management nodes and connect compatible ports. The graph compiles into the canonical declarative Strategy Definition; UI layout is non-semantic. Backend graph validation, static analysis, immutable version/hash, sandboxing, reproducible replay and governed promotion remain mandatory. Research technologies including graph redundancy analysis, sensitivity heatmaps, node attribution, counterfactual debugging, strategy fingerprints, shadow twins and graph optimization may be developed, but none may silently modify or self-promote live strategies.
