@@ -1,40 +1,41 @@
 # Checkpoint
 
-Checkpoint ID: `HCT-CP-0011`
-Status: `PRODUCT_DISCOVERY_ROUND_09_APPROVED`
+Checkpoint ID: `HCT-CP-0012`
+Status: `PRODUCT_DISCOVERY_ROUND_10_APPROVED`
 Canonical branch: `main`
-Last canonical planning merge: `e76ba779bc4ebc49c121268ae1cd14a89bbf0a0f` (`HCT-PLAN-0001-R09`)
+Last canonical planning merge: `60d7ea2bd6df3d21067e99073237afe068b32ce0` (`HCT-PLAN-0001-R10`)
 Risk class: `HIGH_ASSURANCE`
 Functional product planning: `IN_PROGRESS`
 Implementation authorization: `NOT_GRANTED`
 
-## Approved through R09
-- R01–R08 foundations remain approved and authoritative.
-- R09 formalizes the realtime trading cockpit, safety communication, accessibility and design-system semantics as part of the operational safety boundary.
-- Frontend is explicitly non-authoritative and consumes versioned Canonical UI State Envelopes with tenant/account/environment, generation, source, freshness and trading-authority context.
-- Realtime UI distinguishes `LIVE_TRUSTED`, `LIVE_DEGRADED`, `STALE`, `DISCONNECTED`, `RESYNCING` and `UNKNOWN`; stale/unknown data cannot look healthy/live.
-- R05 authority states deterministically restrict exposure actions in the UI: `ALLOW_NEW_EXPOSURE`, `DEGRADED_NEW_EXPOSURE`, `NO_NEW_EXPOSURE`, `REDUCE_ONLY`, `RECONCILIATION_ONLY`, `EMERGENCY`.
-- Order acknowledgement, fill, cancellation and uncertain/reconciliation states remain distinct; no optimistic money-state completion is allowed.
-- Protection confidence, reserved risk, multi-horizon survival and Operational Margin Reserve visually outrank PnL/opportunity decoration when degraded.
-- Current account/risk truth is separated from projected post-trade tier/MMR/leverage/liquidation state.
-- `LIVE`, `PAPER`, `SHADOW`, `REPLAY` and research/backtest contexts are unmistakable and capability-separated.
-- Money-affecting surfaces persist tenant, exchange-account and environment context; switching context invalidates unsafe transient/cached state before new actions.
-- Dangerous actions expose exact scope/consequence, applicable step-up/reason/blast radius and authoritative completion evidence.
-- Emergency/blackout UX preserves the distinction between stopping new exposure and maintaining protection, controlled reduction and reconciliation.
-- Admin/support/elevation/break-glass identity remains persistent and attributable; tenant-sensitive browser/cache/export/telemetry paths inherit R08 isolation.
-- Decision age/expiry, reconnect/resync proof and client lag are first-class UI integrity concerns.
-- Critical states are accessible without relying only on color/motion/sound and use keyboard/focus/assistive-technology/reduced-motion semantics.
-- P0/P1 capital-safety/state-certainty communication pre-empts lower-priority PnL/opportunity/decorative effects.
-- Chart overlays preserve executed/confirmed/provisional/hypothetical provenance; Brain dimensions remain separated; agent agreement never appears authoritative over hard gates.
-- Strategy Builder uses typed validation, immutable published/active versions and governed lifecycle states.
-- WCAG 2.2-oriented verification, semantic design tokens, safe unknown/loading/offline behavior, locale/time semantics, desktop-first authority and restricted mobile scope are approved planning requirements.
+## Approved through R10
+- R01–R09 foundations remain approved and authoritative.
+- R10 formalizes observability as a governed evidence plane that never replaces exchange/OMS/Risk/Security truth.
+- Structured telemetry carries versioned operational context for service/environment/release, correlation, generation, time, authority and classification where applicable.
+- Trading decisions/outcomes can be causally traced from market state through Brain, Safety/Risk, Risk Reservation, Execution, exchange evidence, OMS, protection and reconciliation without replacing immutable domain IDs.
+- Telemetry is tenant-safe and secret-safe by construction; raw credentials/signing/tokens/prohibited context are never normal telemetry.
+- High-value audit is append-only, attributable and supports deployment-appropriate tamper evidence; corrections append rather than rewrite history.
+- SLO/SLI planning prioritizes safety/correctness/freshness/protection/reconciliation over raw uptime.
+- Safe `NO_NEW_EXPOSURE`, `REDUCE_ONLY` or `RECONCILIATION_ONLY` behavior can be correct operation rather than availability failure.
+- Protection establishment/verification, reconciliation coverage/conflict age, uncertain-order age and recovery convergence are first-class SLIs.
+- Incident severity is trading-aware: money-at-risk, state certainty, tenant/security blast radius, protection/reduction capability and recoverability are first-class inputs.
+- Incident lifecycle preserves safe operating mode, evidence, reconciliation and progressive restore; automation is bounded and never receives generic trading authority.
+- Security incidents integrate credential/session/cross-tenant/supply-chain containment with trading-safe recovery proof.
+- Compliance-readiness uses a versioned Control Evidence Map and never equates framework mapping with certification/legal compliance.
+- FinOps cannot disable minimum Safety/Risk/protection/reconciliation/security/audit/incident evidence; cost optimization suppresses optional/research work first.
+- Cardinality, sampling, retention and observability-pipeline degradation are governed resources; observability itself is monitored.
+- Alerting, runbooks, on-call/escalation and post-incident reviews are lifecycle-managed operational artifacts.
+- Release/config/model/agent observability is version-aware without logging prohibited secrets/private reasoning.
+- Cost truth distinguishes estimates, provider usage, statements, invoices and corrections; FOCUS-compatible normalization may be used where applicable.
+- Unit economics and infrastructure migration decisions are driven by measured reliability/security/capacity economics, not customer count alone.
+- `docs/06-test-benchmark-plan.md` now reflects the full HIGH_ASSURANCE product validation surface through R10.
 
-## R09 audit
-- Final audit: `docs/82-r09-final-audit.md`
+## R10 audit
+- Final audit: `docs/89-r10-final-audit.md`
 - Verdict: `APPROVED`
-- Acceptance gates: 30/30 PASS
-- Initial gaps: 38; unresolved CRITICAL/HIGH gaps: 0
-- Decisions Ledger consolidated through `HCT-DEC-0117`
+- Acceptance gates: 36/36 PASS
+- Initial gaps: 44; unresolved CRITICAL/HIGH gaps: 0
+- Decisions Ledger consolidated through `HCT-DEC-0131`
 
 ## Completed increments
 - `HCT-BOOT-0001`
@@ -47,14 +48,15 @@ Implementation authorization: `NOT_GRANTED`
 - `HCT-PLAN-0001-R07`
 - `HCT-PLAN-0001-R08`
 - `HCT-PLAN-0001-R09`
+- `HCT-PLAN-0001-R10`
 
 ## Current blockers
 None for continuing structured planning. Implementation, production secrets/credentials, deployment, limited-live and real-money trading remain not granted.
 
 ## Next necessary action
-Continue `HCT-PLAN-0001` with formal `HCT-PLAN-0001-R10`: observability, audit, incident response, compliance-readiness and FinOps discovery.
+Continue `HCT-PLAN-0001` with formal `HCT-PLAN-0001-R11`: integration review, dependency graph, V1/IMPORTANT/FUTURE classification reconciliation and cross-round contradiction audit across R01–R10.
 
-Use approved R03–R09 operational, security, evidence and UI-observability contracts as pre-discovery inputs and perform a formal R10-specific gap audit.
+R11 must verify that the complete planned system composes safely and identify/fix cross-module contradictions before the R12 planning-freeze candidate. R11 is not an authorization to expand scope casually.
 
 ## Resume rule
 A new chat must recover from the machine-readable planning checkpoint and repository source hierarchy, validate Git state, and resume only from `next_necessary_action`.
