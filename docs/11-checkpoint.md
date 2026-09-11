@@ -1,71 +1,64 @@
 # Checkpoint
 
-Checkpoint ID: `HCT-CP-0005`
-Status: `PRODUCT_DISCOVERY_ROUND_03_APPROVED`
+Checkpoint ID: `HCT-CP-0006`
+Status: `PRODUCT_DISCOVERY_ROUND_04_APPROVED`
 Canonical branch: `main`
-Last canonical planning merge: `26045a553f8c84b5c88a1eb0ea514ea361ad2422` (`HCT-PLAN-0001-R03`)
+Last canonical planning merge: `7932b56cfeb2f6d191a63a29bcc00a632dd02a52` (`HCT-PLAN-0001-R04`)
 Risk class: `HIGH_ASSURANCE`
 Functional product planning: `IN_PROGRESS`
 Implementation authorization: `NOT_GRANTED`
 
 ## Frozen governance foundation
-- Hive Plan-style source hierarchy and governance are active.
-- GitHub is canonical truth; conversation memory is advisory only.
-- Cross-chat resume uses machine-readable workstream checkpoints and Git validation.
-- Work Orders use stable HCT IDs across prompts, branches, PRs, evidence, corrections and checkpoints.
-- Review verdicts are APPROVED / CORRECTION REQUIRED / BLOCKED.
-- Financial/trading, signing/custody, privileged auth, security-critical and irreversible actions default to HIGH_ASSURANCE.
+- GitHub remains canonical truth; chat memory is advisory.
+- Cross-chat resume uses machine-readable checkpoints and Git validation.
+- Financial/trading and other safety-critical work remains `HIGH_ASSURANCE`.
+- Review verdicts remain exactly `APPROVED`, `CORRECTION REQUIRED` or `BLOCKED`.
 
-## Approved R01–R02 foundation
-- MEXC Futures is the V1 live-trading exchange target; the core remains multi-exchange-ready.
+## Approved product foundation through R03
+- MEXC Futures is the V1 live-trading venue target; core architecture remains multi-exchange-ready.
 - Current planning module map contains 42 modules.
-- Strategy Engine, default strategy catalog, user Strategy Builder, typed nodal strategy graph and Strategy Ecology/Router are first-class requirements.
-- Institutional-grade agents and Agentic Copilot are governed by structured evidence and cannot directly bypass deterministic exchange authority.
-- HCT Intelligence Brain uses calibrated evidence fusion, abstention/selective decision, uncertainty and expert reliability while remaining subordinate to Safety/Risk/Policy/Execution.
-- Temporal Market Memory requires point-in-time correctness, leakage protection, drift controls and governed learning.
-- Microstructure/order-flow/liquidity/breadth/cross-market intelligence is an evidence domain requiring incremental-value proof.
-- Simulation/Replay/Paper/Shadow/Promotion Laboratory is required for point-in-time proof, realistic frictions and live-parity validation.
-- `Signals` is a first-class workspace; Telegram signal rooms are a governed publishing path separate from exchange execution.
-- Frontend/backend separation, English-first i18n (`en-US`, `pt-BR`, `es`) and free-first bootstrap infrastructure remain approved planning constraints.
+- Strategy, Intelligence Brain, institutional agents, Temporal Market Memory, microstructure intelligence, Telegram Signals, Simulation/Replay/Shadow, deterministic Safety/Risk and free-first infrastructure remain approved planning foundations.
+- R03 institutional risk contracts include dynamic venue risk rules, expiring `RiskSnapshot`, deterministic Risk Reservation Ledger, cross-margin contagion analysis, multi-horizon survival budgets, protected Operational Margin Reserve, protection-failure exposure, add/pyramiding reapproval, collateral stress and extreme-venue risk.
 
-## Approved R03 institutional risk foundation
-- Dynamic venue risk tiers, maintenance-margin rates, leverage ceilings, position limits, margin modes and liquidation semantics are runtime state, not permanent constants.
-- Every exposure-increasing action requires an immutable/versioned and expiring `RiskSnapshot` containing current and projected post-trade state.
-- Risk approval is based on projected post-fill state, including tier transition, MMR, leverage legality and liquidation corridor.
-- A deterministic Risk Reservation Ledger reserves risk before order submit and conserves it across pending, partial, cancel-pending and uncertain order states until authoritative resolution.
-- Cross margin is treated as shared collateral and requires deterministic contagion analysis across relevant positions and open-order margin.
-- Risk budgets span trade, intraday/session, daily, weekly, monthly and account-survival horizons; longer-horizon exhaustion can veto shorter-horizon opportunity capacity.
-- Tail/Expected Shortfall-style models and stress surfaces may only tighten deterministic hard limits.
-- Operational Margin Reserve is protected from ordinary opportunity sizing.
-- Protection Failure Exposure explicitly accounts for gap-through-stop, rejection/cancellation, partial coverage, stale protective quantity, adverse fills and delayed/uncertain protection.
-- Every ADD/pyramiding action is a fresh exposure-increasing decision with a new RiskSnapshot/reservation; martingale or loss-recovery escalation is prohibited by default.
-- Collateral/stablecoin concentration can reduce Effective Risk Capital through governed stress haircuts.
-- Partial/tiered liquidation and ADL/extreme venue mechanics are explicit risk inputs where observable, with conservative UNKNOWN degradation otherwise.
-- User risk presets are bounded policy bundles under platform hard ceilings and never override Safety/Risk authority.
-- Risk explainability must expose monetary/open/reserved risk, notional, leverage, margin mode, tier/MMR, liquidation corridor, survival/tail state, collateral quality, protection confidence and exact veto/reduction reasons.
+## Approved R04 execution / OMS / reconciliation foundation
+- Execution uses distinct immutable identities for Order Intent, Execution Plan, Execution Command, external/client OID, exchange order ID, fill ID and mutation lineage.
+- Every state-changing command is bound to still-current Safety, RiskSnapshot/Risk Reservation and Session Policy authority through a deterministic command-authorization contract.
+- REST/API acknowledgement never equals fill truth; HCT uses an explicit evidence hierarchy from request send through exchange order evidence, fills, position reconciliation and protection verification.
+- OMS retains immutable source events and handles duplicate, late and out-of-order evidence without silent state regression.
+- One authoritative fill identity may affect position, fees and risk accounting at most once.
+- Timeout/ambiguous submission, cancel-pending and replace-pending remain uncertain until authoritatively reconciled; blind retries are prohibited.
+- Cancel/replace races are modeled explicitly, including fills while cancellation/replacement is in flight.
+- REDUCE/CLOSE/PROTECT actions are position-mode aware and may not silently create, increase or reverse opposite exposure.
+- Required stop/TP/trailing protection is modeled as a dependency of actual filled exposure and must be resized/reverified as exposure changes.
+- Reconciliation uses explicit watermarks/coverage and a persisted conflict ledger rather than a single boolean synchronized flag.
+- Restart/failover requires a Recovery Completeness Proof before normal new exposure resumes.
+- R03 Risk Reservation accounting is conserved through submission, partial fills, cancellation, replacement, timeout, uncertainty and final reconciliation.
+- Signed-command clock integrity is monitored; protection/reconciliation/emergency traffic outranks new-exposure/research traffic under finite quotas.
+- Execution fees, order tactics, position modes, STP and private-event schemas are versioned external dependencies, not permanent constants.
+- R04-specific accepted requirements are captured in `docs/48-r04-execution-requirements-addendum.md` pending planning-freeze consolidation into the master requirements.
 
-## R03 audit
-- Final audit artifact: `docs/43-r03-final-audit.md`.
+## R04 audit
+- Final audit artifact: `docs/49-r04-final-audit.md`.
 - Verdict: `APPROVED`.
-- Acceptance gates passed: 14/14.
-- Initial gap audit identified 18 institutional gaps; all are now `RESOLVED_IN_PLANNING`.
-- No unresolved CRITICAL/HIGH R03 planning defect remains.
-- Decisions Ledger is consolidated through `HCT-DEC-0049`.
-- Implementation proof remains deferred to future HIGH_ASSURANCE Work Orders/tests/replay/preflight.
+- Acceptance gates passed: 19/19.
+- Initial R04 gap audit identified 22 execution/OMS/reconciliation gaps; all have canonical planning resolutions.
+- No unresolved CRITICAL/HIGH R04 planning defect remains.
+- Decisions Ledger is consolidated through `HCT-DEC-0057`.
 
 ## Completed increments
 - `HCT-BOOT-0001` — governance/checkpoint/handoff/prompt contract bootstrap.
 - `HCT-PLAN-0001-R01` — market-universe/scanner and product-discovery foundation.
-- `HCT-PLAN-0001-R02` — strategy/signal/indicator architecture and classified pre-discovery extensions; audited and merged.
-- `HCT-PLAN-0001-R03` — institutional Safety/Risk/leverage/position-sizing discovery; audited and merged via PR #7.
+- `HCT-PLAN-0001-R02` — strategy/signal/indicator architecture and classified pre-discovery extensions.
+- `HCT-PLAN-0001-R03` — institutional Safety/Risk/leverage/position-sizing discovery.
+- `HCT-PLAN-0001-R04` — HIGH_ASSURANCE Execution, OMS and reconciliation discovery; audited and merged via PR #9.
 
 ## Current blockers
-None for continuing structured planning. Production implementation and live trading remain blocked because planning is incomplete and implementation authorization has not been granted.
+None for continuing structured planning. Production implementation, production credentials and live trading remain blocked because planning is incomplete and implementation authorization has not been granted.
 
 ## Next necessary action
-Continue `HCT-PLAN-0001` with formal `HCT-PLAN-0001-R04`: Execution, OMS and reconciliation discovery.
+Continue `HCT-PLAN-0001` with formal `HCT-PLAN-0001-R05`: realtime market data, API quota/WebSocket, caching, backpressure and resilience discovery.
 
-Use `docs/29-execution-intelligence-oms-reconciliation-and-recovery.md` as pre-discovery input, perform a formal R04-specific gap audit, and preserve the R03 RiskSnapshot/Risk Reservation contracts as upstream authority constraints.
+Use `docs/30-realtime-market-data-intelligence-and-streaming-rd.md`, `docs/31-realtime-performance-benchmark-and-technology-selection.md`, `docs/32-bootstrap-free-infrastructure-and-scale-migration.md` and `docs/33-microstructure-orderflow-liquidity-breadth-and-anomaly-intelligence.md` as pre-discovery inputs and perform a formal R05-specific gap audit.
 
 Do not generate an implementation Work Order or authorize live trading yet.
 
