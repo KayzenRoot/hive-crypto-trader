@@ -1,38 +1,40 @@
 # Checkpoint
 
-Checkpoint ID: `HCT-CP-0010`
-Status: `PRODUCT_DISCOVERY_ROUND_08_APPROVED`
+Checkpoint ID: `HCT-CP-0011`
+Status: `PRODUCT_DISCOVERY_ROUND_09_APPROVED`
 Canonical branch: `main`
-Last canonical planning merge: `cc09c5c22c03b0671fe3c2044f0dbd2c34eacd00` (`HCT-PLAN-0001-R08`)
+Last canonical planning merge: `e76ba779bc4ebc49c121268ae1cd14a89bbf0a0f` (`HCT-PLAN-0001-R09`)
 Risk class: `HIGH_ASSURANCE`
 Functional product planning: `IN_PROGRESS`
 Implementation authorization: `NOT_GRANTED`
 
-## Approved through R08
-- R01–R07 foundations remain approved and authoritative.
-- R08 formalizes multi-tenant isolation, security, exchange credential/secrets boundaries and commercialization readiness.
-- Every protected operation derives a server-authenticated SecurityContext; client tenant/resource IDs never prove authority by themselves.
-- Tenant isolation spans object authorization, DB/pools, cache, queues/events, workers, private streams and trading state.
-- Risk/Execution/OMS/protection/reconciliation bind to canonical tenant–exchange-account–credential identity.
-- Raw exchange credentials live only behind backend SecretStore/Vault and cryptographic key hierarchy/lifecycle controls.
-- Raw secrets are never normal browser, logging, tracing, support, CI or model/agent data.
-- Human authentication, recovery and sessions are assurance-aware and revocable; privileged actions require stronger step-up.
-- Workloads, humans, CI/CD, admin and support have distinct least-privileged identities.
-- Admin/break-glass/support access is purpose/time/scope limited and permanently attributable to the real actor.
-- Harness controls are tenant/account/capability scoped; commercial entitlement never equals trading/security authorization.
-- Tenant quotas/noisy-neighbor controls preserve platform safety reserves before optional tenant workloads.
-- Telemetry/audit, data classification/encryption, backups, offboarding and RAG/index deletion preserve tenant isolation.
-- Production/non-production and CI/runtime trust boundaries are separated.
-- Incident response and DR are tenant-scoped and trading-aware, using restrictive recovery before new exposure resumes.
-- Commercial billing lifecycle and regional/exchange eligibility cannot strand protected exposure or silently create live authority.
-- Broad commercialization requires adversarial multi-tenant testing and an auditable vulnerability/supply-chain lifecycle.
+## Approved through R09
+- R01–R08 foundations remain approved and authoritative.
+- R09 formalizes the realtime trading cockpit, safety communication, accessibility and design-system semantics as part of the operational safety boundary.
+- Frontend is explicitly non-authoritative and consumes versioned Canonical UI State Envelopes with tenant/account/environment, generation, source, freshness and trading-authority context.
+- Realtime UI distinguishes `LIVE_TRUSTED`, `LIVE_DEGRADED`, `STALE`, `DISCONNECTED`, `RESYNCING` and `UNKNOWN`; stale/unknown data cannot look healthy/live.
+- R05 authority states deterministically restrict exposure actions in the UI: `ALLOW_NEW_EXPOSURE`, `DEGRADED_NEW_EXPOSURE`, `NO_NEW_EXPOSURE`, `REDUCE_ONLY`, `RECONCILIATION_ONLY`, `EMERGENCY`.
+- Order acknowledgement, fill, cancellation and uncertain/reconciliation states remain distinct; no optimistic money-state completion is allowed.
+- Protection confidence, reserved risk, multi-horizon survival and Operational Margin Reserve visually outrank PnL/opportunity decoration when degraded.
+- Current account/risk truth is separated from projected post-trade tier/MMR/leverage/liquidation state.
+- `LIVE`, `PAPER`, `SHADOW`, `REPLAY` and research/backtest contexts are unmistakable and capability-separated.
+- Money-affecting surfaces persist tenant, exchange-account and environment context; switching context invalidates unsafe transient/cached state before new actions.
+- Dangerous actions expose exact scope/consequence, applicable step-up/reason/blast radius and authoritative completion evidence.
+- Emergency/blackout UX preserves the distinction between stopping new exposure and maintaining protection, controlled reduction and reconciliation.
+- Admin/support/elevation/break-glass identity remains persistent and attributable; tenant-sensitive browser/cache/export/telemetry paths inherit R08 isolation.
+- Decision age/expiry, reconnect/resync proof and client lag are first-class UI integrity concerns.
+- Critical states are accessible without relying only on color/motion/sound and use keyboard/focus/assistive-technology/reduced-motion semantics.
+- P0/P1 capital-safety/state-certainty communication pre-empts lower-priority PnL/opportunity/decorative effects.
+- Chart overlays preserve executed/confirmed/provisional/hypothetical provenance; Brain dimensions remain separated; agent agreement never appears authoritative over hard gates.
+- Strategy Builder uses typed validation, immutable published/active versions and governed lifecycle states.
+- WCAG 2.2-oriented verification, semantic design tokens, safe unknown/loading/offline behavior, locale/time semantics, desktop-first authority and restricted mobile scope are approved planning requirements.
 
-## R08 audit
-- Final audit: `docs/75-r08-final-audit.md`
+## R09 audit
+- Final audit: `docs/82-r09-final-audit.md`
 - Verdict: `APPROVED`
-- Acceptance gates: 31/31 PASS
-- Initial gaps: 40; unresolved CRITICAL/HIGH gaps: 0
-- Decisions Ledger consolidated through `HCT-DEC-0103`
+- Acceptance gates: 30/30 PASS
+- Initial gaps: 38; unresolved CRITICAL/HIGH gaps: 0
+- Decisions Ledger consolidated through `HCT-DEC-0117`
 
 ## Completed increments
 - `HCT-BOOT-0001`
@@ -44,14 +46,15 @@ Implementation authorization: `NOT_GRANTED`
 - `HCT-PLAN-0001-R06`
 - `HCT-PLAN-0001-R07`
 - `HCT-PLAN-0001-R08`
+- `HCT-PLAN-0001-R09`
 
 ## Current blockers
 None for continuing structured planning. Implementation, production secrets/credentials, deployment, limited-live and real-money trading remain not granted.
 
 ## Next necessary action
-Continue `HCT-PLAN-0001` with formal `HCT-PLAN-0001-R09`: realtime trading cockpit, UI/UX, safety communication and design-system discovery.
+Continue `HCT-PLAN-0001` with formal `HCT-PLAN-0001-R10`: observability, audit, incident response, compliance-readiness and FinOps discovery.
 
-Use approved UI/UX, Copilot/strategy visualization and admin-cockpit pre-discovery artifacts and perform a formal R09-specific gap audit.
+Use approved R03–R09 operational, security, evidence and UI-observability contracts as pre-discovery inputs and perform a formal R10-specific gap audit.
 
 ## Resume rule
 A new chat must recover from the machine-readable planning checkpoint and repository source hierarchy, validate Git state, and resume only from `next_necessary_action`.
