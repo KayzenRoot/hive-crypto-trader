@@ -395,3 +395,69 @@ Status: APPROVED_FOR_DISCOVERY
 Date: 2026-09-11
 
 Decision: future multi-instance realtime reconstruction/publication uses explicit ownership leases and fencing tokens so only one writer publishes canonical state per partition. Failover takeover requires resynchronization/recovery proof before trusted publication resumes.
+
+## HCT-DEC-0067 — Brain fusion accepts only canonical admissible evidence
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: every machine-authoritative Brain input uses a versioned Canonical Evidence Envelope and passes a deterministic Evidence Admissibility Gate before fusion. Failed critical provenance, temporal, schema, generation, freshness, policy or R05 data-authority predicates cannot be hidden by confidence scores or LLM reasoning.
+
+## HCT-DEC-0068 — Confidence, uncertainty and calibration remain semantically separated
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: directional probability, opportunity quality, data confidence, calibration reliability, evidence independence, regime fit, historical support, execution feasibility, risk compatibility and stability are separate quantities. Calibration uses explicit contextual hierarchy, sample sufficiency, drift and fallback rules; insufficient support produces `CALIBRATION_UNTRUSTED` rather than fabricated certainty.
+
+## HCT-DEC-0069 — Selective abstention is a first-class intelligence outcome
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: `WAIT`, `NO_TRADE`, `DATA_UNCERTAIN`, `EVIDENCE_CONFLICT`, `CALIBRATION_UNTRUSTED`, `MODEL_UNAVAILABLE` and `MEMORY_UNAVAILABLE` are legitimate candidate outcomes. Near ties, missing required evidence, expired signal lifetime, material fragility or unresolved contradiction cannot be forced into LONG/SHORT simply to keep the system active.
+
+## HCT-DEC-0070 — Agents are evidence producers under bounded deliberation and fixed authority ceilings
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: agents publish structured evidence with provenance, assumptions, temporal validity, uncertainty, contradictions, tools/sources and authority ceilings. Agent and supervisor deliberation is bounded by rounds, time, tool, inference/cost and signal-lifetime budgets. No agent has direct exchange-order, risk-limit, canonical-truth or self-promotion authority.
+
+## HCT-DEC-0071 — Temporal memory is point-in-time and protected by a leakage firewall
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: canonical market memory preserves event, knowledge, ingestion, correction and label-maturity times plus market-state generation and provenance. Decision-time memory is immutable; later outcomes append separately. Historical replay/retrieval/training may not expose future knowledge, later unavailable corrections, outcome-derived prior features or immature labels.
+
+## HCT-DEC-0072 — Historical analog evidence requires independence and sufficiency
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: temporal retrieval is versioned and context-aware, while historical analog support must report raw and effective-independent counts, regime/temporal/symbol diversity and drift/relevance penalties. Sparse, near-duplicate or overly concentrated analog sets produce `INSUFFICIENT_ANALOG_EVIDENCE` rather than strong statistical claims.
+
+## HCT-DEC-0073 — Continual learning is localized, bounded and cannot self-promote
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: drift must be localized before adaptation. Only explicitly approved bounded online calibration/reliability/drift/regime statistics may adapt within frozen limits. Material model, strategy, behaviorally material prompt, retriever, agent-skill or memory-policy changes require immutable candidate versions, offline validation and governed promotion. Self-promotion is prohibited.
+
+## HCT-DEC-0074 — Intelligence behavior is fully version-pinned and attributable
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: every production-eligible candidate decision identifies the exact material versions/hashes of evidence schema, market-state generation, strategy, features, model, prompt/spec, agent, tool, skill, retriever, memory snapshot/index, calibration, policy and Brain fusion logic. HCT maintains a Decision Attribution Ledger linking evidence, exclusions, downstream Safety/Risk/Execution actions and matured outcomes.
+
+## HCT-DEC-0075 — External web/news remains untrusted until temporally and evidentially qualified
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: external web/news content requires source identity, publication/event/knowledge timestamps, reliability, corroboration and expiration before it can enter trusted intelligence. Unverified content cannot silently become canonical factual memory, training truth or a direct execution instruction; contradictory sources remain explicit.
+
+## HCT-DEC-0076 — Brain remains subordinate to R05 data authority and deterministic Risk
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: R05 hard data-authority states directly constrain evidence admission and candidate outputs. The Brain cannot reason around `NO_NEW_EXPOSURE`, `RECONCILIATION_ONLY` or equivalent failed critical data predicates. Brain confidence/opportunity quality cannot raise hard monetary risk, leverage, loss budgets, margin or portfolio ceilings.
+
+## HCT-DEC-0077 — Intelligence changes require incremental-value promotion proof
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: material changes to models, retrievers, prompts/specs, agents/skills, calibration, fusion logic or memory policy require incremental-value proof through applicable offline evaluation, point-in-time replay, walk-forward/OOS, paper, shadow and champion/challenger stages. Promotion evaluates calibration, abstention, false-confidence harm, regime robustness, latency/cost/failure behavior and baseline/champion comparison. Better explanations alone do not prove better decisions.
