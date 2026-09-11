@@ -18,31 +18,32 @@ This document records the current planning module map. It is a planning registry
 8. **Candlestick & Chart Pattern Engine** — recognized candlestick formations and broader price/market structure patterns.
 9. **Proprietary Indicator R&D Lab** — HCT-created indicators/features treated as hypotheses until statistically validated.
 10. **Strategy Engine** — pluggable long/short strategy definitions, versions and strategy-specific constraints.
-11. **User Strategy Builder & Strategy DSL** — visual/structured creation of user-owned strategies using validated declarative rules, indicators, timeframes and exits without arbitrary backend code execution.
+11. **User Strategy Builder & Strategy DSL** — typed nodal/structured creation of user-owned strategies using validated declarative rules, indicators, timeframes and exits without arbitrary backend code execution.
 12. **Default Strategy Catalog** — approximately 10–15 documented, versioned built-in strategy templates with regime, timeframe, entry/exit, risk and validation metadata.
-13. **Signal Engine** — transform strategy evidence into candidate entries/exits/no-trade decisions with confidence and provenance.
-14. **Market Regime Engine** — trending/ranging, volatility, liquidity, cycle and abnormal-regime classification.
-15. **HCT Intelligence Brain** — reasoning/orchestration layer that combines indicators, patterns, regime, historical memory and risk context before approving a candidate signal for downstream risk evaluation.
-16. **RAG & Market Memory** — retrieve relevant historical contexts, prior setups, outcomes, regimes, incidents and lessons without allowing retrieved text to directly place orders.
-17. **Learning & Model Lifecycle** — controlled offline learning, feature/model experimentation, optional fine-tuning where justified, evaluation, promotion and rollback.
-18. **Risk Engine** — hard risk limits per trade, symbol, strategy, tenant/account, portfolio, drawdown, correlation and market state.
-19. **Leverage Engine** — contract-aware leverage constraints and dynamic leverage recommendation subordinate to Risk Engine hard limits.
-20. **Position Sizing Engine** — size positions from approved risk budget, stop distance, leverage constraints, liquidity and portfolio exposure.
-21. **Safety & Protection Governor** — independent fail-safe layer capable of denying new exposure regardless of strategy/AI output.
-22. **Execution Engine** — safe entry, reduce, close, cancel/replace and execution policy handling.
-23. **Order Management System (OMS)** — lifecycle of pending, partial, rejected, cancelled, duplicate and uncertain orders.
-24. **Position / Account Reconciliation** — continuous local-state versus exchange-state reconciliation and discrepancy handling.
-25. **Portfolio Exposure Engine** — aggregate directional, correlated and concentration exposure across open positions.
-26. **API Quota, WebSocket & Backpressure Governor** — exchange-aware rate-limit management, subscription planning, throttling, retry budgets, circuit breakers and account-ban prevention.
-27. **Caching & Hot-State Layer** — low-latency caches with explicit freshness/TTL rules and no hidden divergence from exchange truth.
-28. **Backtest / Replay / Paper Trading / Simulation** — deterministic research path before production promotion, including user-authored strategies.
-29. **Multi-Tenant Platform Foundation** — tenant isolation, account boundaries, credentials isolation, quotas, per-tenant policy and future commercialization readiness.
-30. **Realtime Trading Cockpit / UI-UX System** — enterprise dashboard, observability, diagnostics, explanations, risk state and the Hive Plan-aligned technological visual language.
-31. **Agentic Copilot Orchestrator** — supervised multi-agent orchestration for market analysis, candidate actions, position management and autonomous lifecycle control within hard boundaries.
-32. **Session Policy & User Operating Envelope Engine** — immutable session policy snapshots covering daily loss, target mode, risk/trade, leverage ceiling, allowed strategies/symbols, hours, volatility/news behavior, cooldown and emergency controls.
-33. **News & Event Intelligence** — approved-source event/calendar intelligence and event-risk classification used as context for Copilot decisions without bypassing deterministic safety/risk rules.
-34. **Administrative Control Plane** — owner-only operational cockpit for platform-wide observability, tenant/system administration, incidents, releases and governed privileged controls.
-35. **Harness / Capability Isolation & Blackout Engine** — dependency-aware feature flags, scoped freezes, quarantine, degradation, no-new-actions, maintenance and emergency blackout controls with blast-radius analysis and audit evidence.
+13. **Strategy Ecology, Router, Ensemble & Conflict Engine** — context-aware suitability/routing of approved strategies, redundancy-aware ensembles, conflict resolution, strategy decay/drift and governed strategy-level risk-budget recommendations.
+14. **Signal Engine** — transform strategy evidence into candidate entries/exits/no-trade decisions with confidence and provenance.
+15. **Market Regime Engine** — trending/ranging, volatility, liquidity, cycle and abnormal-regime classification.
+16. **HCT Intelligence Brain** — reasoning/orchestration layer that combines indicators, patterns, regime, historical memory and risk context before approving a candidate signal for downstream risk evaluation.
+17. **RAG & Market Memory** — retrieve relevant historical contexts, prior setups, outcomes, regimes, incidents and lessons without allowing retrieved text to directly place orders.
+18. **Learning & Model Lifecycle** — controlled offline learning, feature/model experimentation, optional fine-tuning where justified, evaluation, promotion and rollback.
+19. **Risk Engine** — hard risk limits per trade, symbol, strategy, tenant/account, portfolio, drawdown, correlation and market state.
+20. **Leverage Engine** — contract-aware leverage constraints and dynamic leverage recommendation subordinate to Risk Engine hard limits.
+21. **Position Sizing Engine** — size positions from approved risk budget, stop distance, leverage constraints, liquidity and portfolio exposure.
+22. **Safety & Protection Governor** — independent fail-safe layer capable of denying new exposure regardless of strategy/AI output.
+23. **Execution Engine** — safe entry, reduce, close, cancel/replace and execution policy handling.
+24. **Order Management System (OMS)** — lifecycle of pending, partial, rejected, cancelled, duplicate and uncertain orders.
+25. **Position / Account Reconciliation** — continuous local-state versus exchange-state reconciliation and discrepancy handling.
+26. **Portfolio Exposure Engine** — aggregate directional, correlated and concentration exposure across open positions.
+27. **API Quota, WebSocket & Backpressure Governor** — exchange-aware rate-limit management, subscription planning, throttling, retry budgets, circuit breakers and account-ban prevention.
+28. **Caching & Hot-State Layer** — low-latency caches with explicit freshness/TTL rules and no hidden divergence from exchange truth.
+29. **Backtest / Replay / Paper Trading / Simulation** — deterministic research path before production promotion, including user-authored strategies.
+30. **Multi-Tenant Platform Foundation** — tenant isolation, account boundaries, credentials isolation, quotas, per-tenant policy and future commercialization readiness.
+31. **Realtime Trading Cockpit / UI-UX System** — enterprise dashboard, observability, diagnostics, explanations, risk state and the Hive Plan-aligned technological visual language.
+32. **Agentic Copilot Orchestrator** — supervised multi-agent orchestration for market analysis, candidate actions, position management and autonomous lifecycle control within hard boundaries.
+33. **Session Policy & User Operating Envelope Engine** — immutable session policy snapshots covering daily loss, target mode, risk/trade, leverage ceiling, allowed strategies/symbols, hours, volatility/news behavior, cooldown and emergency controls.
+34. **News & Event Intelligence** — approved-source event/calendar intelligence and event-risk classification used as context for Copilot decisions without bypassing deterministic safety/risk rules.
+35. **Administrative Control Plane** — owner-only operational cockpit for platform-wide observability, tenant/system administration, incidents, releases and governed privileged controls.
+36. **Harness / Capability Isolation & Blackout Engine** — dependency-aware feature flags, scoped freezes, quarantine, degradation, no-new-actions, maintenance and emergency blackout controls with blast-radius analysis and audit evidence.
 
 ## Cross-cutting platform capabilities
 These concerns span multiple modules and will be planned explicitly rather than buried inside individual components:
@@ -54,6 +55,8 @@ These concerns span multiple modules and will be planned explicitly rather than 
 - testing, CI/CD and release governance;
 - performance, resilience and disaster recovery;
 - tenancy, billing-readiness and future plan/entitlement controls;
+- internationalization/localization with `en-US` canonical and `pt-BR`/`es` supported from implementation start;
+- USD-first commercial catalog and locale-aware presentation;
 - FinOps/cost controls;
 - legal/compliance/regional capability checks;
 - exchange capability normalization and portability governance;
@@ -65,7 +68,7 @@ Only **MEXC Futures** is enabled for live trading in V1. Binance and other excha
 ## Planning rule
 The system may analyze a broad market universe, but analysis is not authorization to trade. The evolved decision chain is conceptually:
 
-`Exchange Adapter -> Market Data -> Features/Indicators/Patterns -> Strategy -> Multi-Agent Copilot -> Supervisor -> Candidate Action -> Safety Governor -> Risk Engine -> Session Policy -> Position/Leverage -> Execution -> Exchange Adapter -> Exchange -> Reconciliation`
+`Exchange Adapter -> Market Data -> Features/Indicators/Patterns -> Strategy -> Strategy Ecology/Router -> Multi-Agent Copilot -> Supervisor -> Candidate Action -> Safety Governor -> Risk Engine -> Session Policy -> Position/Leverage -> Execution -> Exchange Adapter -> Exchange -> Reconciliation`
 
 The Administrative Control Plane and Harness sit orthogonally across the platform and may restrict/degrade capabilities, but cannot silently bypass Safety/Risk rules.
 
