@@ -10,10 +10,13 @@ Accepted planning themes include:
 - MEXC Futures as the initial exchange integration target;
 - dynamic discovery and scanning of API-eligible futures contracts;
 - realtime WebSocket/REST integration with quota/backpressure protection;
+- trusted realtime state using feed generations, synchronization proof, data-quality authority, freshness/coherency contracts and end-to-end decision-age control;
 - indicators, candlestick/chart patterns and HCT proprietary indicator R&D;
 - pluggable strategies, signal generation and market-regime intelligence;
 - first-class signal-room publishing, with Telegram as the initial destination, structured entry/TP/SL lifecycle, freshness/idempotency, subscriber-realizability analytics and provider-neutral publisher boundaries;
 - RAG/market memory, controlled learning and model lifecycle;
+- canonical intelligence evidence, deterministic evidence admissibility, calibration, selective abstention, point-in-time Temporal Market Memory and governed continual-learning authority;
+- bounded institutional-agent deliberation with explicit authority ceilings and no direct exchange authority;
 - independent Safety & Protection Governor, hard Risk Engine, leverage and position sizing;
 - dynamic exchange risk tiers, maintenance margin, position limits, margin modes and liquidation semantics;
 - immutable/expiring post-trade RiskSnapshots and deterministic pre-submit Risk Reservation Ledger;
@@ -43,7 +46,7 @@ Accepted planning themes include:
 - deterministic execution identity/idempotency, fill conservation and unknown-outcome reconciliation;
 - position-mode-safe reduction/closing, protection integrity and restart/failover recovery;
 - backtest/replay/paper/shadow promotion path;
-- HCT Intelligence Brain and governed memory/learning foundations;
+- HCT Intelligence Brain, canonical evidence/admissibility, point-in-time memory and governed learning foundations;
 - frontend/backend separation, security and operational controls;
 - `Signals` workspace and Telegram signal publishing as a separate non-execution product path;
 - bootstrap/free-first infrastructure with safe migration path.
@@ -67,7 +70,7 @@ Accepted planning themes include:
 - live API credentials or secrets in the repository;
 - real-money order execution;
 - final strategy formulas or production parameter values;
-- autonomous self-modifying production strategy/risk/execution logic;
+- autonomous self-modifying production strategy/risk/execution/intelligence logic;
 - final leverage limits;
 - final commercial pricing/plans;
 - production deployment topology;
@@ -77,4 +80,4 @@ Accepted planning themes include:
 ## Scope control
 New ideas may be added during discovery, but each must be classified as NECESSARY, IMPORTANT, FUTURE or OUT OF SCOPE before implementation planning. No idea becomes production scope merely because it was discussed.
 
-R03 and any future R04 approval are planning approvals only and do not authorize implementation or live trading.
+All HCT-PLAN-0001 round approvals are planning approvals only and do not authorize implementation, production credentials, production deployment or live trading.
