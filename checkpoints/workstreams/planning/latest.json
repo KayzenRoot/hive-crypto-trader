@@ -2,12 +2,12 @@
   "schema_version": "1.0",
   "project_code": "HCT",
   "workstream": "planning",
-  "checkpoint_id": "HCT-CP-0011",
-  "checkpoint_path": "checkpoints/history/HCT-CP-0011.json",
-  "status": "PRODUCT_DISCOVERY_ROUND_09_APPROVED",
-  "last_canonical_planning_merge_sha": "e76ba779bc4ebc49c121268ae1cd14a89bbf0a0f",
-  "completed_increment": "HCT-PLAN-0001-R09",
-  "next_necessary_action": "Continue HCT-PLAN-0001 with formal HCT-PLAN-0001-R10: observability, audit, incident response, compliance-readiness and FinOps discovery. Use approved R03-R09 operational, security, evidence and UI observability contracts as pre-discovery inputs, perform an R10-specific gap audit, and do not authorize implementation, production deployment, credentials or live trading.",
+  "checkpoint_id": "HCT-CP-0012",
+  "checkpoint_path": "checkpoints/history/HCT-CP-0012.json",
+  "status": "PRODUCT_DISCOVERY_ROUND_10_APPROVED",
+  "last_canonical_planning_merge_sha": "60d7ea2bd6df3d21067e99073237afe068b32ce0",
+  "completed_increment": "HCT-PLAN-0001-R10",
+  "next_necessary_action": "Continue HCT-PLAN-0001 with formal HCT-PLAN-0001-R11: integration review, dependency graph, V1/IMPORTANT/FUTURE classification reconciliation and cross-round contradiction audit across R01-R10. Verify that the complete planned system composes safely before the R12 planning-freeze candidate; do not authorize implementation or live trading.",
   "functional_planning_started": true,
   "implementation_authorized": false
 }
