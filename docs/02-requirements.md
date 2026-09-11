@@ -14,6 +14,22 @@ Product requirements are being discovered and refined. The following requirement
 - Provide a user-selectable Copilot mode capable of autonomous trade lifecycle management within hard user/platform constraints.
 - Provide both curated built-in strategies and a user-facing strategy builder for creating private custom strategies.
 - Keep V1 live trading limited to MEXC Futures while preserving an exchange-adapter architecture for future Binance and additional venue integrations.
+- Build HCT as an English-first commercial product targeting the US/international English-speaking market, while supporting first-class Portuguese (Brazil) and Spanish localization from implementation start.
+- Use USD as the initial canonical commercial plan/catalog currency.
+
+## Internationalization and localization requirements
+- Canonical/default product locale is `en-US`.
+- Initial supported UI locales are `en-US`, `pt-BR` and `es`, with architecture ready for additional regional locales later.
+- Source code identifiers, APIs, domain/database fields, events, telemetry keys, configuration keys, Strategy DSL/node type identifiers and canonical technical documentation use English.
+- User-facing strings must use localization resources/keys rather than being hard-coded where localization is appropriate.
+- New user-facing features must add/queue English, Portuguese and Spanish copy during the same development workflow rather than deferring translation to a late retrofit.
+- Machine semantics must be locale-independent: changing UI language must not alter strategy logic, Safety/Risk decisions, order semantics, numeric calculations or audit identity.
+- Locale-aware presentation must cover dates/times, time zones, numbers, percentages, currencies, pluralization, validation/error text, chart labels/tooltips and accessibility labels.
+- Strategy graphs and saved strategies must use stable canonical identifiers so the same graph can be displayed in any supported language without semantic changes.
+- Financial/risk/security/autonomy/emergency-control translations require stricter review and automated coverage checks.
+- Backend-generated user-facing messages and notifications should expose structured codes/templates suitable for localization rather than uncontrolled English-only prose.
+- Initial plan/catalog pricing is denominated in USD. Localization of a price does not imply automatic FX conversion or regional pricing; those require explicit future commercial policy.
+- CI/testing should cover missing translation keys, fallback behavior, interpolation integrity, long-string layouts and locale switching without state/semantic mutation.
 
 ## Market and exchange requirements
 - Prefer WebSocket for realtime market streams where appropriate and REST for reference/reconciliation/control paths.
@@ -79,7 +95,7 @@ Product requirements are being discovered and refined. The following requirement
 ## Multi-tenant requirements
 - Future tenant isolation must be anticipated in identity, credentials, data ownership, quotas, policies, strategy/model access and audit boundaries.
 - Exchange API secrets/private credentials must be isolated per tenant/account and never appear in logs, prompts, RAG corpora or shared caches.
-- Pricing plans/entitlements are intentionally deferred and will be planned separately.
+- Pricing plan definitions/entitlements are intentionally deferred, while the initial commercial catalog currency is USD.
 
 ## UI/UX requirements
 - Establish a technological premium enterprise trading-cockpit design language aligned with the visual DNA of Hive Plan while remaining product-specific.
