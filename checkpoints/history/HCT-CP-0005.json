@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0",
+  "project_code": "HCT",
+  "workstream": "planning",
+  "checkpoint_id": "HCT-CP-0005",
+  "status": "PRODUCT_DISCOVERY_ROUND_03_APPROVED",
+  "risk_class": "HIGH_ASSURANCE",
+  "canonical_branch": "main",
+  "canonical_merge_sha": "26045a553f8c84b5c88a1eb0ea514ea361ad2422",
+  "reviewed_pr": 7,
+  "completed_increment": "HCT-PLAN-0001-R03",
+  "functional_planning_started": true,
+  "implementation_authorized": false,
+  "approved_decisions": [
+    "HCT-DEC-0042",
+    "HCT-DEC-0043",
+    "HCT-DEC-0044",
+    "HCT-DEC-0045",
+    "HCT-DEC-0046",
+    "HCT-DEC-0047",
+    "HCT-DEC-0048",
+    "HCT-DEC-0049"
+  ],
+  "frozen_round_03_foundation": {
+    "dynamic_exchange_risk_rules_required": true,
+    "immutable_expiring_risk_snapshot_required": true,
+    "post_trade_liquidation_preview_required": true,
+    "risk_reservation_before_submit_required": true,
+    "cross_margin_contagion_guard_required": true,
+    "multi_horizon_survival_budgets_required": true,
+    "operational_margin_reserve_required": true,
+    "protection_failure_exposure_required": true,
+    "fresh_risk_approval_for_every_add_required": true,
+    "martingale_default_prohibited": true,
+    "collateral_stress_effective_risk_capital_required": true,
+    "extreme_venue_partial_liquidation_adl_awareness_required": true,
+    "user_risk_presets_bounded_by_platform_ceiling": true,
+    "structured_risk_explainability_required": true
+  },
+  "audit": {
+    "artifact": "docs/43-r03-final-audit.md",
+    "verdict": "APPROVED",
+    "acceptance_gates_passed": 14,
+    "identified_gaps_resolved_in_planning": 18,
+    "unresolved_critical_high_planning_defects": 0
+  },
+  "next_necessary_action": "Continue HCT-PLAN-0001 with formal HCT-PLAN-0001-R04: Execution, OMS and reconciliation discovery. Use docs/29-execution-intelligence-oms-reconciliation-and-recovery.md as pre-discovery input, perform an R04-specific gap audit, and do not authorize implementation or live trading.",
+  "critical_sources": [
+    "docs/02-requirements.md",
+    "docs/03-scope.md",
+    "docs/10-decisions-ledger.md",
+    "docs/14-product-module-map.md",
+    "docs/28-risk-intelligence-position-sizing-leverage-and-equity-guard.md",
+    "docs/29-execution-intelligence-oms-reconciliation-and-recovery.md",
+    "docs/39-r03-risk-gap-audit-and-institutional-hardening.md",
+    "docs/40-r03-institutional-risk-control-architecture.md",
+    "docs/41-r03-tail-survival-collateral-and-extreme-venue-risk.md",
+    "docs/42-r03-acceptance-criteria-and-review-gates.md",
+    "docs/43-r03-final-audit.md"
+  ]
+}
