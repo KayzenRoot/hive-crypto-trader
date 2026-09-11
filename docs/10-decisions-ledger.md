@@ -167,3 +167,27 @@ Status: APPROVED_FOR_DISCOVERY
 Date: 2026-09-11
 
 Decision: HCT will research explicit strategy-level measures including Strategy DNA, Effective Strategy Diversity, Strategy Decay Index, Strategy Regime Affinity Surface and Strategy Conflict Graph. These measures support explainability, routing, diagnostics, champion/challenger evaluation and governed quarantine/review, but do not constitute guaranteed edge and may not autonomously rewrite live strategy semantics.
+
+## HCT-DEC-0029 — Agent specifications are canonical institutional-grade repository artifacts
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: HCT agents will be specified in this repository as a coordinated institutional-grade financial/economic/market/risk workforce before implementation. Each agent specification must define expertise, tools, source hierarchy, structured evidence contract, memory/skill policy, evaluation and authority ceiling. External coding agents implement these specifications rather than inventing production behavior ad hoc.
+
+## HCT-DEC-0030 — News & Event Intelligence receives governed realtime web/source research capability
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: a dedicated News & Event Intelligence Agent will research approved internet/data sources for breaking and scheduled events that may affect crypto over minutes, hours or the current session. It must prioritize primary/high-quality sources, preserve provenance/time validity/corroboration, distinguish event existence from directional certainty, and may recommend risk reduction or NO_TRADE. It cannot directly execute or override deterministic Safety/Risk/Policy.
+
+## HCT-DEC-0031 — Agent tools and skills require explicit governance
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: agents access web/data/internal capabilities through a permissioned Tool Gateway. Reusable skills are versioned governed procedures; agents may propose new skills, but new/changed production skills require review, sandbox/evaluation and explicit activation. Model/tool/skill changes are observable and do not expand agent authority implicitly.
+
+## HCT-DEC-0032 — Risk construction includes Daily Equity Guard, liquidation defense and portfolio-factor exposure
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: HCT risk architecture will derive position size from approved monetary risk and thesis invalidation, keep leverage subordinate to survivability, enforce a deterministic Daily Equity Guard and evaluate correlated/common-factor portfolio exposure. Profit targets cannot trigger risk escalation. Research metrics such as Adaptive Risk Budget Surface, Liquidation Defense Distance, Margin Fragility Score, Correlated Exposure Equivalent, Portfolio Stress Lattice and Stop Quality Score may inform stricter decisions but cannot relax hard risk ceilings.
