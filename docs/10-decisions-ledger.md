@@ -119,3 +119,21 @@ Status: APPROVED_FOR_DISCOVERY
 Date: 2026-09-11
 
 Decision: timeframe importance will be strategy/regime/context dependent. HCT will preserve role-based multi-timeframe evidence, estimate redundancy/independence, and allow adaptive weights only inside governed/versioned bounds. Opportunity decisions retain explainable sub-scores before deriving a composite HCT Opportunity Score. No adaptive mechanism may silently rewrite hard production strategy semantics.
+
+## HCT-DEC-0021 — Users may author declarative custom strategies
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: HCT will provide a user Strategy Builder supporting flexible combinations of approved indicators/features, HCT indicators exposed to users, patterns, market structure, derivatives/liquidity/regime/timeframe context and supported entry/exit/position-management conditions. V1 user strategies are declarative and sandboxed rather than arbitrary executable backend code. Every runtime strategy is immutable/versioned and remains subordinate to exchange capabilities, Safety Governor, Risk Engine, Session Policy, tenancy/security and reconciliation.
+
+## HCT-DEC-0022 — Initial product includes a documented default strategy catalog
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: HCT should launch with approximately 10–15 built-in, documented strategy templates/families covering multiple market behaviors such as trend, pullback, breakout, momentum, mean reversion, reversal/exhaustion, multi-timeframe confluence, structure, liquidity, volume/volatility, regime-adaptive and HCT proprietary approaches. Exact formulas/parameters and live eligibility require governed validation; no template implies guaranteed profitability.
+
+## HCT-DEC-0023 — V1 is MEXC-only live trading but core architecture is multi-exchange-ready
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: V1 will enable live trading only through MEXC Futures. Core HCT domains must use an HCT-owned Exchange Abstraction & Adapter Framework so future Binance and other exchanges can be integrated without rewriting strategy/risk/UI cores. Each venue retains explicit capability, order-semantics, authentication, quota and reconciliation behavior and requires independent HIGH_ASSURANCE production promotion.
