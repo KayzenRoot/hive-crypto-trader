@@ -49,7 +49,7 @@ None for continuing structured planning. Implementation, production credentials/
 ## Next necessary action
 Continue `HCT-PLAN-0001` with formal `HCT-PLAN-0001-R07`: Simulation, Replay, Backtest, Paper, Shadow and Promotion Laboratory discovery.
 
-Use `docs/36-simulation-replay-paper-shadow-and-promotion-lab.md` plus approved R03–R06 authority/data/intelligence contracts as pre-discovery inputs, then perform a formal R07-specific gap audit.
+Use `docs/36-simulation-replay-paper-shadow-and-promotion-laboratory.md` plus approved R03–R06 authority/data/intelligence contracts as pre-discovery inputs, then perform a formal R07-specific gap audit.
 
 ## Resume rule
 A new chat must recover from the machine-readable planning checkpoint and repository source hierarchy, validate Git state, and resume only from `next_necessary_action`.
