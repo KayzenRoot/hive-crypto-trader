@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0",
+  "project_code": "HCT",
+  "workstream": "planning",
+  "checkpoint_id": "HCT-CP-0003",
+  "status": "PRODUCT_DISCOVERY_ROUND_01_APPROVED",
+  "risk_class": "HIGH_ASSURANCE",
+  "canonical_branch": "main",
+  "canonical_merge_sha": "9004759f7f08b01ecae10c7d23327d22025f6de2",
+  "reviewed_pr": 3,
+  "completed_increment": "HCT-PLAN-0001-R01",
+  "functional_planning_started": true,
+  "implementation_authorized": false,
+  "approved_decisions": [
+    "HCT-DEC-0001",
+    "HCT-DEC-0002",
+    "HCT-DEC-0003",
+    "HCT-DEC-0004",
+    "HCT-DEC-0005",
+    "HCT-DEC-0006",
+    "HCT-DEC-0007",
+    "HCT-DEC-0008",
+    "HCT-DEC-0009",
+    "HCT-DEC-0010",
+    "HCT-DEC-0011",
+    "HCT-DEC-0012"
+  ],
+  "frozen_round_01_foundation": {
+    "initial_exchange_target": "MEXC Futures",
+    "module_count": 27,
+    "safety_governor_required": true,
+    "indicator_pattern_program_required": true,
+    "proprietary_indicator_rnd_allowed_with_statistical_gates": true,
+    "rag_market_memory_required": true,
+    "controlled_learning_model_lifecycle_required": true,
+    "multi_tenant_readiness_required": true,
+    "api_quota_websocket_backpressure_governor_required": true,
+    "cache_is_not_exchange_truth": true,
+    "hive_plan_aligned_ui_ux_direction": true
+  },
+  "next_necessary_action": "Continue HCT-PLAN-0001 with HCT-PLAN-0001-R02: strategy, signal and indicator architecture discovery. No implementation Work Order or live trading authorization yet.",
+  "critical_sources": [
+    "docs/02-requirements.md",
+    "docs/03-scope.md",
+    "docs/08-backlog.md",
+    "docs/10-decisions-ledger.md",
+    "docs/14-product-module-map.md",
+    "docs/15-intelligence-learning-and-indicators.md",
+    "docs/16-ui-ux-design-language.md"
+  ]
+}
