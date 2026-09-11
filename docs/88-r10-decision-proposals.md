@@ -1,10 +1,10 @@
 # HCT-PLAN-0001-R10 — Decision Proposals for Ledger Consolidation
 
-Status: `DISCOVERY_IN_PROGRESS`
+Status: `CONSOLIDATED`
 Increment: `HCT-PLAN-0001-R10`
 Date: `2026-09-11`
 
-These decisions are accepted within R10 planning and must be consolidated into `docs/10-decisions-ledger.md` before final approval.
+`HCT-DEC-0118` through `HCT-DEC-0131` were accepted during R10 planning and are now consolidated into `docs/10-decisions-ledger.md`. This file remains as round-local provenance and must not compete with the canonical Decisions Ledger.
 
 ## HCT-DEC-0118 — Observability is a governed evidence plane, never authoritative trading truth
 Status: APPROVED_FOR_DISCOVERY
