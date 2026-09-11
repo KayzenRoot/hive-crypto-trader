@@ -2,12 +2,12 @@
   "schema_version": "1.0",
   "project_code": "HCT",
   "workstream": "planning",
-  "checkpoint_id": "HCT-CP-0006",
-  "checkpoint_path": "checkpoints/history/HCT-CP-0006.json",
-  "status": "PRODUCT_DISCOVERY_ROUND_04_APPROVED",
-  "last_canonical_planning_merge_sha": "7932b56cfeb2f6d191a63a29bcc00a632dd02a52",
-  "completed_increment": "HCT-PLAN-0001-R04",
-  "next_necessary_action": "Continue HCT-PLAN-0001 with formal HCT-PLAN-0001-R05: realtime market data, API quota/WebSocket, caching, backpressure and resilience discovery. Use docs/30-realtime-market-data-intelligence-and-streaming-rd.md, docs/31-realtime-performance-benchmark-and-technology-selection.md, docs/32-bootstrap-free-infrastructure-and-scale-migration.md and docs/33-microstructure-orderflow-liquidity-breadth-and-anomaly-intelligence.md as pre-discovery inputs, perform an R05-specific gap audit, and do not authorize implementation or live trading.",
+  "checkpoint_id": "HCT-CP-0007",
+  "checkpoint_path": "checkpoints/history/HCT-CP-0007.json",
+  "status": "PRODUCT_DISCOVERY_ROUND_05_APPROVED",
+  "last_canonical_planning_merge_sha": "bdae365f755799137d64eacd2e11df587338efd8",
+  "completed_increment": "HCT-PLAN-0001-R05",
+  "next_necessary_action": "Continue HCT-PLAN-0001 with formal HCT-PLAN-0001-R06: Intelligence Brain, temporal RAG/market memory and governed learning discovery. Use docs/34-temporal-market-memory-rag-and-continual-learning.md, docs/35-intelligence-brain-evidence-fusion-calibration-and-selective-decision.md and related agent/intelligence artifacts as pre-discovery inputs, perform an R06-specific gap audit, and do not authorize implementation or live trading.",
   "functional_planning_started": true,
   "implementation_authorized": false
 }
