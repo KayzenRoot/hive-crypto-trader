@@ -48,6 +48,7 @@ This document records the current planning module map. It is a planning registry
 38. **Administrative Control Plane** — owner-only operational cockpit for platform-wide observability, tenant/system administration, incidents, releases and governed privileged controls.
 39. **Harness / Capability Isolation & Blackout Engine** — dependency-aware feature flags, scoped freezes, quarantine, degradation, no-new-actions, maintenance and emergency blackout controls with blast-radius analysis and audit evidence.
 40. **Microstructure, Order-Flow, Liquidity, Breadth & Cross-Market Intelligence** — low-latency order-book/trade-flow features, liquidity topology and impact, alternative bars, market breadth, dynamic lead/lag propagation, anomaly detection, realtime feature serving and proprietary HCT microstructure R&D with bootstrap-aware compute budgets.
+41. **Temporal Market Memory, Historical Analog & Continual Learning Intelligence** — point-in-time-correct episode/event memory, temporal-causal graph relations, global-plus-recent retrieval, regime-conditioned analog search, no-trade learning, concept-drift localization, catastrophic-forgetting controls, champion/challenger evaluation and governed continual learning.
 
 ## Cross-cutting platform capabilities
 These concerns span multiple modules and will be planned explicitly rather than buried inside individual components:
@@ -62,6 +63,10 @@ These concerns span multiple modules and will be planned explicitly rather than 
 - bounded queues, adaptive subscription planning, backpressure and deterministic load shedding;
 - realtime feature freshness/coherence, point-in-time correctness and incremental computation;
 - microstructure/order-flow validation, breadth/lead-lag decay and anomaly explainability;
+- temporal event/knowledge timestamps, leakage prevention and immutable ex-ante evidence;
+- regime-aware analog retrieval, memory diversity and historical-relevance decay;
+- concept-drift detection/localization, catastrophic-forgetting prevention and champion/challenger governance;
+- learning from executed trades, rejected candidates and no-trade decisions without selection bias;
 - tenancy, billing-readiness and future plan/entitlement controls;
 - internationalization/localization with `en-US` canonical and `pt-BR`/`es` supported from implementation start;
 - USD-first commercial catalog and locale-aware presentation;
@@ -81,7 +86,7 @@ Only **MEXC Futures** is enabled for live trading in V1. Binance and other excha
 ## Planning rule
 The system may analyze a broad market universe, but analysis is not authorization to trade. The evolved decision chain is conceptually:
 
-`Exchange Adapter -> Realtime Market Data -> Market-State Fabric/Integrity -> Microstructure/Breadth/Cross-Market Intelligence -> Features/Indicators/Patterns -> Strategy -> Strategy Ecology/Router -> Institutional Agent Workforce -> Copilot Supervisor -> Candidate Action -> Safety Governor -> Risk Engine -> Session Policy -> Position/Leverage -> Execution Intelligence -> OMS -> Exchange Adapter -> Exchange -> Reconciliation/State Confidence -> Protective Integrity`
+`Exchange Adapter -> Realtime Market Data -> Market-State Fabric/Integrity -> Microstructure/Breadth/Cross-Market Intelligence -> Features/Indicators/Patterns -> Temporal Memory/Analog Intelligence -> Strategy -> Strategy Ecology/Router -> Institutional Agent Workforce -> Copilot Supervisor -> Candidate Action -> Safety Governor -> Risk Engine -> Session Policy -> Position/Leverage -> Execution Intelligence -> OMS -> Exchange Adapter -> Exchange -> Reconciliation/State Confidence -> Protective Integrity`
 
 The Administrative Control Plane and Harness sit orthogonally across the platform and may restrict/degrade capabilities, but cannot silently bypass Safety/Risk rules.
 
