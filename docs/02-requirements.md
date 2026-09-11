@@ -12,14 +12,19 @@ Product requirements are being discovered and refined. The following requirement
 - Support long and short workflows, leverage-aware operation and realtime decision/execution paths.
 - Architect for eventual commercial multi-tenant use even if commercialization and paid plans are deferred beyond the first release.
 - Provide a user-selectable Copilot mode capable of autonomous trade lifecycle management within hard user/platform constraints.
+- Provide both curated built-in strategies and a user-facing strategy builder for creating private custom strategies.
+- Keep V1 live trading limited to MEXC Futures while preserving an exchange-adapter architecture for future Binance and additional venue integrations.
 
 ## Market and exchange requirements
 - Prefer WebSocket for realtime market streams where appropriate and REST for reference/reconciliation/control paths.
 - Discover contract capabilities and constraints dynamically where the exchange exposes them.
 - Treat exchange state as authoritative for orders, fills, positions and balances; local state must be continuously reconcilable.
 - Enforce API/WebSocket usage budgets, throttling, retry budgets, backpressure and circuit breakers so the platform stays within documented exchange limits and avoids abusive behavior/account blocking.
-- Account for regional/API capability restrictions and future MEXC API changes as versioned external dependencies.
+- Account for regional/API capability restrictions and future exchange API changes as versioned external dependencies.
 - Use exchange-native protective order capabilities such as TP/SL, trigger and trailing mechanisms where supported and appropriate, with reconciliation and platform-side safety oversight.
+- Core trading modules must depend on HCT-owned canonical exchange/domain interfaces wherever practical rather than directly on MEXC payloads.
+- MEXC must be implemented as the first concrete exchange adapter; future exchanges require their own capability mapping, signing/authentication, quota, reconciliation and HIGH_ASSURANCE promotion.
+- Maintain an explicit exchange capability matrix so unsupported venue functionality is rejected or degraded visibly rather than silently emulated.
 
 ## Trading intelligence requirements
 - Provide an extensible indicator and feature engine covering major public/standard technical-analysis indicator families relevant to the product.
@@ -33,6 +38,19 @@ Product requirements are being discovered and refined. The following requirement
 - Support controlled offline learning/model lifecycle and optional fine-tuning only when justified by evidence.
 - Prevent future-information leakage in research/backtests and require provenance/time-awareness for learned/retrieved data.
 - Preserve explainable/versioned decision traces suitable for audit and later learning.
+
+## Strategy requirements
+- Ship approximately 10–15 documented built-in strategy templates/families for the initial product experience.
+- Every built-in strategy must explain intended regime, direction, required indicators/features, timeframe template, entry, invalidation/exit, protective-order behavior, limitations/failure modes and validation status.
+- Provide a visual user Strategy Builder backed by the same canonical versioned Strategy Definition/DSL used by runtime, backtest and paper trading.
+- User strategy conditions may combine allowed indicators, proprietary HCT indicators exposed to the user, patterns, price structure, volume, volatility, liquidity, derivatives context, regime, multi-timeframe logic, news/event filters where supported, time/session filters and Boolean/grouped conditions.
+- User strategies may define long/short/both direction, entry, confirmation, invalidation, exit, stop-loss, take-profit, trailing, partial exits and other supported position-management rules.
+- V1 custom strategy execution must be declarative/sandboxed; users may not upload arbitrary backend-executable code.
+- Every custom strategy must be owned by a tenant/user and immutably versioned for runtime evidence. Editing a strategy creates a new version rather than mutating prior trading history.
+- Strategy compatibility must be evaluated against the active exchange capabilities and available datasets.
+- The platform may require schema validation, backtest, replay and/or paper validation before a custom strategy becomes live-eligible.
+- Custom strategy rules may tighten risk constraints but may never raise platform hard ceilings or bypass Safety, Risk, Session Policy, tenancy/security or reconciliation.
+- Architecture should allow future controlled sharing/import/export/marketplace/plan entitlements without requiring core Strategy Engine redesign.
 
 ## Agentic Copilot requirements
 - Use a supervised multi-agent topology rather than unrestricted direct model access to exchange credentials.
@@ -69,6 +87,7 @@ Product requirements are being discovered and refined. The following requirement
 - Provide a dedicated Copilot session setup surface and realtime autonomous-operation cockpit.
 - When a symbol is selected, provide a realtime chart with optional overlays for strategy behavior, actual executions, simulated signals, indicators/patterns, TP/SL/trailing paths, regime, agent evidence and proprietary HCT indicators.
 - Clearly distinguish executed trades from hypothetical or paper/simulated strategy paths.
+- Provide Strategy Catalog and Strategy Builder views with visual rules, human-readable explanation, chart preview, timeframe/indicator overlays, validation warnings, backtest/paper evidence, cloning/comparison and version history.
 - Plan dedicated operational views for scanner, symbol intelligence, indicators/patterns, positions/orders, risk/leverage, Safety Governor, RAG/decision traces, backtest/paper trading, model lifecycle, tenancy and system/API health.
 
 ## Validation requirements
@@ -76,6 +95,7 @@ Product requirements are being discovered and refined. The following requirement
 - Research candidates should progress through reproducible backtest, out-of-sample/walk-forward checks, realistic fees/slippage/funding assumptions as applicable, paper/shadow validation and governed promotion.
 - Proprietary indicators must include ablation and incremental-value analysis against baselines.
 - Profitability is never guaranteed by an indicator/model; evidence must distinguish statistical edge from overfitting.
+- User-authored strategies require reproducible versioned evaluation and must not silently use future data or unavailable exchange capabilities.
 
 ## Governance requirements already in force
 - repository is canonical truth;
