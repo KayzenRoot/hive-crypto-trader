@@ -1,10 +1,10 @@
-# HCT-PLAN-0001-R08 — Decision Proposals for Ledger Consolidation
+# HCT-PLAN-0001-R08 — Decision Proposals / Consolidation Record
 
-Status: `DISCOVERY_IN_PROGRESS`
+Status: `CONSOLIDATED`
 Increment: `HCT-PLAN-0001-R08`
 Date: `2026-09-11`
 
-These decisions are accepted within R08 planning but must be consolidated into `docs/10-decisions-ledger.md` before final R08 approval.
+The decisions below were accepted during R08 planning and are now consolidated into `docs/10-decisions-ledger.md` as `HCT-DEC-0090` through `HCT-DEC-0103`.
 
 ## HCT-DEC-0090 — Protected operations require canonical server-derived tenant security context
 Status: APPROVED_FOR_DISCOVERY
