@@ -143,3 +143,15 @@ Status: APPROVED_FOR_DISCOVERY
 Date: 2026-09-11
 
 Decision: the primary custom-strategy authoring experience will use a ComfyUI-like nodal workflow paradigm adapted to trading. Users compose typed market/indicator/logic/timeframe/decision/position-management nodes and connect compatible ports. The graph compiles into the canonical declarative Strategy Definition; UI layout is non-semantic. Backend graph validation, static analysis, immutable version/hash, sandboxing, reproducible replay and governed promotion remain mandatory. Research technologies including graph redundancy analysis, sensitivity heatmaps, node attribution, counterfactual debugging, strategy fingerprints, shadow twins and graph optimization may be developed, but none may silently modify or self-promote live strategies.
+
+## HCT-DEC-0025 — English-first product with continuous Portuguese and Spanish localization
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: HCT's canonical/default product locale is `en-US`, with the initial commercial audience focused on the US/international English-speaking market. Product engineering, canonical identifiers, APIs, Strategy DSL/node types and technical documentation use English. `pt-BR` and Spanish (`es`, with future regional variants possible) are first-class supported localizations and must be maintained during feature development rather than retrofitted at the end. Localization must never change canonical trading semantics, risk rules or audit identity.
+
+## HCT-DEC-0026 — Initial commercial catalog currency is USD
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: HCT's initial subscription/plan catalog will be denominated in USD. Locale-specific formatting is separate from currency conversion or regional pricing. Future regional price books, local settlement currencies, taxes and FX behavior require explicit commercial/payment decisions rather than being inferred from UI language.
