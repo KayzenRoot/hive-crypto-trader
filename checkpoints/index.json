@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "project": "Hive Crypto Trader",
+  "project_code": "HCT",
+  "canonical_repository": "KayzenRoot/hive-crypto-trader",
+  "canonical_branch": "main",
+  "active_workstream": "planning",
+  "workstreams": {
+    "planning": "checkpoints/workstreams/planning/latest.json"
+  },
+  "resume_protocol": "docs/13-chat-handoff-protocol.md"
+}
