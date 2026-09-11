@@ -88,7 +88,7 @@ Decision: autonomous reasoning will be decomposed into specialized agents includ
 Status: APPROVED_FOR_DISCOVERY
 Date: 2026-09-11
 
-Decision: autonomous sessions must be governed by an immutable session policy snapshot containing configured loss limits, target mode, risk/trade, leverage ceiling, positions/exposure, strategies/symbols, hours, volatility/news behavior, cooldowns and emergency controls. User policy may tighten but not exceed platform hard safety ceilings.
+Decision: autonomous sessions must be governed by an immutable session policy snapshot containing configured loss limits, target mode, risk/trade, leverage ceiling, positions/exposure, strategies/symbols, hours, volatility/news behavior, cooldowns and emergency controls. User policy may tighten but not exceed platform/global safety ceilings.
 
 ## HCT-DEC-0016 — Proprietary indicators must seek genuinely incremental information
 Status: APPROVED_FOR_DISCOVERY
@@ -191,3 +191,21 @@ Status: APPROVED_FOR_DISCOVERY
 Date: 2026-09-11
 
 Decision: HCT risk architecture will derive position size from approved monetary risk and thesis invalidation, keep leverage subordinate to survivability, enforce a deterministic Daily Equity Guard and evaluate correlated/common-factor portfolio exposure. Profit targets cannot trigger risk escalation. Research metrics such as Adaptive Risk Budget Surface, Liquidation Defense Distance, Margin Fragility Score, Correlated Exposure Equivalent, Portfolio Stress Lattice and Stop Quality Score may inform stricter decisions but cannot relax hard risk ceilings.
+
+## HCT-DEC-0033 — Execution is an independent high-assurance decision domain
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: an approved trade candidate/order intent is not equivalent to successful execution. HCT will use an immutable canonical Order Intent, an Execution Intelligence/Feasibility layer, bounded slippage/latency policies and an event-sourced OMS. Execution optimization may adapt order tactics only within the already-approved quantity/risk and may not manufacture a new directional thesis or silently exceed slippage/risk limits.
+
+## HCT-DEC-0034 — Unknown exchange outcomes require reconciliation before retry
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: timeout/network ambiguity after an order submission is classified as `UNCERTAIN`, not failed. HCT must block blind duplicate retries and reconcile against exchange-authoritative order/fill/position evidence before resolving or retrying. Persistent uncertainty reduces or blocks new exposure according to policy.
+
+## HCT-DEC-0035 — Protective coverage and exchange-state confidence gate live exposure
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: HCT will explicitly verify protective-order integrity and maintain a State Confidence view for local-versus-exchange truth. Required protection that is missing/partial/unknown and low-confidence reconciliation state can trigger no-new-exposure, protection recovery, reduce-only or emergency modes. Process restart/deployment/failover requires authoritative recovery/reconciliation before normal live operation resumes.
