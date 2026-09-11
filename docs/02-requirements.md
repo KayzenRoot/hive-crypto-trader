@@ -131,7 +131,20 @@ Product requirements are being discovered and refined. The following requirement
 - Evaluate portfolio concentration using correlation/common-factor/strategy exposure rather than assuming different crypto tickers are independent.
 - Leverage evaluation must include liquidation distance/buffer, maintenance-margin rules and uncertainty around protective execution.
 - No new position should be authorized if liquidation/margin state cannot be evaluated reliably.
-- Risk research may include Adaptive Risk Budget Surface, Liquidation Defense Distance, Margin Fragility Score, Correlated Exposure Equivalent, Portfolio Stress Lattice and Stop Quality Score, all subordinate to deterministic hard limits.
+- Resolve exchange risk tiers, maintenance-margin rates, maximum leverage, position limits, margin modes and liquidation semantics dynamically through the exchange adapter where available; unknown critical venue risk state blocks new exposure.
+- Require an immutable, versioned and expiring `RiskSnapshot` for every exposure-increasing action, including projected post-trade tier, maintenance margin, leverage legality, liquidation buffer, portfolio state, policy versions and data confidence.
+- Require deterministic risk reservation before order submission; pending, partial and uncertain orders continue consuming reserved risk until authoritative exchange/reconciliation resolution.
+- Cross-margin approval must evaluate shared collateral contagion across relevant positions, unrealized PnL, open-order margin, correlation/common-factor exposure and reconciliation confidence.
+- Maintain multi-horizon risk budgets spanning trade, intraday/session, daily, weekly, monthly and account-survival horizons; shorter-horizon availability may not override exhausted longer-horizon survival budgets.
+- Maintain a protected `Operational Margin Reserve` that is excluded from ordinary opportunity sizing and preserved for fees, funding, slippage, partial fills, protective-order uncertainty, emergency closes, margin-rule changes and operational stress.
+- Tail-risk models such as Expected Shortfall-style estimates, stress surfaces and survival metrics may only preserve or tighten approved risk, never relax deterministic hard ceilings.
+- Treat protective-stop failure, delayed/rejected protection, gap-through-stop and partial protective fills as explicit contingent risk rather than assuming stops perfectly cap losses.
+- Treat every `ADD`/pyramiding action as a fresh exposure-increasing decision requiring a new RiskSnapshot, risk reservation and post-add liquidation/portfolio review; martingale or loss-recovery escalation is prohibited by default.
+- Evaluate collateral/stablecoin concentration and allow governed stress haircuts to derive conservative `Effective Risk Capital`; nominal wallet equity is not automatically equal to risk-usable capital under collateral stress.
+- Model observable extreme venue mechanics, including tiered/partial liquidation and ADL exposure where supported by the venue, and degrade conservatively when such state is unknown.
+- User-facing risk presets such as Conservative/Balanced/Aggressive must map only to bounded policy configurations beneath platform hard ceilings; labels themselves never authorize increased risk.
+- Risk decisions must provide structured explainability including monetary risk, reserved/open risk, notional, leverage, margin mode, tier/MMR, liquidation corridor, Operational Margin Reserve, tail/survival state, collateral quality, portfolio concentration, protection-failure exposure and veto/reduction reasons.
+- Risk research may include Adaptive Risk Budget Surface, Liquidation Defense Distance, Margin Fragility Score, Correlated Exposure Equivalent, Portfolio Stress Lattice, Stop Quality Score, Tier Transition Risk, Liquidation Buffer Confidence Interval, Stop-to-Liquidation Safety Corridor, Cross-Margin Contagion Index, Tail Loss Envelope, Expected Shortfall Surface, Survival Probability Floor, Collateral Stress Haircut and ADL Exposure Score, all subordinate to deterministic hard limits.
 - Drawdown state may progress through governed states such as NORMAL, CAUTION, RISK_REDUCED, NO_NEW_EXPOSURE, RECOVERY_ONLY and EMERGENCY.
 - Provide kill-switch/circuit-breaker behavior and explicit uncertain-state handling.
 - User/tenant settings may tighten but cannot exceed global/platform safety ceilings.
@@ -169,6 +182,7 @@ Product requirements are being discovered and refined. The following requirement
 - Agent changes, model changes and active skill changes require regression/evaluation evidence appropriate to their authority and risk.
 - Signal-room strategies must be validated for subscriber realizability under Telegram publication delay, plausible human reaction delay, market movement, liquidity and signal-expiry assumptions rather than only internal decision-price results.
 - Publication-path testing must cover idempotency, retry/duplicate suppression, stale-signal suppression, destination outage, lifecycle update consistency and independent Harness isolation.
+- R03 risk validation must cover tier-boundary transitions, maintenance-margin changes, stale RiskSnapshots, reservation conservation, partial/uncertain orders, cross-margin contagion, tail scenarios, survival-budget exhaustion, Operational Margin Reserve protection, stop/protection failure, pyramiding, collateral stress/depeg, partial liquidation/ADL scenarios where representable, and structured explainability.
 
 ## Governance requirements already in force
 - repository is canonical truth;

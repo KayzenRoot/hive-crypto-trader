@@ -15,6 +15,11 @@ Accepted planning themes include:
 - first-class signal-room publishing, with Telegram as the initial destination, structured entry/TP/SL lifecycle, freshness/idempotency, subscriber-realizability analytics and provider-neutral publisher boundaries;
 - RAG/market memory, controlled learning and model lifecycle;
 - independent Safety & Protection Governor, hard Risk Engine, leverage and position sizing;
+- dynamic exchange risk tiers, maintenance margin, position limits, margin modes and liquidation semantics;
+- immutable/expiring post-trade RiskSnapshots and deterministic pre-submit Risk Reservation Ledger;
+- cross-margin contagion, portfolio/common-factor/tail risk and multi-horizon survival budgets;
+- protected Operational Margin Reserve, protection-failure exposure and risk-approval revalidation;
+- governed ADD/pyramiding controls, collateral/stablecoin stress, Effective Risk Capital and venue-extreme mechanics such as partial liquidation/ADL where observable;
 - execution, OMS, reconciliation and portfolio exposure;
 - caching/hot state with explicit freshness rules;
 - backtest/replay/paper/shadow validation;
@@ -28,6 +33,7 @@ Accepted planning themes include:
 - market universe/scanner and realtime data integrity;
 - strategy/signal/indicator architecture;
 - Safety, Risk, leverage, position sizing, execution, OMS and reconciliation;
+- dynamic exchange/margin risk-state resolution, post-trade risk preview, risk reservation and survival controls;
 - backtest/replay/paper/shadow promotion path;
 - HCT Intelligence Brain and governed memory/learning foundations;
 - frontend/backend separation, security and operational controls;
@@ -60,3 +66,5 @@ Accepted planning themes include:
 
 ## Scope control
 New ideas may be added during discovery, but each must be classified as NECESSARY, IMPORTANT, FUTURE or OUT OF SCOPE before implementation planning. No idea becomes production scope merely because it was discussed.
+
+R03 approval is planning approval only and does not authorize implementation or live trading.
