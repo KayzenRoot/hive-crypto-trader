@@ -35,6 +35,9 @@ This document records the current planning module map. It is a planning registry
 25. **Backtest / Replay / Paper Trading / Simulation** — deterministic research path before production promotion.
 26. **Multi-Tenant Platform Foundation** — tenant isolation, account boundaries, credentials isolation, quotas, per-tenant policy and future commercialization readiness.
 27. **Realtime Trading Cockpit / UI-UX System** — enterprise dashboard, observability, diagnostics, explanations, risk state and the Hive Plan-aligned technological visual language.
+28. **Agentic Copilot Orchestrator** — supervised multi-agent orchestration for market analysis, candidate actions, position management and autonomous lifecycle control within hard boundaries.
+29. **Session Policy & User Operating Envelope Engine** — immutable session policy snapshots covering daily loss, target mode, risk/trade, leverage ceiling, allowed strategies/symbols, hours, volatility/news behavior, cooldown and emergency controls.
+30. **News & Event Intelligence** — approved-source event/calendar intelligence and event-risk classification used as context for Copilot decisions without bypassing deterministic safety/risk rules.
 
 ## Cross-cutting platform capabilities
 These concerns span multiple modules and will be planned explicitly rather than buried inside individual components:
@@ -50,8 +53,8 @@ These concerns span multiple modules and will be planned explicitly rather than 
 - legal/compliance/regional capability checks.
 
 ## Planning rule
-The system may analyze a broad market universe, but analysis is not authorization to trade. The decision chain remains conceptually:
+The system may analyze a broad market universe, but analysis is not authorization to trade. The evolved decision chain is conceptually:
 
-`Market Data -> Features/Indicators/Patterns -> Strategy -> Signal -> Intelligence Brain -> Safety Governor -> Risk Engine -> Position/Leverage -> Execution -> Reconciliation`
+`Market Data -> Features/Indicators/Patterns -> Strategy -> Multi-Agent Copilot -> Supervisor -> Candidate Action -> Safety Governor -> Risk Engine -> Session Policy -> Position/Leverage -> Execution -> Exchange -> Reconciliation`
 
-Any AI/RAG/learned component is advisory or decision-support only until it passes explicit promotion gates. It may never override hard risk, security, exchange or tenancy controls.
+Any AI/RAG/learned component must pass explicit promotion gates before receiving production authority. Even in `FULL_COPILOT`, agents cannot override hard risk, platform safety, exchange, security or tenancy controls.
