@@ -71,3 +71,33 @@ Status: APPROVED_FOR_DISCOVERY
 Date: 2026-09-11
 
 Decision: HCT will include a caching/hot-state layer for low-latency operation, but every cached datum must have explicit freshness/TTL/invalidation semantics. Exchange-authoritative state such as orders, fills, positions and balances must remain reconcilable and cache divergence must never be silently accepted.
+
+## HCT-DEC-0013 — Copilot may become autonomously operational inside hard boundaries
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: HCT will plan explicit autonomy modes culminating in `FULL_COPILOT`, where the system may autonomously scan, select, open, manage and close trades, including TP/SL, trailing, partial exits and order replacement. Autonomy remains subordinate to exchange constraints, platform Safety Governor, Risk Engine and the current user/tenant operating envelope.
+
+## HCT-DEC-0014 — Copilot uses supervised specialized agents
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: autonomous reasoning will be decomposed into specialized agents including market scout, technical analysis, regime/cycle, RAG memory, strategy, risk proposal, execution planning, position management, news/event context, adversarial review, supervision and post-trade review. Agents do not receive unrestricted direct exchange authority.
+
+## HCT-DEC-0015 — Daily/session operating envelope is mandatory for autonomous modes
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: autonomous sessions must be governed by an immutable session policy snapshot containing configured loss limits, target mode, risk/trade, leverage ceiling, positions/exposure, strategies/symbols, hours, volatility/news behavior, cooldowns and emergency controls. User policy may tighten but not exceed platform hard safety ceilings.
+
+## HCT-DEC-0016 — Proprietary indicators must seek genuinely incremental information
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: HCT indicator R&D will explicitly investigate new features such as Regime Transition Probability, Multi-Timeframe Agreement Entropy, False Breakout Probability, Liquidity Vacuum Index, Exhaustion Resonance, Historical Analog Edge, Adversarial Confidence Gap, Signal Fragility, Opportunity Persistence, Contextual Risk-Reward Surface, Cycle Alignment and Decision Confidence Calibration. Novelty alone is insufficient; promotion requires incremental validated value.
+
+## HCT-DEC-0017 — Copilot and strategy behavior must be visually inspectable
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: the trading cockpit must provide a dedicated Copilot session/setup experience and symbol chart workspace capable of visualizing actual executions, strategy signals, conditions, indicators/patterns, TP/SL/trailing behavior, regime, agent evidence/disagreement and proprietary HCT indicators while clearly distinguishing executed versus hypothetical/simulated paths.
