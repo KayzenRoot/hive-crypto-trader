@@ -13,6 +13,7 @@ Product requirements are being discovered and refined. The following requirement
 - Architect for eventual commercial multi-tenant use even if commercialization and paid plans are deferred beyond the first release.
 - Provide a user-selectable Copilot mode capable of autonomous trade lifecycle management within hard user/platform constraints.
 - Provide both curated built-in strategies and a user-facing strategy builder for creating private custom strategies.
+- Provide a first-class `Signals` workspace capable of publishing governed strategy-generated LONG/SHORT signals to Telegram channels/groups as a product capability separate from autonomous exchange execution.
 - Keep V1 live trading limited to MEXC Futures while preserving an exchange-adapter architecture for future Binance and additional venue integrations.
 - Build HCT as an English-first commercial product targeting the US/international English-speaking market, while supporting first-class Portuguese (Brazil) and Spanish localization from implementation start.
 - Use USD as the initial canonical commercial plan/catalog currency.
@@ -68,6 +69,25 @@ Product requirements are being discovered and refined. The following requirement
 - The platform may require schema validation, backtest, replay and/or paper validation before a custom strategy becomes live-eligible.
 - Custom strategy rules may tighten risk constraints but may never raise platform hard ceilings or bypass Safety, Risk, Session Policy, tenancy/security or reconciliation.
 - Architecture should allow future controlled sharing/import/export/marketplace/plan entitlements without requiring core Strategy Engine redesign.
+
+## Signal publishing and Telegram room requirements
+- Provide a top-level `Signals` area in the product sidebar and cockpit navigation.
+- Allow creation of versioned signal-room strategies using canonical Strategy Definition / Strategy Builder semantics wherever practical.
+- Permit an operator to select strategy, indicators/features, symbols/universe, direction, timeframes, minimum confidence/evidence requirements, operating windows, cooldown, entry logic, validity/expiry and publication policy.
+- Support Telegram broadcast channels as the recommended official-signal destination, with optional linked discussion group; direct groups/supergroups may also be supported.
+- Implement Telegram behind a provider-neutral `SignalPublisher` / destination adapter interface so other delivery destinations can be added later without changing signal semantics.
+- Keep Telegram bot credentials backend-only and isolated from exchange API credentials, frontend clients, prompts and user-authored strategy content.
+- Use a durable publication outbox with idempotency, retry policy, duplicate suppression and observable delivery state.
+- Support structured LONG and SHORT signal artifacts with symbol/contract, exchange, direction, entry price or zone, up to three take-profit levels, one primary stop by default, optional additional explicitly-labelled stop/invalidation profiles, confidence/context, creation time and validity/expiry.
+- Multiple stop levels must have explicit semantics and must not be presented ambiguously as if a subscriber could simultaneously use mutually inconsistent hard stops.
+- Publication must pass an independent freshness/opportunity-decay gate; stale or excessively moved opportunities may be suppressed rather than sent late.
+- Signal lifecycle may emit controlled updates such as entry reached, TP1/TP2/TP3 reached, stop/invalidation reached, cancelled, expired or closed.
+- Store Telegram destination/message identifiers and publication lifecycle evidence sufficient for deduplication, updates, auditing and performance reconstruction.
+- Telegram availability/failure must not alter HCT live-trading state; the Harness must be able to degrade/disable only signal publishing.
+- Signal-room analytics must distinguish HCT internal decision price from Telegram publication price and plausible subscriber execution after human reaction delay.
+- Evaluate subscriber realizability using publication latency, market movement, signal half-life, liquidity and configurable reaction-delay scenarios rather than claiming performance from ideal internal prices.
+- A strategy suitable for automated low-latency HCT execution may be classified as unsuitable for human Telegram distribution when its opportunity half-life is too short.
+- Signal content and commercial presentation must not imply guaranteed profit and require legal/commercial/regional review before paid commercialization.
 
 ## Institutional agent workforce requirements
 - Agent specifications are canonical repository artifacts authored before implementation, not improvised by the execution model.
@@ -132,6 +152,7 @@ Product requirements are being discovered and refined. The following requirement
 - Establish a technological premium enterprise trading-cockpit design language aligned with the visual DNA of Hive Plan while remaining product-specific.
 - Realtime risk, degraded-state and exchange-uncertainty signals must have visual priority over decorative/3D effects.
 - Provide a dedicated Copilot session setup surface and realtime autonomous-operation cockpit.
+- Provide a top-level `Signals` workspace for signal-room strategy configuration, Telegram destination health, template preview, published-signal lifecycle, freshness/latency warnings and subscriber-realizability/performance analytics.
 - When a symbol is selected, provide a realtime chart with optional overlays for strategy behavior, actual executions, simulated signals, indicators/patterns, TP/SL/trailing paths, regime, agent evidence and proprietary HCT indicators.
 - Clearly distinguish executed trades from hypothetical or paper/simulated strategy paths.
 - Provide Strategy Catalog and Strategy Builder views with visual rules, human-readable explanation, chart preview, timeframe/indicator overlays, validation warnings, backtest/paper evidence, cloning/comparison and version history.
@@ -146,6 +167,8 @@ Product requirements are being discovered and refined. The following requirement
 - Profitability is never guaranteed by an indicator/model; evidence must distinguish statistical edge from overfitting.
 - User-authored strategies require reproducible versioned evaluation and must not silently use future data or unavailable exchange capabilities.
 - Agent changes, model changes and active skill changes require regression/evaluation evidence appropriate to their authority and risk.
+- Signal-room strategies must be validated for subscriber realizability under Telegram publication delay, plausible human reaction delay, market movement, liquidity and signal-expiry assumptions rather than only internal decision-price results.
+- Publication-path testing must cover idempotency, retry/duplicate suppression, stale-signal suppression, destination outage, lifecycle update consistency and independent Harness isolation.
 
 ## Governance requirements already in force
 - repository is canonical truth;
