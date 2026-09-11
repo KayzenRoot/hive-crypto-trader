@@ -155,3 +155,15 @@ Status: APPROVED_FOR_DISCOVERY
 Date: 2026-09-11
 
 Decision: HCT's initial subscription/plan catalog will be denominated in USD. Locale-specific formatting is separate from currency conversion or regional pricing. Future regional price books, local settlement currencies, taxes and FX behavior require explicit commercial/payment decisions rather than being inferred from UI language.
+
+## HCT-DEC-0027 — Approved strategies participate in a governed Strategy Ecology and Router
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: HCT will include a Strategy Ecology/Router layer that evaluates only policy-eligible strategy versions for context suitability, redundancy, conflicts, regime affinity, execution feasibility and portfolio interaction. Multiple agreeing strategies are treated as ensemble evidence rather than multiplied risk. Experimental/user/AI-generated candidates cannot self-promote to live; strategy routing remains subordinate to Safety Governor, Risk Engine, Session Policy and portfolio constraints.
+
+## HCT-DEC-0028 — Strategy deterioration, diversity and conflict are explicit measurable concepts
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: HCT will research explicit strategy-level measures including Strategy DNA, Effective Strategy Diversity, Strategy Decay Index, Strategy Regime Affinity Surface and Strategy Conflict Graph. These measures support explainability, routing, diagnostics, champion/challenger evaluation and governed quarantine/review, but do not constitute guaranteed edge and may not autonomously rewrite live strategy semantics.
