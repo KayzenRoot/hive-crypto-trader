@@ -2,12 +2,12 @@
   "schema_version": "1.0",
   "project_code": "HCT",
   "workstream": "planning",
-  "checkpoint_id": "HCT-CP-0004",
-  "checkpoint_path": "checkpoints/history/HCT-CP-0004.json",
-  "status": "PRODUCT_DISCOVERY_ROUND_02_APPROVED",
-  "last_canonical_planning_merge_sha": "1bcab0302c849b6711a5d5100a181ee0943099a5",
-  "completed_increment": "HCT-PLAN-0001-R02",
-  "next_necessary_action": "Continue HCT-PLAN-0001 with formal HCT-PLAN-0001-R03: Safety, Risk, leverage and position-sizing discovery. Use docs/28-risk-intelligence-position-sizing-leverage-and-equity-guard.md as pre-discovery input, perform a formal R03 gap audit, and do not authorize implementation or live trading.",
+  "checkpoint_id": "HCT-CP-0005",
+  "checkpoint_path": "checkpoints/history/HCT-CP-0005.json",
+  "status": "PRODUCT_DISCOVERY_ROUND_03_APPROVED",
+  "last_canonical_planning_merge_sha": "26045a553f8c84b5c88a1eb0ea514ea361ad2422",
+  "completed_increment": "HCT-PLAN-0001-R03",
+  "next_necessary_action": "Continue HCT-PLAN-0001 with formal HCT-PLAN-0001-R04: Execution, OMS and reconciliation discovery. Use docs/29-execution-intelligence-oms-reconciliation-and-recovery.md as pre-discovery input, perform an R04-specific gap audit, and do not authorize implementation or live trading.",
   "functional_planning_started": true,
   "implementation_authorized": false
 }
