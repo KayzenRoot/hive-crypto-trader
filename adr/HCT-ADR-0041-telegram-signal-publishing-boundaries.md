@@ -1,6 +1,6 @@
 # HCT-ADR-0041 — Telegram Signal Publishing Boundaries
 
-Status: `PROPOSED_FOR_DISCOVERY`
+Status: `APPROVED_FOR_DISCOVERY`
 Date: 2026-09-11
 Risk class: `HIGH_ASSURANCE`
 
