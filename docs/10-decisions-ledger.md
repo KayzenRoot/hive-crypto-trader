@@ -293,3 +293,51 @@ Status: APPROVED_FOR_DISCOVERY
 Date: 2026-09-11
 
 Decision: nominal wallet equity is not automatically equal to usable risk capital. HCT must evaluate collateral/stablecoin concentration and may apply governed stress haircuts to derive Effective Risk Capital. Partial/tiered liquidation, insurance-fund/ADL mechanics and other venue-extreme behavior are explicit risk inputs where observable; unknown critical extreme-state information causes conservative degradation or no-new-exposure rather than optimistic assumptions.
+
+## HCT-DEC-0050 — Execution commands require immutable identity and a current authorization lease
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: HCT separates Order Intent, Execution Plan, Execution Command, client/external order identity, exchange order identity, fills and mutation lineage. Every state-changing command must bind to still-valid Safety, RiskSnapshot/Risk Reservation and Session Policy state through a Command Authorization Lease. A queued command whose authority has expired or changed must be revalidated before transmission.
+
+## HCT-DEC-0051 — Exchange acknowledgements and fills are different evidence levels
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: REST/API success or an exchange order identifier proves acknowledgement/acceptance only to the extent documented by the venue and never proves a fill. HCT uses an explicit Order Evidence Ladder and resolves economic state from order, fill, position and reconciliation evidence with provenance. Unknown or contradictory evidence remains visible and may block new exposure.
+
+## HCT-DEC-0052 — Fills are economically idempotent and OMS projections cannot regress on late events
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: each exchange fill identity may affect position, fees and risk accounting at most once. OMS stores immutable source events, deduplicates by authoritative identities where available, tolerates duplicate/late/out-of-order events and does not regress a stronger lifecycle projection solely because weaker or older evidence arrived later.
+
+## HCT-DEC-0053 — Unknown outcomes and cancel/replace races require reconciliation, never blind retry
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: timeout after submission, cancel-pending, replace-pending and ambiguous mutation outcomes are not classified optimistically. HCT blocks unsafe duplicate commands, uses external/exchange IDs and authoritative order/fill/position evidence to resolve state, and explicitly handles fills racing with cancel/replace operations. A cancel request never proves cancellation.
+
+## HCT-DEC-0054 — Reduce/close and protection semantics are position-mode aware and exposure-safe
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: REDUCE/CLOSE/PROTECT actions must be validated against current reconciled position mode, side, size, position identity and venue capability. They may not silently create or increase opposite exposure. Required stops/TP/trailing protection are represented as dependencies of actual filled exposure and must be verified/re-sized as fills and exits change the position.
+
+## HCT-DEC-0055 — Reconciliation uses explicit watermarks, conflicts and restart completeness proof
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: HCT reconciliation tracks the coverage/freshness of order, fill, position, account and protection evidence with explicit watermarks. Contradictory evidence creates a persisted conflict instead of silent overwrite. After restart/failover, normal new exposure remains disabled until potentially-live orders/intents, positions, fills, protection and risk reservations are authoritatively classified or the system remains in a restrictive recovery mode.
+
+## HCT-DEC-0056 — Protective and reconciliation operations receive quota and time-integrity priority
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: signed exchange commands require monitored clock integrity and current venue request-time semantics. API/WebSocket budgets are priority-aware so emergency, protection, reconciliation and active-position control outrank new exposure and research traffic. Scanner/research demand may not consume the capacity required to protect or reconcile existing money-at-risk.
+
+## HCT-DEC-0057 — Execution tactics, fees and private-event schemas are versioned external dependencies
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: supported order types, time-in-force behavior, STP, position modes, reduce-only semantics, fee schedules and private-event schemas are capability/versioned external state, not perpetual hardcoded assumptions. HCT maintains an Execution Tactic Capability Matrix, expected-versus-realized cost evidence, schema validation/quarantine and conservative degradation when critical semantics become unknown.
