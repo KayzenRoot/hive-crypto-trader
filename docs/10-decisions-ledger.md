@@ -28,7 +28,7 @@ Decision: Hive Crypto Trader will initially target MEXC Futures. The market univ
 Status: APPROVED_FOR_DISCOVERY
 Date: 2026-09-11
 
-Decision: realtime design will prefer WebSocket where appropriate and use REST for reference/control/reconciliation paths. A dedicated API Quota, WebSocket & Backpressure Governor will enforce documented limits, subscription planning, throttling, retry budgets and circuit breakers. The system must fail safe rather than risk abusive traffic or account blocking.
+Decision: realtime design will prefer WebSocket where appropriate and use REST for reference/reconciliation/control paths. A dedicated API Quota, WebSocket & Backpressure Governor will enforce documented limits, subscription planning, throttling, retry budgets and circuit breakers. The system must fail safe rather than risk abusive traffic or account blocking.
 
 ## HCT-DEC-0006 — Safety & Protection Governor is independent and authoritative
 Status: APPROVED_FOR_DISCOVERY
@@ -209,3 +209,9 @@ Status: APPROVED_FOR_DISCOVERY
 Date: 2026-09-11
 
 Decision: HCT will explicitly verify protective-order integrity and maintain a State Confidence view for local-versus-exchange truth. Required protection that is missing/partial/unknown and low-confidence reconciliation state can trigger no-new-exposure, protection recovery, reduce-only or emergency modes. Process restart/deployment/failover requires authoritative recovery/reconciliation before normal live operation resumes.
+
+## HCT-DEC-0036 — Bootstrap infrastructure is free-first with portable provider abstractions
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: HCT targets approximately USD 0/month recurring infrastructure during development and earliest commercialization, using credible free tiers where they satisfy security, latency and reliability requirements. A narrowly justified soft exception of approximately USD 3–4/month may be used for an indispensable persistent component when no safe free option exists. Architecture must abstract providers so later migration does not rewrite the trading core. Infrastructure receives a formal upgrade review near 10–12 active paying customers or earlier when measured capacity, latency, reliability, security or quota thresholds require it. Free pricing never justifies an unsafe live-trading design.
