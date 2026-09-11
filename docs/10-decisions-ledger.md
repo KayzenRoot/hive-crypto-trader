@@ -215,3 +215,33 @@ Status: APPROVED_FOR_DISCOVERY
 Date: 2026-09-11
 
 Decision: HCT targets approximately USD 0/month recurring infrastructure during development and earliest commercialization, using credible free tiers where they satisfy security, latency and reliability requirements. A narrowly justified soft exception of approximately USD 3–4/month may be used for an indispensable persistent component when no safe free option exists. Architecture must abstract providers so later migration does not rewrite the trading core. Infrastructure receives a formal upgrade review near 10–12 active paying customers or earlier when measured capacity, latency, reliability, security or quota thresholds require it. Free pricing never justifies an unsafe live-trading design.
+
+## HCT-DEC-0037 — Microstructure intelligence uses provider-neutral realtime feature serving
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: HCT adopts Microstructure, Order-Flow, Liquidity, Breadth & Cross-Market Intelligence as a dedicated evidence domain. Realtime feature serving uses provider-neutral contracts; bootstrap implementation prefers in-process memory plus bounded durable evidence rather than per-tick cloud round trips. Proprietary microstructure features require point-in-time, OOS/walk-forward, realistic-cost and replay/paper/shadow validation before promotion.
+
+## HCT-DEC-0038 — Market memory is point-in-time, temporal and governed
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: HCT market memory must distinguish `event_time` from `knowledge_time`, preserve immutable ex-ante evidence, support global-plus-recent temporal retrieval, regime-conditioned analog search and explicit drift/forgetting controls. Material learning changes may not silently self-modify or self-promote production behavior.
+
+## HCT-DEC-0039 — Intelligence Brain is calibrated, selective and non-authoritative over safety
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: HCT Intelligence Brain fuses structured evidence with provenance, freshness, independence, contradiction and empirical calibration. `WAIT`, `NO_TRADE`, `DATA_UNCERTAIN`, `EVIDENCE_CONFLICT` and `CALIBRATION_UNTRUSTED` are first-class outputs. The Brain produces candidate decisions only and remains subordinate to Safety Governor, Risk Engine, Session Policy, Position/Leverage and Execution controls.
+
+## HCT-DEC-0040 — Production promotion requires point-in-time proof and live-parity validation
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: HCT will maintain a Simulation/Replay/Paper/Shadow/Promotion Laboratory. Promotion evidence must be point-in-time correct, include realistic frictions where relevant, use explicit staged validation and champion/challenger governance, preserve rollback and avoid hidden semantic divergence between research and live paths. Historical PnL alone is insufficient for production promotion.
+
+## HCT-DEC-0041 — Telegram signal rooms are a separate governed publishing path
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: HCT will provide a first-class `Signals` workspace with versioned signal strategies and Telegram channel/group publishing behind a provider-neutral `SignalPublisher` boundary. Signal publishing is informational distribution, separate from exchange execution, uses durable/idempotent outbox semantics, supports structured entry/TP/SL lifecycle, publication freshness gating and subscriber-realizability measurement, and must not claim guaranteed profit.
