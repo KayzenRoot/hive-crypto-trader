@@ -49,6 +49,7 @@ This document records the current planning module map. It is a planning registry
 39. **Harness / Capability Isolation & Blackout Engine** — dependency-aware feature flags, scoped freezes, quarantine, degradation, no-new-actions, maintenance and emergency blackout controls with blast-radius analysis and audit evidence.
 40. **Microstructure, Order-Flow, Liquidity, Breadth & Cross-Market Intelligence** — low-latency order-book/trade-flow features, liquidity topology and impact, alternative bars, market breadth, dynamic lead/lag propagation, anomaly detection, realtime feature serving and proprietary HCT microstructure R&D with bootstrap-aware compute budgets.
 41. **Temporal Market Memory, Historical Analog & Continual Learning Intelligence** — point-in-time-correct episode/event memory, temporal-causal graph relations, global-plus-recent retrieval, regime-conditioned analog search, no-trade learning, concept-drift localization, catastrophic-forgetting controls, champion/challenger evaluation and governed continual learning.
+42. **Signal Publishing, Telegram Rooms & Subscriber Delivery Intelligence** — first-class HCT Signals workspace, versioned signal-room strategies, Telegram channel/group destinations, structured LONG/SHORT signal cards, entry/TP/SL lifecycle, durable outbox/idempotent delivery, publication freshness, subscriber-delay realism, performance analytics and provider-neutral signal publishing.
 
 ## Cross-cutting platform capabilities
 These concerns span multiple modules and will be planned explicitly rather than buried inside individual components:
@@ -71,6 +72,7 @@ These concerns span multiple modules and will be planned explicitly rather than 
 - point-in-time replay, temporal non-interference, simulation/live parity and promotion evidence;
 - realistic fees, funding, spread, slippage, latency, market impact, partial-fill and signal-expiry modeling;
 - stress/failure injection, reality-gap monitoring, limited-live canary and rollback governance;
+- Telegram/signal-room delivery security, idempotency, freshness, lifecycle updates and subscriber-realizability measurement;
 - tenancy, billing-readiness and future plan/entitlement controls;
 - internationalization/localization with `en-US` canonical and `pt-BR`/`es` supported from implementation start;
 - USD-first commercial catalog and locale-aware presentation;
@@ -91,6 +93,12 @@ Only **MEXC Futures** is enabled for live trading in V1. Binance and other excha
 The system may analyze a broad market universe, but analysis is not authorization to trade. The evolved decision chain is conceptually:
 
 `Exchange Adapter -> Realtime Market Data -> Market-State Fabric/Integrity -> Microstructure/Breadth/Cross-Market Intelligence -> Features/Indicators/Patterns -> Temporal Memory/Analog Intelligence -> Strategy -> Strategy Ecology/Router -> Institutional Agent Workforce -> HCT Intelligence Brain / Copilot Supervisor -> Candidate Action -> Safety Governor -> Risk Engine -> Session Policy -> Position/Leverage -> Execution Intelligence -> OMS -> Exchange Adapter -> Exchange -> Reconciliation/State Confidence -> Protective Integrity`
+
+Signal publication is a separate governed branch:
+
+`Approved Signal Strategy -> Signal Candidate -> Publication Policy/Freshness Gate -> Durable Outbox -> Signal Publisher -> Telegram Channel/Group -> Subscriber`
+
+Telegram publication is informational distribution and never bypasses or becomes exchange execution authority.
 
 The Simulation/Replay/Paper/Shadow/Promotion Laboratory runs orthogonally against the same domain contracts to validate new versions before live promotion.
 
