@@ -270,26 +270,26 @@ Date: 2026-09-11
 
 Decision: when cross margin is used, HCT must evaluate shared wallet/equity, all relevant cross positions, unrealized PnL, maintenance margin, open-order margin, correlated stress and collateral confidence before approving new exposure. A position that appears acceptable in isolation may be reduced or vetoed if it materially destabilizes the shared margin pool. Unknown critical cross-margin state blocks new exposure.
 
-## HCT-DEC-0046 — Risk budgets are multi-horizon and preserve account survival
+## HCT-DEC-0046 — Risk authority includes multi-horizon survival budgets
 Status: APPROVED_FOR_DISCOVERY
 Date: 2026-09-11
 
-Decision: HCT will maintain nested trade, intraday, daily/session, weekly, monthly and account-survival risk budgets. Higher-horizon survival constraints may block new exposure even when trade-level and daily budgets remain available. Tail-risk estimates, Expected Shortfall-style measures and survival controls may only tighten risk and cannot expand hard ceilings.
+Decision: HCT risk budgets span individual trade, intraday/session, daily, weekly, monthly and account-survival horizons. Exhaustion or breach at a longer survival horizon may tighten or veto shorter-horizon opportunity authority even when a local trade/day budget remains. Tail/survival models may tighten deterministic limits but may not expand them.
 
-## HCT-DEC-0047 — Operational margin reserve is protected from normal opportunity sizing
+## HCT-DEC-0047 — Operational Margin Reserve is protected from ordinary opportunity sizing
 Status: APPROVED_FOR_DISCOVERY
 Date: 2026-09-11
 
-Decision: HCT will reserve part of usable capital as an Operational Margin Reserve for plausible slippage, fees/funding, protection delays/failure, partial-fill transitions, tier/MMR changes, cross-margin deterioration, reconciliation uncertainty and emergency reduction. Strategies and agents may not consume this reserve merely to increase normal position size.
+Decision: HCT will maintain a protected Operational Margin Reserve for non-ideal operational outcomes including fees/funding, slippage, partial fills, protective-order failure or delay, emergency closes, margin-rule changes and reconciliation uncertainty. Normal strategies, agents and opportunity sizing cannot consume the OMR as ordinary risk capital.
 
-## HCT-DEC-0048 — Adds/pyramiding require independent incremental risk approval
+## HCT-DEC-0048 — Every ADD/pyramiding action requires fresh independent risk approval
 Status: APPROVED_FOR_DISCOVERY
 Date: 2026-09-11
 
-Decision: every ADD/pyramiding action is a new exposure-increasing decision requiring a fresh RiskSnapshot, incremental risk reservation and recomputation of average entry, invalidation/protection, tier/MMR, liquidation corridor, portfolio concentration and cumulative risk. Martingale/loss-recovery escalation is prohibited by default and unrealized profit does not create unrestricted free risk.
+Decision: adding exposure to an existing position requires a new RiskSnapshot, risk reservation, projected post-add tier/MMR/leverage/liquidation review and cumulative thesis/portfolio risk evaluation. Existing unrealized profit does not constitute free risk capacity. Implicit martingale or loss-recovery averaging is prohibited by default.
 
 ## HCT-DEC-0049 — Collateral quality and extreme venue mechanics are first-class risk inputs
 Status: APPROVED_FOR_DISCOVERY
 Date: 2026-09-11
 
-Decision: HCT must account for collateral concentration/depeg/counterparty uncertainty and for venue extreme-state mechanics including tiered/partial liquidation and Auto-Deleveraging (ADL) where applicable/observable. Nominal wallet equity may be haircutted into Effective Risk Capital under collateral stress. High or unknown extreme-venue risk may reduce size/leverage or trigger NO_NEW_EXPOSURE/REDUCE_ONLY; these mechanisms never relax risk limits.
+Decision: nominal wallet equity is not automatically equal to usable risk capital. HCT must evaluate collateral/stablecoin concentration and may apply governed stress haircuts to derive Effective Risk Capital. Partial/tiered liquidation, insurance-fund/ADL mechanics and other venue-extreme behavior are explicit risk inputs where observable; unknown critical extreme-state information causes conservative degradation or no-new-exposure rather than optimistic assumptions.
