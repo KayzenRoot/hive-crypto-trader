@@ -47,6 +47,7 @@ This document records the current planning module map. It is a planning registry
 37. **News & Event Intelligence** — approved-source event/calendar/breaking-news intelligence, web research, corroboration and near-term impact classification without bypassing deterministic safety/risk rules.
 38. **Administrative Control Plane** — owner-only operational cockpit for platform-wide observability, tenant/system administration, incidents, releases and governed privileged controls.
 39. **Harness / Capability Isolation & Blackout Engine** — dependency-aware feature flags, scoped freezes, quarantine, degradation, no-new-actions, maintenance and emergency blackout controls with blast-radius analysis and audit evidence.
+40. **Microstructure, Order-Flow, Liquidity, Breadth & Cross-Market Intelligence** — low-latency order-book/trade-flow features, liquidity topology and impact, alternative bars, market breadth, dynamic lead/lag propagation, anomaly detection, realtime feature serving and proprietary HCT microstructure R&D with bootstrap-aware compute budgets.
 
 ## Cross-cutting platform capabilities
 These concerns span multiple modules and will be planned explicitly rather than buried inside individual components:
@@ -59,10 +60,13 @@ These concerns span multiple modules and will be planned explicitly rather than 
 - performance, resilience and disaster recovery;
 - realtime event-time provenance, replay fidelity and market-state-generation coherence;
 - bounded queues, adaptive subscription planning, backpressure and deterministic load shedding;
+- realtime feature freshness/coherence, point-in-time correctness and incremental computation;
+- microstructure/order-flow validation, breadth/lead-lag decay and anomaly explainability;
 - tenancy, billing-readiness and future plan/entitlement controls;
 - internationalization/localization with `en-US` canonical and `pt-BR`/`es` supported from implementation start;
 - USD-first commercial catalog and locale-aware presentation;
 - FinOps/cost controls;
+- bootstrap `Feature Value Density` so costly realtime features must justify compute/network/storage consumption;
 - legal/compliance/regional capability checks;
 - exchange capability normalization and portability governance;
 - strategy ownership, versioning and compatibility governance;
@@ -77,7 +81,7 @@ Only **MEXC Futures** is enabled for live trading in V1. Binance and other excha
 ## Planning rule
 The system may analyze a broad market universe, but analysis is not authorization to trade. The evolved decision chain is conceptually:
 
-`Exchange Adapter -> Realtime Market Data -> Market-State Fabric/Integrity -> Features/Indicators/Patterns -> Strategy -> Strategy Ecology/Router -> Institutional Agent Workforce -> Copilot Supervisor -> Candidate Action -> Safety Governor -> Risk Engine -> Session Policy -> Position/Leverage -> Execution Intelligence -> OMS -> Exchange Adapter -> Exchange -> Reconciliation/State Confidence -> Protective Integrity`
+`Exchange Adapter -> Realtime Market Data -> Market-State Fabric/Integrity -> Microstructure/Breadth/Cross-Market Intelligence -> Features/Indicators/Patterns -> Strategy -> Strategy Ecology/Router -> Institutional Agent Workforce -> Copilot Supervisor -> Candidate Action -> Safety Governor -> Risk Engine -> Session Policy -> Position/Leverage -> Execution Intelligence -> OMS -> Exchange Adapter -> Exchange -> Reconciliation/State Confidence -> Protective Integrity`
 
 The Administrative Control Plane and Harness sit orthogonally across the platform and may restrict/degrade capabilities, but cannot silently bypass Safety/Risk rules.
 
