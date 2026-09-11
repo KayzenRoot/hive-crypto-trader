@@ -38,6 +38,8 @@ This document records the current planning module map. It is a planning registry
 28. **Agentic Copilot Orchestrator** — supervised multi-agent orchestration for market analysis, candidate actions, position management and autonomous lifecycle control within hard boundaries.
 29. **Session Policy & User Operating Envelope Engine** — immutable session policy snapshots covering daily loss, target mode, risk/trade, leverage ceiling, allowed strategies/symbols, hours, volatility/news behavior, cooldown and emergency controls.
 30. **News & Event Intelligence** — approved-source event/calendar intelligence and event-risk classification used as context for Copilot decisions without bypassing deterministic safety/risk rules.
+31. **Administrative Control Plane** — owner-only operational cockpit for platform-wide observability, tenant/system administration, incidents, releases and governed privileged controls.
+32. **Harness / Capability Isolation & Blackout Engine** — dependency-aware feature flags, scoped freezes, quarantine, degradation, no-new-actions, maintenance and emergency blackout controls with blast-radius analysis and audit evidence.
 
 ## Cross-cutting platform capabilities
 These concerns span multiple modules and will be planned explicitly rather than buried inside individual components:
@@ -56,5 +58,7 @@ These concerns span multiple modules and will be planned explicitly rather than 
 The system may analyze a broad market universe, but analysis is not authorization to trade. The evolved decision chain is conceptually:
 
 `Market Data -> Features/Indicators/Patterns -> Strategy -> Multi-Agent Copilot -> Supervisor -> Candidate Action -> Safety Governor -> Risk Engine -> Session Policy -> Position/Leverage -> Execution -> Exchange -> Reconciliation`
+
+The Administrative Control Plane and Harness sit orthogonally across the platform and may restrict/degrade capabilities, but cannot silently bypass Safety/Risk rules.
 
 Any AI/RAG/learned component must pass explicit promotion gates before receiving production authority. Even in `FULL_COPILOT`, agents cannot override hard risk, platform safety, exchange, security or tenancy controls.
