@@ -16,6 +16,7 @@ Product requirements are being discovered and refined. The following requirement
 - Keep V1 live trading limited to MEXC Futures while preserving an exchange-adapter architecture for future Binance and additional venue integrations.
 - Build HCT as an English-first commercial product targeting the US/international English-speaking market, while supporting first-class Portuguese (Brazil) and Spanish localization from implementation start.
 - Use USD as the initial canonical commercial plan/catalog currency.
+- Build the agent layer as a coordinated institutional-grade workforce whose canonical specifications are authored and versioned in this repository before implementation.
 
 ## Internationalization and localization requirements
 - Canonical/default product locale is `en-US`.
@@ -68,9 +69,30 @@ Product requirements are being discovered and refined. The following requirement
 - Custom strategy rules may tighten risk constraints but may never raise platform hard ceilings or bypass Safety, Risk, Session Policy, tenancy/security or reconciliation.
 - Architecture should allow future controlled sharing/import/export/marketplace/plan entitlements without requiring core Strategy Engine redesign.
 
+## Institutional agent workforce requirements
+- Agent specifications are canonical repository artifacts authored before implementation, not improvised by the execution model.
+- Each agent must define mission, scope, non-goals, expertise profile, approved inputs/outputs, tools, source hierarchy, uncertainty behavior, escalation, communication contract, memory policy, skill policy, degraded behavior, evaluation suite and authority ceiling.
+- Initial workforce should cover market scanning, technical/quant analysis, macroeconomics, crypto market structure, regime/cycle, strategy specialization/ecology, RAG memory, risk, portfolio exposure, leverage/position construction, execution/microstructure, position management, news/events, geopolitical/regulatory risk, security/exploits, adversarial review, supervision, post-trade review and agent/model-risk audit.
+- Agents communicate production evidence through structured, persisted envelopes containing claims, source references, confidence/uncertainty, assumptions, temporal validity, symbol/timeframe scope, conflicts and tool/skill/model versions.
+- Inter-agent deliberation must preserve dissent and support `WAIT` / `NO_TRADE`; forced consensus is not required.
+- Agents access internet/data/internal capabilities through a governed Tool Gateway with explicit read/write permissions and auditability.
+- Agents may propose reusable skills, but production skill creation follows a governed lifecycle such as DRAFT -> STATIC_REVIEW -> SANDBOX_TEST -> EVALUATED -> APPROVED -> ACTIVE.
+- No agent may silently activate a skill that expands its authority.
+- Different approved models may be routed to different agents based on quality, latency, reliability and cost, but model choice/version is observable and cannot alter authority boundaries.
+- An Agent Auditor / Model Risk Agent must monitor calibration drift, source errors, hallucinations, tool misuse, prompt/skill/model changes and behavioral regressions.
+
+## News and event intelligence requirements
+- Provide a dedicated News & Event Intelligence Agent capable of current web/source research for known, emerging and scheduled events that may affect the market over minutes, hours, the current session or near-term horizon.
+- Prefer primary/official and high-quality financial sources; social/unverified sources are discovery-only until corroborated.
+- Preserve event provenance, publish/detection/scheduled timestamps, source reliability tier, corroboration state, affected assets, impact horizon, uncertainty, transmission mechanism and expiry/decay.
+- Distinguish event existence from directional impact; the agent may classify volatility, liquidity, execution or no-trade risk without pretending directional certainty.
+- News intelligence should cover macro releases/central banks, regulation/enforcement, exchange events, token/protocol events, security exploits, stablecoin risks, major legal/bankruptcy events, geopolitical shocks and other materially relevant scheduled/breaking developments.
+- Unverified web content must not silently become canonical factual memory.
+- News/event agents may reduce confidence or recommend `NO_TRADE`, but cannot directly place orders or override deterministic Safety/Risk/Policy.
+- Evaluate the News Agent for detection latency, source quality, rumor rejection, duplication, timing, calibration and excessive-veto behavior.
+
 ## Agentic Copilot requirements
 - Use a supervised multi-agent topology rather than unrestricted direct model access to exchange credentials.
-- Candidate agents include market scout, technical analyst, regime/cycle, RAG/memory, strategy, risk proposal, execution planner, position manager, news/event context, adversarial reviewer, supervisor and post-trade reviewer.
 - Agents produce structured candidate actions; only deterministic Safety/Risk/Policy/Execution components can authorize exchange actions.
 - Support explicit autonomy modes: OFF, ADVISORY, GUARDED_AUTOPILOT and FULL_COPILOT.
 - FULL_COPILOT may autonomously open, manage and close positions, including TP/SL, trailing, partial exits and order replacement, only inside the current session operating envelope.
@@ -82,6 +104,15 @@ Product requirements are being discovered and refined. The following requirement
 - Risk Engine hard limits dominate strategy, RAG and learned-model recommendations.
 - AI/RAG/learned models may not autonomously raise hard risk limits, maximum leverage, disable safety controls or self-promote production versions.
 - Leverage is subordinate to risk, contract constraints, position sizing and portfolio exposure.
+- Position size must derive from approved monetary risk/invalidation and account for liquidity, slippage, fees/funding, portfolio exposure and exchange constraints rather than leverage-first sizing.
+- Provide deterministic daily/session equity protection including hard daily maximum loss and explicit drawdown/no-new-exposure states.
+- Optional profit targets may stop/reduce risk or trail session profit, but may never increase leverage, risk or trade frequency to reach a target.
+- Maintain a risk-budget hierarchy across platform, tenant/account, session/day, portfolio, strategy, symbol/correlation cluster and individual trade.
+- Evaluate portfolio concentration using correlation/common-factor/strategy exposure rather than assuming different crypto tickers are independent.
+- Leverage evaluation must include liquidation distance/buffer, maintenance-margin rules and uncertainty around protective execution.
+- No new position should be authorized if liquidation/margin state cannot be evaluated reliably.
+- Risk research may include Adaptive Risk Budget Surface, Liquidation Defense Distance, Margin Fragility Score, Correlated Exposure Equivalent, Portfolio Stress Lattice and Stop Quality Score, all subordinate to deterministic hard limits.
+- Drawdown state may progress through governed states such as NORMAL, CAUTION, RISK_REDUCED, NO_NEW_EXPOSURE, RECOVERY_ONLY and EMERGENCY.
 - Provide kill-switch/circuit-breaker behavior and explicit uncertain-state handling.
 - User/tenant settings may tighten but cannot exceed global/platform safety ceilings.
 - Session policy controls include daily max loss, optional target/open-target mode, risk/trade, concurrent positions, exposure, leverage ceiling, strategy/symbol allowlists, operating hours, volatility/news tolerance, cooldown and emergency controls.
@@ -104,6 +135,8 @@ Product requirements are being discovered and refined. The following requirement
 - When a symbol is selected, provide a realtime chart with optional overlays for strategy behavior, actual executions, simulated signals, indicators/patterns, TP/SL/trailing paths, regime, agent evidence and proprietary HCT indicators.
 - Clearly distinguish executed trades from hypothetical or paper/simulated strategy paths.
 - Provide Strategy Catalog and Strategy Builder views with visual rules, human-readable explanation, chart preview, timeframe/indicator overlays, validation warnings, backtest/paper evidence, cloning/comparison and version history.
+- Provide an agent/evidence view showing which agents participated, their status, evidence, disagreement, tool/source freshness and supervisor synthesis without exposing private hidden reasoning.
+- Provide risk explainability covering monetary risk, notional size, leverage, stop/invalidation, liquidation buffer, expected slippage/fees, portfolio-correlation impact, budget remaining, Daily Equity Guard state and veto/reduction reasons.
 - Plan dedicated operational views for scanner, symbol intelligence, indicators/patterns, positions/orders, risk/leverage, Safety Governor, RAG/decision traces, backtest/paper trading, model lifecycle, tenancy and system/API health.
 
 ## Validation requirements
@@ -112,6 +145,7 @@ Product requirements are being discovered and refined. The following requirement
 - Proprietary indicators must include ablation and incremental-value analysis against baselines.
 - Profitability is never guaranteed by an indicator/model; evidence must distinguish statistical edge from overfitting.
 - User-authored strategies require reproducible versioned evaluation and must not silently use future data or unavailable exchange capabilities.
+- Agent changes, model changes and active skill changes require regression/evaluation evidence appropriate to their authority and risk.
 
 ## Governance requirements already in force
 - repository is canonical truth;
