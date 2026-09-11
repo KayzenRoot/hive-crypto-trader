@@ -20,7 +20,13 @@ Accepted planning themes include:
 - cross-margin contagion, portfolio/common-factor/tail risk and multi-horizon survival budgets;
 - protected Operational Margin Reserve, protection-failure exposure and risk-approval revalidation;
 - governed ADD/pyramiding controls, collateral/stablecoin stress, Effective Risk Capital and venue-extreme mechanics such as partial liquidation/ADL where observable;
-- execution, OMS, reconciliation and portfolio exposure;
+- execution command identity, authorization leases, idempotency and mutation lineage;
+- OMS event sourcing, fill conservation, duplicate/late/out-of-order handling and unknown-outcome recovery;
+- cancel/replace race resolution and position-mode-aware REDUCE/CLOSE correctness;
+- protective-order dependency tracking, coverage verification and protection-establishment latency;
+- reconciliation watermarks, conflict ledger, state confidence and restart/failover recovery proof;
+- signed-command clock health, quota-priority protection and versioned execution capability/fee/schema dependencies;
+- portfolio exposure and continuous open-position state reconciliation;
 - caching/hot state with explicit freshness rules;
 - backtest/replay/paper/shadow validation;
 - future multi-tenant commercialization readiness;
@@ -34,6 +40,8 @@ Accepted planning themes include:
 - strategy/signal/indicator architecture;
 - Safety, Risk, leverage, position sizing, execution, OMS and reconciliation;
 - dynamic exchange/margin risk-state resolution, post-trade risk preview, risk reservation and survival controls;
+- deterministic execution identity/idempotency, fill conservation and unknown-outcome reconciliation;
+- position-mode-safe reduction/closing, protection integrity and restart/failover recovery;
 - backtest/replay/paper/shadow promotion path;
 - HCT Intelligence Brain and governed memory/learning foundations;
 - frontend/backend separation, security and operational controls;
@@ -44,11 +52,13 @@ Accepted planning themes include:
 - advanced proprietary microstructure technologies beyond the minimum validated V1 set;
 - advanced cross-market/lead-lag research;
 - deeper agent/model routing optimization;
-- richer subscriber-realizability and signal-room analytics after the core delivery path is stable.
+- richer subscriber-realizability and signal-room analytics after the core delivery path is stable;
+- advanced execution-tactic optimization beyond the minimum validated MEXC capability set.
 
 ### FUTURE
 - live trading on exchanges other than MEXC Futures;
 - additional signal-distribution destinations beyond Telegram;
+- multi-venue smart order routing;
 - dedicated large-scale streaming/vector/graph infrastructure before measured need;
 - advanced marketplace/white-label commercialization features unless separately promoted.
 
@@ -57,7 +67,7 @@ Accepted planning themes include:
 - live API credentials or secrets in the repository;
 - real-money order execution;
 - final strategy formulas or production parameter values;
-- autonomous self-modifying production strategy/risk logic;
+- autonomous self-modifying production strategy/risk/execution logic;
 - final leverage limits;
 - final commercial pricing/plans;
 - production deployment topology;
@@ -67,4 +77,4 @@ Accepted planning themes include:
 ## Scope control
 New ideas may be added during discovery, but each must be classified as NECESSARY, IMPORTANT, FUTURE or OUT OF SCOPE before implementation planning. No idea becomes production scope merely because it was discussed.
 
-R03 approval is planning approval only and does not authorize implementation or live trading.
+R03 and any future R04 approval are planning approvals only and do not authorize implementation or live trading.
