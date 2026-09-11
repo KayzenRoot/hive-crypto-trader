@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "project_code": "HCT",
+  "workstream": "planning",
+  "checkpoint_id": "HCT-CP-0008",
+  "status": "PRODUCT_DISCOVERY_ROUND_06_APPROVED",
+  "canonical_branch": "main",
+  "last_canonical_planning_merge_sha": "3ddfe30147074801508747fc2190f2a78ba3eb46",
+  "completed_increment": "HCT-PLAN-0001-R06",
+  "audit_artifact": "docs/62-r06-final-audit.md",
+  "audit_verdict": "APPROVED",
+  "acceptance_gates_passed": "27/27",
+  "initial_gaps": 30,
+  "unresolved_critical_high_gaps": 0,
+  "decisions_ledger_through": "HCT-DEC-0077",
+  "functional_planning_started": true,
+  "implementation_authorized": false,
+  "production_credentials_authorized": false,
+  "live_trading_authorized": false,
+  "next_necessary_action": "Continue HCT-PLAN-0001 with formal HCT-PLAN-0001-R07: Simulation, Replay, Backtest, Paper, Shadow and Promotion Laboratory discovery. Use docs/36-simulation-replay-paper-shadow-and-promotion-lab.md plus approved R03-R06 contracts as pre-discovery inputs, perform an R07-specific gap audit, and do not authorize implementation or live trading."
+}
