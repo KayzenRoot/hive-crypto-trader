@@ -1,10 +1,10 @@
 # HCT-PLAN-0001-R11 — Decision Proposals for Ledger Consolidation
 
-Status: `DISCOVERY_IN_PROGRESS`
+Status: `CONSOLIDATED`
 Increment: `HCT-PLAN-0001-R11`
 Date: `2026-09-11`
 
-These decisions are accepted within R11 planning and must be consolidated into `docs/10-decisions-ledger.md` before final approval.
+`HCT-DEC-0132` through `HCT-DEC-0141` are consolidated in `docs/10-decisions-ledger.md`. This file remains as R11-local provenance and must not compete with the canonical Decisions Ledger.
 
 ## HCT-DEC-0132 — Trading authority composes as a restrictive lattice, not a relaxable sequential chain
 Status: APPROVED_FOR_DISCOVERY
