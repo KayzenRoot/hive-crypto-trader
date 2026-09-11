@@ -2,12 +2,12 @@
   "schema_version": "1.0",
   "project_code": "HCT",
   "workstream": "planning",
-  "checkpoint_id": "HCT-CP-0008",
-  "checkpoint_path": "checkpoints/history/HCT-CP-0008.json",
-  "status": "PRODUCT_DISCOVERY_ROUND_06_APPROVED",
-  "last_canonical_planning_merge_sha": "3ddfe30147074801508747fc2190f2a78ba3eb46",
-  "completed_increment": "HCT-PLAN-0001-R06",
-  "next_necessary_action": "Continue HCT-PLAN-0001 with formal HCT-PLAN-0001-R07: Simulation, Replay, Backtest, Paper, Shadow and Promotion Laboratory discovery. Use docs/36-simulation-replay-paper-shadow-and-promotion-laboratory.md plus approved R03-R06 contracts as pre-discovery inputs, perform an R07-specific gap audit, and do not authorize implementation or live trading.",
+  "checkpoint_id": "HCT-CP-0009",
+  "checkpoint_path": "checkpoints/history/HCT-CP-0009.json",
+  "status": "PRODUCT_DISCOVERY_ROUND_07_APPROVED",
+  "last_canonical_planning_merge_sha": "7c83658eb52a33e2f238ffd9023d11aee6cb1884",
+  "completed_increment": "HCT-PLAN-0001-R07",
+  "next_necessary_action": "Continue HCT-PLAN-0001 with formal HCT-PLAN-0001-R08: multi-tenant platform foundation, security, secrets/credentials isolation and commercialization-readiness discovery. Use approved security, admin/harness, infrastructure and tenancy pre-discovery artifacts, perform an R08-specific gap audit, and do not authorize implementation or live trading.",
   "functional_planning_started": true,
   "implementation_authorized": false
 }
