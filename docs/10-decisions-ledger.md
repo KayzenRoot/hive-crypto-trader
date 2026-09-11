@@ -40,7 +40,7 @@ Decision: the product will include an independent Safety & Protection Governor c
 Status: APPROVED_FOR_DISCOVERY
 Date: 2026-09-11
 
-Decision: the product will include an extensible Indicator & Feature Engine plus Candlestick & Chart Pattern Engine. Coverage should include the major public/standard technical-analysis families and relevant patterns commonly used in professional charting environments. The requirement is functional coverage, not copying proprietary/closed-source TradingView or community scripts.
+Decision: the product will include an extensible Indicator & Feature Engine plus Candlestick & Chart Pattern Engine. Coverage should include the major public/standard technical-analysis indicator families and relevant patterns commonly used in professional charting environments. The requirement is functional coverage, not copying proprietary/closed-source TradingView or community scripts.
 
 ## HCT-DEC-0008 — HCT proprietary indicators are encouraged but must earn promotion
 Status: APPROVED_FOR_DISCOVERY
@@ -245,3 +245,27 @@ Status: APPROVED_FOR_DISCOVERY
 Date: 2026-09-11
 
 Decision: HCT will provide a first-class `Signals` workspace with versioned signal strategies and Telegram channel/group publishing behind a provider-neutral `SignalPublisher` boundary. Signal publishing is informational distribution, separate from exchange execution, uses durable/idempotent outbox semantics, supports structured entry/TP/SL lifecycle, publication freshness gating and subscriber-realizability measurement, and must not claim guaranteed profit.
+
+## HCT-DEC-0042 — Exchange risk tiers, maintenance margin and leverage ceilings are dynamic runtime state
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: HCT must resolve exchange/contract risk tiers, maximum leverage, maintenance-margin rates, position limits, margin modes and liquidation-trigger semantics dynamically through the exchange adapter wherever available. Strategies, UI and risk logic may not treat a static leverage or maintenance-margin constant as perpetual exchange truth. Unknown critical venue risk state blocks new exposure.
+
+## HCT-DEC-0043 — Exposure-increasing actions require immutable, expiring post-trade RiskSnapshots
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: every candidate action that may increase exposure must be evaluated against an immutable/versioned `RiskSnapshot` that captures current and projected post-trade account, position, margin, risk-tier, maintenance-margin, leverage, liquidation-buffer, portfolio, policy and data-confidence state. The snapshot has a finite validity horizon and explicit revalidation triggers; execution may consume only a still-valid approved snapshot or must request reapproval.
+
+## HCT-DEC-0044 — Risk is reserved before order submission and remains reserved until authoritative resolution
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: HCT will maintain a deterministic Risk Reservation Ledger. Exposure-increasing intents reserve approved risk before exchange submission. Partial fills convert only the filled portion into open-position risk; unfilled/uncertain portions remain reserved. Cancel requests, network timeouts and unknown outcomes do not release risk. Reservations are released only after exchange-confirmed or authoritatively reconciled cancellation, rejection, expiry or final resolution. Agents and strategies cannot manually free reserved risk.
+
+## HCT-DEC-0045 — Cross-margin shared-collateral contagion is an explicit deterministic risk gate
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: when cross margin is used, HCT must evaluate shared wallet/equity, all relevant cross positions, unrealized PnL, maintenance margin, open-order margin, correlated stress and collateral confidence before approving new exposure. A position that appears acceptable in isolation may be reduced or vetoed if it materially destabilizes the shared margin pool. Unknown critical cross-margin state blocks new exposure.
