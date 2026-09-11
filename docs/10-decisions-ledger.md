@@ -461,3 +461,75 @@ Status: APPROVED_FOR_DISCOVERY
 Date: 2026-09-11
 
 Decision: material changes to models, retrievers, prompts/specs, agents/skills, calibration, fusion logic or memory policy require incremental-value proof through applicable offline evaluation, point-in-time replay, walk-forward/OOS, paper, shadow and champion/challenger stages. Promotion evaluates calibration, abstention, false-confidence harm, regime robustness, latency/cost/failure behavior and baseline/champion comparison. Better explanations alone do not prove better decisions.
+
+## HCT-DEC-0078 — Promotion datasets require eligibility proof and point-in-time universe truth
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: promotion-grade experiments require immutable dataset eligibility/completeness manifests derived from R05 capture fidelity and a point-in-time universe/rule view. Current surviving symbols or current exchange rules may not be projected backward, and critically degraded/unknown historical intervals cannot silently count as full promotion evidence.
+
+## HCT-DEC-0079 — Temporal leakage and holdout access are governed proof boundaries
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: promotion evidence requires end-to-end Temporal Non-Interference proof and an OOS/holdout firewall. Tuning/search cannot consume final promotion holdouts; access is auditable, temporal purge/embargo/nested validation are used where needed, and repeatedly inspected holdouts may be considered consumed rather than recycled as supposedly independent confirmation.
+
+## HCT-DEC-0080 — Promotion experiments require complete reproducible environment identity
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: every promotion-grade experiment pins code/data/config/dependencies/runtime/container/build, simulator/accounting/fill/latency versions, strategy/model/prompt/tool/skill/retriever/calibration/policy versions, venue semantics, evaluator versions and stochastic reproduction identity. Materially unpinned behavior is not promotion-reproducible.
+
+## HCT-DEC-0081 — Replay uses causal scheduling and historical venue/fill semantics
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: HCT replay uses an explicit causal event scheduler and point-in-time venue semantics. Fill models expose realism/confidence class and model no-fill, partial fill, liquidity, latency, slippage and cancellation uncertainty. Impossible same-tick/same-bar causal shortcuts and optimistic-only fill assumptions cannot be promotion authority.
+
+## HCT-DEC-0082 — Accounting and R03/R04/live-parity semantics are shared or conformance-tested
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: replay/paper/shadow use a canonical trading accounting/margin kernel and preserve R03/R04 RiskSnapshot, Risk Reservation, authorization, OMS, protection, uncertainty and reconciliation semantics. Research/live semantic forks must be explicit parity exceptions and block blanket live-parity claims.
+
+## HCT-DEC-0083 — Paper and shadow are technically isolated from live trading authority
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: paper/shadow environments use separate capability/state namespaces and are technically unable to mutate live exchange orders, production positions, Risk Reservations, protection, balances or authoritative production configuration. Hypothetical fills cannot become real trading truth.
+
+## HCT-DEC-0084 — Promotion evidence is immutable and experiment-family selection bias is governed
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: promotion decisions reference append-only immutable Promotion Evidence Bundles containing manifests, metrics, gate outcomes, evaluator/reviewer identity and relevant failed/search history. Related searches use ExperimentFamilyIDs with variant/search-space/holdout-access accounting and appropriate multiple-testing/selection-bias controls.
+
+## HCT-DEC-0085 — Promotion eligibility expires and future limited-live uses an immutable canary envelope
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: production eligibility has a validity lease and revalidation triggers for material venue/data/model/runtime/regime/reality-gap/safety changes. Any future `LIMITED_LIVE` stage, if explicitly authorized in a later production process, requires immutable account/symbol/time/risk/loss/health/expiry limits plus automatic kill/rollback conditions; canary scope cannot silently broaden.
+
+## HCT-DEC-0086 — Promotion proof measures independent, robust and economically material evidence
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: promotion evidence distinguishes raw from effective-independent samples, declares regime/OOD coverage, uses component-appropriate uncertainty and economic materiality, and applies nested search/parameter robustness controls. Narrow overfit optima, correlated observation counts or unsupported regimes cannot masquerade as broad proof.
+
+## HCT-DEC-0087 — Simulator assumptions are empirically calibrated and degraded/synthetic evidence stays explicit
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: fee/funding/latency/fill/slippage/cancel models are versioned and empirically calibrated against available observations with confidence/age/error and conservative fallback. Degraded/imputed data, synthetic crises and Monte Carlo/resampling remain explicitly classified; synthetic or statistically invalid resampling cannot be presented as clean historical profitability evidence.
+
+## HCT-DEC-0088 — Promotion evaluates portfolio interaction, paired comparisons, shadow divergence and component-level reality gaps
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: where components interact, promotion evaluates shared capital/risk reservations/correlation/cross-margin/quota/liquidity/resource effects. Paired Decision Twin/ablation tests disclose confounders, Shadow Divergence compares candidate vs Champion on aligned windows, and critical component-level reality gaps cannot be averaged away by a favorable composite.
+
+## HCT-DEC-0089 — Typed promotion gates, rollback compatibility, independent review and resource governance are mandatory
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: promotion profiles are component-specific with mandatory metrics/stages/failure gates. HIGH_ASSURANCE promotion requires auditable independent review where practical and no self-approval. Rollback proof includes persisted state/schema/memory/OMS/open-position compatibility or a safe roll-forward plan. Experiment resource limits may delay/cancel work but cannot silently weaken required validation rigor.
