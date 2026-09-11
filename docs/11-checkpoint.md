@@ -1,37 +1,38 @@
 # Checkpoint
 
-Checkpoint ID: `HCT-CP-0009`
-Status: `PRODUCT_DISCOVERY_ROUND_07_APPROVED`
+Checkpoint ID: `HCT-CP-0010`
+Status: `PRODUCT_DISCOVERY_ROUND_08_APPROVED`
 Canonical branch: `main`
-Last canonical planning merge: `7c83658eb52a33e2f238ffd9023d11aee6cb1884` (`HCT-PLAN-0001-R07`)
+Last canonical planning merge: `cc09c5c22c03b0671fe3c2044f0dbd2c34eacd00` (`HCT-PLAN-0001-R08`)
 Risk class: `HIGH_ASSURANCE`
 Functional product planning: `IN_PROGRESS`
 Implementation authorization: `NOT_GRANTED`
 
-## Approved through R07
-- R01–R06 foundations remain approved and authoritative.
-- R07 formalizes the Simulation/Replay/Backtest/Paper/Shadow/Promotion Laboratory as a proof system rather than a cosmetic backtester.
-- Promotion datasets require eligibility/completeness manifests and point-in-time symbol/universe/rule truth.
-- Temporal Non-Interference proof and holdout/OOS isolation are mandatory; contaminated evidence cannot be rescued by favorable PnL.
-- Promotion experiments pin complete code/data/config/runtime/simulator/model/policy/evaluator/reproduction identity.
-- Replay uses explicit causal event ordering and point-in-time venue semantics.
-- Fill realism models no-fill/partial fill/liquidity/latency/slippage uncertainty; optimistic fills cannot be sole promotion evidence.
-- Validation shares or conformance-tests canonical R03/R04 accounting, Risk, OMS, protection and reconciliation state machines.
-- Paper/Shadow capability namespaces cannot mutate live exchange or production account truth.
-- Promotion decisions reference immutable append-only evidence bundles and account for experiment-family search/multiple-testing bias.
-- Promotion eligibility has a validity lease and explicit revalidation triggers.
-- Any future limited-live activation requires separate authorization plus immutable canary/rollback limits.
-- Promotion evaluates effective independent evidence, regime/OOD coverage, statistical/economic significance and parameter robustness.
-- Simulator assumptions are empirically calibrated where observations exist; degraded/synthetic/Monte-Carlo evidence remains explicitly classified.
-- Portfolio interaction, paired ablation, shadow divergence and component-level reality gaps are part of validation where relevant.
-- Typed component-specific promotion gates, rollback-state compatibility, independent HIGH_ASSURANCE review and resource governance are mandatory.
+## Approved through R08
+- R01–R07 foundations remain approved and authoritative.
+- R08 formalizes multi-tenant isolation, security, exchange credential/secrets boundaries and commercialization readiness.
+- Every protected operation derives a server-authenticated SecurityContext; client tenant/resource IDs never prove authority by themselves.
+- Tenant isolation spans object authorization, DB/pools, cache, queues/events, workers, private streams and trading state.
+- Risk/Execution/OMS/protection/reconciliation bind to canonical tenant–exchange-account–credential identity.
+- Raw exchange credentials live only behind backend SecretStore/Vault and cryptographic key hierarchy/lifecycle controls.
+- Raw secrets are never normal browser, logging, tracing, support, CI or model/agent data.
+- Human authentication, recovery and sessions are assurance-aware and revocable; privileged actions require stronger step-up.
+- Workloads, humans, CI/CD, admin and support have distinct least-privileged identities.
+- Admin/break-glass/support access is purpose/time/scope limited and permanently attributable to the real actor.
+- Harness controls are tenant/account/capability scoped; commercial entitlement never equals trading/security authorization.
+- Tenant quotas/noisy-neighbor controls preserve platform safety reserves before optional tenant workloads.
+- Telemetry/audit, data classification/encryption, backups, offboarding and RAG/index deletion preserve tenant isolation.
+- Production/non-production and CI/runtime trust boundaries are separated.
+- Incident response and DR are tenant-scoped and trading-aware, using restrictive recovery before new exposure resumes.
+- Commercial billing lifecycle and regional/exchange eligibility cannot strand protected exposure or silently create live authority.
+- Broad commercialization requires adversarial multi-tenant testing and an auditable vulnerability/supply-chain lifecycle.
 
-## R07 audit
-- Final audit: `docs/68-r07-final-audit.md`
+## R08 audit
+- Final audit: `docs/75-r08-final-audit.md`
 - Verdict: `APPROVED`
-- Acceptance gates: 29/29 PASS
-- Initial gaps: 34; unresolved CRITICAL/HIGH gaps: 0
-- Decisions Ledger consolidated through `HCT-DEC-0089`
+- Acceptance gates: 31/31 PASS
+- Initial gaps: 40; unresolved CRITICAL/HIGH gaps: 0
+- Decisions Ledger consolidated through `HCT-DEC-0103`
 
 ## Completed increments
 - `HCT-BOOT-0001`
@@ -42,14 +43,15 @@ Implementation authorization: `NOT_GRANTED`
 - `HCT-PLAN-0001-R05`
 - `HCT-PLAN-0001-R06`
 - `HCT-PLAN-0001-R07`
+- `HCT-PLAN-0001-R08`
 
 ## Current blockers
-None for continuing structured planning. Implementation, production credentials/deployment, limited-live activation and real-money trading remain not granted.
+None for continuing structured planning. Implementation, production secrets/credentials, deployment, limited-live and real-money trading remain not granted.
 
 ## Next necessary action
-Continue `HCT-PLAN-0001` with formal `HCT-PLAN-0001-R08`: multi-tenant platform foundation, security, secrets/credentials isolation and commercialization-readiness discovery.
+Continue `HCT-PLAN-0001` with formal `HCT-PLAN-0001-R09`: realtime trading cockpit, UI/UX, safety communication and design-system discovery.
 
-Use the approved security, admin/harness, infrastructure and tenancy pre-discovery artifacts and perform a formal R08-specific gap audit.
+Use approved UI/UX, Copilot/strategy visualization and admin-cockpit pre-discovery artifacts and perform a formal R09-specific gap audit.
 
 ## Resume rule
 A new chat must recover from the machine-readable planning checkpoint and repository source hierarchy, validate Git state, and resume only from `next_necessary_action`.
