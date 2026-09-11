@@ -1,10 +1,10 @@
 # HCT-PLAN-0001-R09 — Decision Proposals for Ledger Consolidation
 
-Status: `DISCOVERY_IN_PROGRESS`
+Status: `CONSOLIDATED`
 Increment: `HCT-PLAN-0001-R09`
 Date: `2026-09-11`
 
-These decisions are accepted within R09 planning and must be consolidated into `docs/10-decisions-ledger.md` before final approval.
+`HCT-DEC-0104` through `HCT-DEC-0117` were accepted during R09 planning and are now consolidated into `docs/10-decisions-ledger.md`. This file remains as round-local provenance and must not be treated as a competing decisions source.
 
 ## HCT-DEC-0104 — Frontend is a non-authoritative projection governed by a Canonical UI State Envelope
 Status: APPROVED_FOR_DISCOVERY
