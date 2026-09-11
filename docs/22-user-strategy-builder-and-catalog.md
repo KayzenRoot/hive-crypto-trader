@@ -45,7 +45,9 @@ The exact formulas and production parameters remain to be validated. Candidate i
 These names define research families, not promises of profitability. Every production template requires governed validation and versioning.
 
 ## User Strategy Builder
-Users may create private strategies using a visual builder and, where appropriate, an advanced structured rule editor. Strategies should be representable as a validated Strategy Definition rather than arbitrary executable server code.
+Users may create private strategies using a first-class nodal visual builder and, where appropriate, an advanced structured rule editor. The nodal paradigm is an architectural product requirement: users add typed nodes, connect compatible ports and compose a strategy graph visually. Strategies remain representable as a validated Strategy Definition rather than arbitrary executable server code.
+
+The node graph and advanced editor compile to the same canonical Strategy Definition. Visual layout changes do not alter trading semantics unless actual graph logic/parameters change.
 
 ### Candidate building blocks
 - indicators and their parameters;
@@ -75,6 +77,14 @@ Users may create private strategies using a visual builder and, where appropriat
 
 The result is still a candidate signal. It must pass Safety Governor, Risk Engine, Session Policy, Position Sizing, exchange capability checks and execution policy.
 
+## Nodal graph direction
+The builder should support typed node families for market inputs, indicators/features, logic, multi-timeframe aggregation, regime filters, decision intents and position-management policies. Invalid connections are rejected before runtime. Reusable subgraphs/macros may package recurring logic while remaining expanded/auditable in the compiled strategy definition.
+
+Conceptual authoring path:
+`Node Palette -> Visual Graph -> Typed Validation -> Canonical Strategy Definition -> Static Analysis -> Backtest/Paper -> Governed Live Eligibility`.
+
+See `docs/24-nodal-strategy-graph-and-rd-technologies.md` for the deeper graph architecture and R&D technologies.
+
 ## Strategy Definition / DSL
 Use a declarative, versioned strategy schema/DSL rather than allowing users to upload arbitrary executable code in V1. Candidate sections:
 - metadata and ownership;
@@ -96,26 +106,28 @@ A visual builder should compile to the same canonical Strategy Definition used b
 
 ## Validation workflow
 User strategies should progress through states such as:
-`DRAFT -> VALIDATED_SCHEMA -> BACKTESTED -> PAPER_READY -> PAPER_RUNNING -> USER_APPROVED_FOR_LIVE -> LIVE_ELIGIBLE`
+`DRAFT -> VALIDATED_SCHEMA -> STATIC_ANALYZED -> BACKTESTED -> PAPER_READY -> PAPER_RUNNING -> USER_APPROVED_FOR_LIVE -> LIVE_ELIGIBLE`
 
 Platform policy may require minimum validation before live use. HIGH_ASSURANCE safeguards remain mandatory.
 
 ## Strategy sandbox
 Before live use, provide:
 - syntax/schema validation;
+- graph type validation;
+- unreachable/contradictory branch analysis;
 - unavailable-indicator detection;
 - unsupported exchange-capability detection;
 - timeframe consistency checks;
 - lookahead/leakage checks where applicable;
-- conflict analysis;
-- estimated compute cost;
+- conflict and redundancy analysis;
+- estimated compute/latency cost;
 - API/data dependency analysis;
 - backtest/replay;
 - paper trading;
 - safety-policy validation.
 
 ## Strategy versioning and reproducibility
-Every edit creates a new immutable strategy version for executed/paper decisions. Trading traces must record the exact strategy version and parameter snapshot. Editing a live strategy must never retroactively mutate prior evidence.
+Every edit creates a new immutable strategy version for executed/paper decisions. Trading traces must record the exact strategy version, graph hash and parameter snapshot. Editing a live strategy must never retroactively mutate prior evidence.
 
 ## Sharing and commercialization readiness
 V1 may keep custom strategies private. Architecture should allow future strategy templates, import/export, controlled sharing, marketplace or plan-based entitlements without redesigning the core Strategy Definition.
@@ -133,12 +145,18 @@ A user-defined strategy cannot:
 
 ## UX direction
 The Strategy Builder should offer:
-- visual condition blocks;
-- human-readable explanation of the resulting logic;
+- searchable node palette;
+- drag/drop canvas;
+- typed ports and visual compatibility;
+- zoom/pan/minimap;
+- grouped frames and comments;
+- reusable subgraphs/macros;
+- human-readable explanation of resulting logic;
 - realtime chart preview;
 - selected indicators/timeframes as overlays;
+- live/replay node-state inspection in research mode;
 - warnings for redundant/conflicting conditions;
-- estimated complexity/data requirements;
+- estimated complexity/data/latency requirements;
 - backtest/paper results;
 - strategy version/history;
 - save/clone/compare workflow.
