@@ -2,11 +2,12 @@
   "schema_version": "1.0",
   "project_code": "HCT",
   "workstream": "planning",
-  "checkpoint_id": "HCT-CP-0001",
-  "checkpoint_path": "checkpoints/history/HCT-CP-0001.json",
-  "status": "GOVERNANCE_BOOTSTRAP_IN_REVIEW",
-  "active_increment": "HCT-BOOT-0001",
-  "next_necessary_action": "Audit HCT-BOOT-0001, merge only if APPROVED, promote post-merge checkpoint, then start HCT-PLAN-0001 product discovery.",
+  "checkpoint_id": "HCT-CP-0002",
+  "checkpoint_path": "checkpoints/history/HCT-CP-0002.json",
+  "status": "GOVERNANCE_BOOTSTRAP_APPROVED",
+  "last_canonical_governance_merge_sha": "a9ba61954fd332ebfa3505a1fc9bd0ad2bfe6b19",
+  "completed_increment": "HCT-BOOT-0001",
+  "next_necessary_action": "Open HCT-PLAN-0001 and begin structured product discovery/planning. Do not generate an implementation Work Order yet.",
   "functional_planning_started": false,
   "implementation_authorized": false
 }

@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "checkpoint_id": "HCT-CP-0002",
+  "project": "Hive Crypto Trader",
+  "project_code": "HCT",
+  "created_at": "2026-09-11T20:07:00Z",
+  "risk_class": "HIGH_ASSURANCE",
+  "status": "GOVERNANCE_BOOTSTRAP_APPROVED",
+  "canonical_repository": "KayzenRoot/hive-crypto-trader",
+  "canonical_branch": "main",
+  "last_canonical_governance_merge_sha": "a9ba61954fd332ebfa3505a1fc9bd0ad2bfe6b19",
+  "completed_increment": "HCT-BOOT-0001",
+  "reviewed_pr": 1,
+  "functional_planning_started": false,
+  "implementation_authorized": false,
+  "approved_bootstrap_decisions": ["HCT-DEC-0001", "HCT-DEC-0002", "HCT-DEC-0003"],
+  "next_necessary_action": "Open HCT-PLAN-0001 and begin structured product discovery/planning. Do not generate an implementation Work Order yet.",
+  "critical_sources": [
+    "docs/00-source-hierarchy.md",
+    "docs/02-requirements.md",
+    "docs/03-scope.md",
+    "docs/04-architecture.md",
+    "docs/09-definition-of-done.md",
+    "docs/10-decisions-ledger.md",
+    "docs/11-checkpoint.md",
+    "docs/12-work-order-prompt-contract.md",
+    "docs/13-chat-handoff-protocol.md"
+  ]
+}
