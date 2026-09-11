@@ -101,3 +101,21 @@ Status: APPROVED_FOR_DISCOVERY
 Date: 2026-09-11
 
 Decision: the trading cockpit must provide a dedicated Copilot session/setup experience and symbol chart workspace capable of visualizing actual executions, strategy signals, conditions, indicators/patterns, TP/SL/trailing behavior, regime, agent evidence/disagreement and proprietary HCT indicators while clearly distinguishing executed versus hypothetical/simulated paths.
+
+## HCT-DEC-0018 — Owner-only Administrative Control Plane and Harness are required
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: HCT will include an owner-only Administrative Control Plane plus dependency-aware Harness/Capability Isolation Engine. Initial policy allows one active super-admin identity. Privileged controls must support scoped enable/degrade/read-only/no-new-actions/pause/quarantine/disable/emergency-blackout behavior, blast-radius analysis, strong authentication and immutable audit evidence. Trading blackout semantics must preserve safe risk-reducing actions and reconciliation rather than blindly stopping everything.
+
+## HCT-DEC-0019 — Frontend and backend are independently deployable runtime surfaces
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: HCT frontend and backend will be separated as independently buildable/deployable runtime surfaces. The frontend is treated as an untrusted client and contains no exchange secrets or authoritative risk logic. Backend owns trading authority, security and business rules. Integration uses versioned API/realtime contracts and CI contract testing. Current repository preference is a canonical monorepo with separate application roots and shared safe contract packages, unless later evidence justifies multiple repositories.
+
+## HCT-DEC-0020 — Multi-timeframe evidence uses governed adaptive weighting, not flat voting
+Status: APPROVED_FOR_DISCOVERY
+Date: 2026-09-11
+
+Decision: timeframe importance will be strategy/regime/context dependent. HCT will preserve role-based multi-timeframe evidence, estimate redundancy/independence, and allow adaptive weights only inside governed/versioned bounds. Opportunity decisions retain explainable sub-scores before deriving a composite HCT Opportunity Score. No adaptive mechanism may silently rewrite hard production strategy semantics.
