@@ -1,0 +1,112 @@
+name: HCT-IMPL-AUTH-0002 S0B Authorization Governance
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/109-implementation-authorization-s0b-candidate.md'
+      - 'work-orders/HCT-IMPL-AUTH-0002.md'
+      - 'work-orders/HCT-IMP-0002-S0B.md'
+      - '.github/workflows/implementation-authorization-s0b-governance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  implementation-authorization-s0b-governance:
+    name: implementation-authorization-s0b-governance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact pull request head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Assert exact raw PR head
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "${{ github.event.pull_request.head.sha }}"
+
+      - name: Verify CP0016 canonical pre-authorization state
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq '"checkpoint_id": "HCT-CP-0016"' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"status": "S0A_IMPLEMENTATION_APPROVED_MERGED"' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"implementation_authorized": false' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"production_credentials_authorized": false' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"production_deployment_authorized": false' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"limited_live_authorized": false' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"live_trading_authorized": false' checkpoints/workstreams/planning/latest.json
+
+      - name: Verify authorization candidate package
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            docs/109-implementation-authorization-s0b-candidate.md
+            work-orders/HCT-IMPL-AUTH-0002.md
+            work-orders/HCT-IMP-0002-S0B.md
+          )
+          for file in "${required[@]}"; do
+            test -s "$file" || { echo "Missing or empty required file: $file"; exit 1; }
+          done
+
+      - name: Verify bounded pre-authorization semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'Status: `INDEPENDENT_REVIEW_REQUIRED`' docs/109-implementation-authorization-s0b-candidate.md
+          grep -Fq 'Status: `PENDING_AUTHORIZATION`' work-orders/HCT-IMP-0002-S0B.md
+          grep -Fq 'HCT-IMP-0002-S0B' docs/109-implementation-authorization-s0b-candidate.md
+          grep -Fq 'NON_TRADING_STAGE_0_SECURITY_FOUNDATION_ONLY' docs/109-implementation-authorization-s0b-candidate.md
+          grep -Fq 'Do not begin product implementation' docs/109-implementation-authorization-s0b-candidate.md
+
+      - name: Verify higher-risk gates remain closed
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'production_credentials_authorized=false' docs/109-implementation-authorization-s0b-candidate.md
+          grep -Fq 'production_deployment_authorized=false' docs/109-implementation-authorization-s0b-candidate.md
+          grep -Fq 'limited_live_authorized=false' docs/109-implementation-authorization-s0b-candidate.md
+          grep -Fq 'live_trading_authorized=false' docs/109-implementation-authorization-s0b-candidate.md
+
+      - name: Verify prohibited S0B capability boundary is explicit
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'real API keys, secret keys, private keys, tokens or secret values' docs/109-implementation-authorization-s0b-candidate.md
+          grep -Fq 'MEXC adapters' docs/109-implementation-authorization-s0b-candidate.md
+          grep -Fq 'production deployment' docs/109-implementation-authorization-s0b-candidate.md
+          grep -Fq 'limited-live or real-money trading' docs/109-implementation-authorization-s0b-candidate.md
+          grep -Fq 'The abstraction SHALL NOT expose or persist real API keys' docs/109-implementation-authorization-s0b-candidate.md
+          grep -Fq 'The S0B SecretStore API SHALL NOT return raw secret strings/bytes' work-orders/HCT-IMP-0002-S0B.md
+          grep -Fq 'No exchange/network/trading capability exists' work-orders/HCT-IMP-0002-S0B.md
+
+      - name: Verify governance-only diff boundary
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          base="origin/${{ github.base_ref }}"
+          head="$(git rev-parse HEAD)"
+          changed="$(git diff --name-only "$base...$head")"
+          printf '%s\n' "$changed"
+          invalid="$(printf '%s\n' "$changed" | grep -Ev '^(docs/109-implementation-authorization-s0b-candidate\.md|work-orders/HCT-IMPL-AUTH-0002\.md|work-orders/HCT-IMP-0002-S0B\.md|\.github/workflows/implementation-authorization-s0b-governance\.yml)$' || true)"
+          if [ -n "$invalid" ]; then
+            echo 'S0B authorization PR contains changes outside governance-only boundary:'
+            echo "$invalid"
+            exit 1
+          fi
+          echo "candidate diff check: $base...$head"
+          git diff --check "$base...$head"
+
+      - name: Governance summary
+        run: |
+          echo 'S0B authorization candidate remains pre-authorization, governance-only, bounded to SecurityContext/tenant-account binding/opaque SecretStore foundation, with no real secret, exchange, deployment, limited-live or live-trading authority.'
