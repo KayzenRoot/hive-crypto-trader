@@ -1,0 +1,134 @@
+name: HCT-IMP-0005-S1B Implementation Governance
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "adr/HCT-ADR-0046-s1b-mexc-public-reference.md"
+      - "apps/backend/src/hct_backend/mexc_reference.py"
+      - "apps/backend/tests/test_mexc_reference.py"
+      - "apps/backend/tests/test_scan_s1b_boundaries.py"
+      - "scripts/scan_s1b_boundaries.py"
+      - "evidence/HCT-IMP-0005-S1B.md"
+      - ".github/workflows/s1b-quality.yml"
+
+permissions:
+  contents: read
+
+env:
+  AUTHORIZED_BASE_SHA: 9fa01c483d503e2ca67a6509cc760e7ab3e88b68
+
+jobs:
+  s1b-quality:
+    name: s1b-quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact pull request head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Assert pull-request-only exact raw head and authorized base
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ github.event_name }}" = "pull_request"
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          test "${{ github.event.pull_request.base.sha }}" = "$AUTHORIZED_BASE_SHA"
+          test "$(git rev-parse origin/main)" = "$AUTHORIZED_BASE_SHA"
+          git cat-file -e "$AUTHORIZED_BASE_SHA^{commit}"
+          if grep -Eq '^[[:space:]]*workflow_dispatch:' .github/workflows/s1b-quality.yml; then
+            echo 'S1B receipt must not expose a manual-dispatch success path.'
+            exit 1
+          fi
+
+      - name: Validate canonical CP0023 context lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq '"checkpoint_id": "HCT-CP-0023"' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"status": "IMPLEMENTATION_AUTHORIZED_S1B"' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"implementation_authorized": true' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"implementation_authorization_scope": [' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"HCT-IMP-0005-S1B"' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"implementation_authorization_ceiling": "NON_TRADING_STAGE_1_MEXC_PUBLIC_REFERENCE_CAPABILITY_RESOLVER_ONLY"' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"production_credentials_authorized": false' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"production_deployment_authorized": false' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"limited_live_authorized": false' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"live_trading_authorized": false' checkpoints/workstreams/planning/latest.json
+          grep -Fq 'HCT-CP-0023' docs/11-checkpoint.md
+
+      - name: Validate candidate changed-file boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only "$AUTHORIZED_BASE_SHA...HEAD")"
+          printf '%s\n' "$changed"
+          invalid="$(printf '%s\n' "$changed" | grep -Ev '^(adr/HCT-ADR-0046-s1b-mexc-public-reference\.md|apps/backend/src/hct_backend/mexc_reference\.py|apps/backend/tests/test_mexc_reference\.py|apps/backend/tests/test_scan_s1b_boundaries\.py|scripts/scan_s1b_boundaries\.py|evidence/HCT-IMP-0005-S1B\.md|\.github/workflows/s1b-quality\.yml)$' || true)"
+          if [ -n "$invalid" ]; then
+            echo 'S1B changed files leave the authorized implementation boundary:'
+            echo "$invalid"
+            exit 1
+          fi
+          if printf '%s\n' "$changed" | grep -Eq '^(checkpoints/|docs/|work-orders/|apps/backend/uv\.lock$|apps/frontend/)'; then
+            echo 'Frozen, checkpoint, Work Order, dependency-lock or frontend surface changed by S1B.'
+            exit 1
+          fi
+          test "$(git merge-base "$AUTHORIZED_BASE_SHA" HEAD)" = "$AUTHORIZED_BASE_SHA"
+          git diff --check "$AUTHORIZED_BASE_SHA...HEAD"
+
+      - name: Install locked backend dependencies
+        run: |
+          python -m pip install --disable-pip-version-check uv==0.12.13
+          uv sync --project apps/backend --locked --all-groups
+
+      - name: Validate canonical contracts, backend, and dependency audit
+        run: |
+          uv run --project apps/backend python scripts/generate_contracts.py --check
+          uv run --project apps/backend python scripts/validate_contract_parity.py
+          uv run --project apps/backend pytest --cov=hct_backend --cov-report=term-missing apps/backend/tests
+          uv run --project apps/backend ruff check apps/backend/src apps/backend/tests scripts/scan_s1b_boundaries.py
+          uv run --project apps/backend mypy apps/backend/src
+          uv build --project apps/backend --out-dir /tmp/hct-backend-dist-s1b
+          uv run --project apps/backend --with pip-audit==2.10.1 pip-audit --local
+
+      - name: Run S0A/S0B/S0C/S1A/S1B regressions and boundary gates
+        env:
+          BASE_SHA: ${{ env.AUTHORIZED_BASE_SHA }}
+        run: |
+          uv run --project apps/backend python scripts/scan_s1b_boundaries.py
+          uv run --project apps/backend pytest \
+            apps/backend/tests/test_contracts.py \
+            apps/backend/tests/test_security.py \
+            apps/backend/tests/test_provenance.py \
+            apps/backend/tests/test_scan_s0b_boundaries.py \
+            apps/backend/tests/test_scan_s0c_boundaries.py \
+            apps/backend/tests/test_exchange_reference.py \
+            apps/backend/tests/test_scan_s1a_boundaries.py \
+            apps/backend/tests/test_mexc_reference.py \
+            apps/backend/tests/test_scan_s1b_boundaries.py
+
+      - name: Install and validate frontend regression surface
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.18.0"
+          cache: npm
+          cache-dependency-path: apps/frontend/package-lock.json
+
+      - name: Run frontend typecheck, tests, lint, generated format and build
+        working-directory: apps/frontend
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run lint
+          npm exec -- prettier --check src/generated/contracts.ts
+          npm run build
+          npm audit --audit-level=high --omit=optional
+
+      - name: Publish S1B governance summary
+        run: |
+          echo 's1b-quality is a pull_request-only exact raw-head receipt.'
+          echo 'Bounded subject: MEXC public contract reference parsing and capability/rule resolution.'
+          echo 'No credentials, private state, orders, persistence, deployment, limited-live or live-trading authority is authorized.'
