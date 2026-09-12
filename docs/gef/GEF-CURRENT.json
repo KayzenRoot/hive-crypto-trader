@@ -4,6 +4,7 @@
   "migrationState": "ADOPTION_PR_PENDING_REVIEW",
   "baselineHead": "29dc6636360953941a7e4fb41a0876c5bc46dcd6",
   "adoptionIssue": 43,
+  "adoptionPr": 44,
   "adoptionBranch": "governance/UADS-GEF-V1-adoption",
   "currentPromptMode": "GEF_V1",
   "currentReviewMode": "HEDS_DELTA",
@@ -45,5 +46,5 @@
     "negativeCapabilityCache": "docs/gef/GEF-KNOWLEDGE-CACHE.json",
     "architectureQuestionCache": "docs/gef/GEF-KNOWLEDGE-CACHE.json"
   },
-  "nextAction": "Independently review and merge the governance-only GEF adoption PR; keep PR #42 on its existing HCT review path."
+  "nextAction": "Independently review PR #44 and merge only after exact-head adoption governance passes; keep PR #42 on its existing HCT review path."
 }
