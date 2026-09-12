@@ -72,7 +72,8 @@ jobs:
           grep -Fq '2. **MEXC Futures Adapter**' docs/14-product-module-map.md
           grep -Fq 'V1 trades only on MEXC Futures.' docs/23-multi-exchange-adapter-architecture.md
           grep -Fq 'MEXC is the first concrete adapter and the only enabled live adapter in V1.' docs/23-multi-exchange-adapter-architecture.md
-          grep -Fq 'S1A_IMPLEMENTATION_APPROVED_MERGED' docs/117-s1a-implementation-approval-and-checkpoint-promotion.md
+          grep -Fq 'Status: `APPROVED_MERGED`' docs/117-s1a-implementation-approval-and-checkpoint-promotion.md
+          grep -Fq 'Promoted checkpoint: `HCT-CP-0022`' docs/117-s1a-implementation-approval-and-checkpoint-promotion.md
 
       - name: Verify authorization candidate package
         shell: bash
