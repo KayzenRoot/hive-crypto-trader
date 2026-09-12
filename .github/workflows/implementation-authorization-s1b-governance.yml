@@ -126,7 +126,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq 'public, unauthenticated, read-only reference/capability discovery' docs/118-implementation-authorization-s1b-candidate.md
+          grep -Fq 'public, unauthenticated, read-only reference REST endpoints' docs/118-implementation-authorization-s1b-candidate.md
           grep -Fq 'MEXC WebSocket' docs/118-implementation-authorization-s1b-candidate.md
           grep -Fq 'API keys, request signing, authentication' docs/118-implementation-authorization-s1b-candidate.md
           grep -Fq 'order placement/cancel/replace' docs/118-implementation-authorization-s1b-candidate.md
