@@ -90,11 +90,21 @@ With this audit artifact present, all 20 identified R12 gaps now have a concrete
 Result: `CONTENT_PREFLIGHT_PASS`.
 
 ## CI / automated evidence status
-At the PR head observed before this audit artifact was added, no GitHub Actions workflow run was associated with the commit. R12 changes are documentation/governance only, but HIGH_ASSURANCE policy does not permit inventing green CI evidence.
+A dedicated governance workflow now exists at `.github/workflows/r12-planning-freeze-governance.yml` and executed against PR #27 head `2c9f8f0500155d2609e2dafba28a44cde3bc1a08`.
 
-Result: `NO_CI_EVIDENCE_RECORDED`.
+GitHub Actions check:
+- check name: `planning-freeze-governance`;
+- run/job URL: `https://github.com/KayzenRoot/hive-crypto-trader/actions/runs/34662359090/job/103467309683`;
+- status: `completed`;
+- conclusion: `success`;
+- started: `2026-09-12T00:39:30Z`;
+- completed: `2026-09-12T00:39:37Z`.
 
-This is not represented as a passing automated check. An independent reviewer must decide whether the repository's planning/documentation controls require an additional automated validation/check for this increment or whether the objective Git/blob/traceability evidence is sufficient for the planning-freeze verdict.
+The workflow validates the R12 candidate package, the five fail-closed authorization flags, the planning-only diff boundary and required freeze-review markers.
+
+Result: `CI_EVIDENCE_PASS`.
+
+Because this document update itself creates a new PR head, the independent reviewer must verify the latest head's check result before issuing the final verdict. Historical success must not be misrepresented as success for a later head.
 
 ## Findings
 ### CRITICAL
@@ -104,7 +114,9 @@ None identified by preflight.
 None identified by preflight.
 
 ### MEDIUM
-`R12-AUD-01`: no automated CI/check run is recorded for the R12 PR head. This does not imply a failed check; it means automated evidence is absent. Independent review must explicitly disposition this for HIGH_ASSURANCE freeze.
+None unresolved by preflight.
+
+`R12-AUD-01` is dispositioned as `RESOLVED_BY_AUTOMATED_GOVERNANCE_CHECK` based on the successful check recorded above, subject to exact-head revalidation after this evidence-recording commit.
 
 ### LOW
 None material.
@@ -130,7 +142,7 @@ The reviewer SHALL issue exactly one governed verdict:
 - `CORRECTION REQUIRED`: only bounded correction delta on PR #27;
 - `BLOCKED`: missing authority/evidence must be resolved before continuation.
 
-The review must explicitly disposition `R12-AUD-01` and confirm zero unresolved CRITICAL/HIGH planning defect.
+The review must confirm zero unresolved CRITICAL/HIGH planning defect and verify successful governance CI for the exact PR head under review.
 
 ## STOP CONDITION
 Keep PR #27 OPEN and unmerged. Do not promote the checkpoint, authorize implementation, provision production credentials, deploy production, activate limited-live or enable real-money trading until independent HIGH_ASSURANCE review returns `APPROVED` and the governed merge/checkpoint sequence completes.
