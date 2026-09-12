@@ -1,0 +1,66 @@
+{
+  "schemaVersion": "GEF_BASELINE_V1",
+  "capturedAt": "2026-09-12",
+  "baselineHead": "29dc6636360953941a7e4fb41a0876c5bc46dcd6",
+  "projectFingerprint": "sha256:28ad059f859668b3447b58db4f45ecc09111b79d886f83ec60000b2ad72162bc",
+  "mode": "PARTIALLY_GOVERNED",
+  "observed": {
+    "activePr": 42,
+    "activeCandidateHead": "f41262a53a59295fecbe3506e774a9b8592ad0cb",
+    "backendTestsOnActiveCandidate": {
+      "count": 56,
+      "coveragePercent": 89,
+      "source": "PR #42 author-side exact-head handoff"
+    },
+    "frontendTestsOnActiveCandidate": {
+      "count": 13,
+      "source": "PR #42 author-side exact-head handoff"
+    },
+    "exactHeadRuns": [
+      {
+        "runId": 34699046327,
+        "check": "s0c-quality",
+        "head": "f41262a53a59295fecbe3506e774a9b8592ad0cb",
+        "result": "success"
+      },
+      {
+        "runId": 34699046325,
+        "check": "S0A regression workflow",
+        "head": "f41262a53a59295fecbe3506e774a9b8592ad0cb",
+        "result": "success"
+      }
+    ],
+    "knownProcessFact": "Historical S0B workflow also triggered on S0C backend changes and failed its stale hardcoded authorization-base assertion; tracked as a GEF adoption gap, not counted as S0C product failure."
+  },
+  "telemetry": {
+    "executorInputTokens": {"value": null, "status": "UNKNOWN"},
+    "executorOutputTokens": {"value": null, "status": "UNKNOWN"},
+    "activeExecutorSeconds": {"value": null, "status": "UNKNOWN"},
+    "searchCount": {"value": null, "status": "UNKNOWN"},
+    "filesOpened": {"value": null, "status": "UNKNOWN"},
+    "filesChanged": {"value": null, "status": "UNKNOWN"},
+    "patchLOC": {"value": null, "status": "UNKNOWN"},
+    "retries": {"value": null, "status": "UNKNOWN"},
+    "focusedTestSeconds": {"value": null, "status": "UNKNOWN"},
+    "impactedEvalSeconds": {"value": null, "status": "UNKNOWN"},
+    "ciSeconds": {"value": null, "status": "UNKNOWN"},
+    "hedsSeconds": {"value": null, "status": "UNKNOWN"},
+    "correctionRounds": {"value": null, "status": "UNKNOWN"},
+    "cacheHits": {"value": null, "status": "UNKNOWN"},
+    "carriedProofs": {"value": null, "status": "UNKNOWN"},
+    "invalidatedProofs": {"value": null, "status": "UNKNOWN"}
+  },
+  "planningTargets": {
+    "executorInputTokensReduction": "60-80%",
+    "reasoningExplorationReduction": "65-85%",
+    "executorOutputTokensReduction": "70-90%",
+    "repositorySearchReduction": "70-90%",
+    "filesReadReduction": "65-85%",
+    "activeCodexTimeReduction": "50-75%",
+    "localValidationReduction": "55-80%",
+    "hedsRereadReduction": "55-80%",
+    "llmEvidenceWritingReduction": "85-95%",
+    "totalModelTokenCostReduction": "55-80%",
+    "classification": "PLANNING_TARGET_NOT_MEASURED_RESULT"
+  }
+}
