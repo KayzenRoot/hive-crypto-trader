@@ -1,22 +1,25 @@
 # HCT-IMP-0003-S0C - Audit/Evidence Integrity & Configuration/Version Semantics Foundation
 
-Status: `PENDING_AUTHORIZATION`
+Status: `AUTHORIZED`
 Risk class: `HIGH_ASSURANCE`
-Parent authorization increment: `HCT-IMPL-AUTH-0003 / PENDING_INDEPENDENT_REVIEW`
-Current checkpoint: `HCT-CP-0018 / S0B_IMPLEMENTATION_APPROVED_MERGED`
+Parent authorization increment: `HCT-IMPL-AUTH-0003 / COMPLETED_APPROVED`
+Authorization checkpoint: `HCT-CP-0019 / IMPLEMENTATION_AUTHORIZED_S0C`
 Planning baseline: `HCT-CP-0014 / PLANNING_FREEZE_APPROVED`
-Proposed authorization ceiling: `NON_TRADING_STAGE_0_AUDIT_EVIDENCE_CONFIG_VERSION_FOUNDATION_ONLY`
+Authorization ceiling: `NON_TRADING_STAGE_0_AUDIT_EVIDENCE_CONFIG_VERSION_FOUNDATION_ONLY`
 
 ## OBJECTIVE
 Finish the remaining bounded R11 Stage-0 provenance foundation by hardening the existing audit/evidence primitives and defining immutable release/config/policy version semantics, without persistence, exchange/network capability, production observability infrastructure or trading authority.
 
 ## AUTHORIZATION PRECONDITION
-This Work Order MUST NOT be executed until a later canonical checkpoint explicitly sets:
+Execution is authorized only while the canonical checkpoint proves all of the following exactly:
+- `checkpoint_id="HCT-CP-0019"`;
+- `status="IMPLEMENTATION_AUTHORIZED_S0C"`;
 - `implementation_authorized=true`;
 - `implementation_authorization_scope=["HCT-IMP-0003-S0C"]`;
-- `implementation_authorization_ceiling="NON_TRADING_STAGE_0_AUDIT_EVIDENCE_CONFIG_VERSION_FOUNDATION_ONLY"`.
+- `implementation_authorization_ceiling="NON_TRADING_STAGE_0_AUDIT_EVIDENCE_CONFIG_VERSION_FOUNDATION_ONLY"`;
+- production credentials/deployment/limited-live/live-trading flags remain false.
 
-Until then, product-code mutation is prohibited.
+Any context drift fails closed before product-code mutation.
 
 ## CONTEXT
 S0A created the canonical runtime/contracts/environment foundation and basic `AuditEnvelope` / `EvidenceEnvelope`. S0B created server-derived `SecurityContext`, tenant/account/environment isolation and opaque SecretStore references. R11 Stage 0 still requires mature audit/evidence primitives plus configuration/version semantics before Stage 1 exchange and realtime truth can be safely introduced.
@@ -41,7 +44,7 @@ At minimum:
 ## FILES / SOURCES TO READ BEFORE MUTATION
 At minimum:
 - `checkpoints/workstreams/planning/latest.json`;
-- the future checkpoint that authorizes this exact Work Order;
+- `checkpoints/history/HCT-CP-0019.json`;
 - `docs/00-source-hierarchy.md`;
 - `docs/09-definition-of-done.md`;
 - `docs/10-decisions-ledger.md`;
@@ -55,6 +58,7 @@ At minimum:
 - `docs/100-r12-requirements-traceability-and-no-loss-proof.md`;
 - `docs/108-s0a-implementation-approval-and-checkpoint-promotion.md`;
 - `docs/111-s0b-implementation-approval-and-checkpoint-promotion.md`;
+- `docs/113-s0c-implementation-authorization-approval-and-checkpoint-promotion.md`;
 - S0A/S0B contracts, security primitives, tests, CI and evidence;
 - this Work Order.
 
@@ -65,7 +69,7 @@ The executor SHOULD keep the slice within a small backend/domain surface such as
 - one focused backend provenance/integrity module if separation is clearer;
 - focused backend tests;
 - one S0C boundary scanner/validator if required;
-- one S0C exact-head governance workflow;
+- one S0C exact-head implementation workflow;
 - `evidence/HCT-IMP-0003-S0C.md`.
 
 Public OpenAPI/frontend contracts SHOULD remain unchanged unless a frozen requirement makes a minimal shared primitive unavoidable. Any such change must be deterministic, backward-safe for S0A/S0B and explicitly justified in the ADR/evidence.
@@ -160,7 +164,6 @@ Preserve all S0A/S0B contracts and tests. S0C cannot weaken environment isolatio
 
 ## OUT OF SCOPE
 Do not implement:
-- any product code unless this exact Work Order is checkpoint-authorized;
 - audit database/schema/storage adapter, WORM/object lock, immutable object storage, blockchain or external signing/KMS service;
 - external telemetry collector/exporter/agent/backend, OpenTelemetry deployment or metrics storage;
 - full logging framework replacement;
