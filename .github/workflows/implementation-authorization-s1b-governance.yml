@@ -55,7 +55,7 @@ jobs:
           grep -Fq '"limited_live_authorized": false' checkpoints/workstreams/planning/latest.json
           grep -Fq '"live_trading_authorized": false' checkpoints/workstreams/planning/latest.json
           grep -Fq 'HCT-CP-0022' docs/11-checkpoint.md
-          grep -Fq 'Current implementation authorization: `CLOSED_FAIL_CLOSED`' docs/11-checkpoint.md
+          grep -Fq 'Current implementation authorization: `NONE_FAIL_CLOSED`' docs/11-checkpoint.md
 
       - name: Verify frozen source identity and Stage-1 dependency order
         shell: bash
