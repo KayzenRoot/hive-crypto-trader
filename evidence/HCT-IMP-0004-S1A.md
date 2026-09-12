@@ -1,6 +1,6 @@
 # HCT-IMP-0004-S1A - Execution Evidence
 
-Status: `AUTHOR_PREFLIGHT_PENDING_EXACT_HEAD_CI`
+Status: `CORRECTION_LOCAL_ASSURANCE_PENDING_EXACT_HEAD_CI`
 Risk: `HIGH_ASSURANCE`
 UADS Work Order: `wo_139098d83c6aed63`
 UADS execution run: `er_0bfdeaed47eae52f`
@@ -25,6 +25,17 @@ The local working tree was clean before mutation. No reset, stash, force operati
 rebase, or history rewrite was used. The final exact candidate head and hosted run
 IDs are intentionally recorded in the PR/Issue handoff after CI to avoid a
 self-referential tracked-file cycle.
+
+## Correction scope
+
+- Previous reviewed head: `c4b3bb16d041eac0cab57e1cf3b2b3a15341d0f0`.
+- Correction authority: HCT-IMP-0004-S1A Correction Pack GEF V1.
+- H001: broaden the structured production AST boundary scan and add direct
+  regression coverage for the required negative-capability families.
+- H002: remove the deterministic in-memory fake from the shipped package and
+  keep it in `apps/backend/tests/test_exchange_reference.py` only.
+- No contract, checkpoint, Work Order, workflow, lockfile, dependency, exchange
+  connection, credential, deployment or live-trading surface was changed.
 
 ## Changed files and justification
 
@@ -57,12 +68,20 @@ are never assigned permissive defaults. Native symbols are mapping metadata and 
 not define canonical contract identity.
 
 The `ExchangeReferenceAdapter` protocol exposes only exchange description,
-capability snapshot, reference listing and canonical/native lookup. The in-memory
-adapter is deterministic, credential-free, network-free and test-only. No command
-surface, transport, account-state read, persistence or runtime session behavior is
-present.
+capability snapshot, reference listing and canonical/native lookup. The deterministic
+in-memory adapter is defined only in the backend test module and is not included in
+the installed production package. No command surface, transport, account-state
+read, persistence or runtime session behavior is present.
 
-## Local evidence
+The corrected production scanner remains AST/structured and fail-closed. It covers
+direct and alternate network/client imports, connection/client/session creation,
+auth/signing definitions and calls, credential-shaped arguments/fields, order and
+leverage/margin mutations, position mutations, market ingest/subscription runtime,
+persistence imports and recognizable persistence adapter definitions. Its tests
+also prove documentation/test vocabulary is ignored and `authority` is not treated
+as an authentication marker.
+
+## Prior-head evidence carried forward
 
 - Contract generation reproducibility: `PASS`.
 - Canonical/runtime parity: `PASS (10 schemas)`.
@@ -81,6 +100,26 @@ present.
 - Frontend lint: `PASS`.
 - Changed generated-contract format: `PASS`.
 - Frontend build: `PASS`.
+- npm audit: `PASS / 0 vulnerabilities`.
+- `git diff --check`: `PASS`.
+
+These values describe the prior reviewed head and remain valid carried evidence
+unless changed inputs invalidate them. The corrected head has fresh local results
+below.
+
+## Correction local evidence
+
+- Focused scanner and exchange-reference tests: `21 passed`.
+- Full backend suite with coverage: `81 passed`, `90%` total (`1177` statements).
+- Focused S0A/S0B/S0C regressions: `59 passed`.
+- Contract generation reproducibility: `PASS`; canonical/runtime parity: `PASS (10 schemas)`.
+- S0A boundary validation: `PASS`.
+- S0A secret scan: `PASS`.
+- S1A boundary and secret scan: `PASS (11 changed files)`.
+- Backend Ruff: `PASS`; strict mypy: `PASS`; backend build: `PASS`.
+- Python dependency audit: `PASS / no known vulnerabilities`.
+- Frontend typecheck: `PASS`; frontend tests: `13 passed`; frontend lint: `PASS`.
+- Changed generated-contract format: `PASS`; frontend build: `PASS`.
 - npm audit: `PASS / 0 vulnerabilities`.
 - `git diff --check`: `PASS`.
 

@@ -1,4 +1,5 @@
-from dataclasses import FrozenInstanceError, replace
+import re
+from dataclasses import FrozenInstanceError, dataclass, replace
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -14,13 +15,77 @@ from hct_backend.exchange_reference import (
     ContractReference,
     ContractType,
     ExchangeDescriptor,
-    InMemoryExchangeReferenceAdapter,
     LifecycleClass,
     MalformedReferenceError,
+    ReferenceUnavailableError,
+    UnknownContractError,
     UnsupportedCapabilityError,
 )
 
 NOW = datetime(2026, 9, 12, 12, 0, tzinfo=UTC)
+NATIVE_SYMBOL_PATTERN = re.compile(r"^[A-Za-z0-9._:/-]{1,64}$")
+
+
+@dataclass(frozen=True, slots=True)
+class InMemoryExchangeReferenceAdapter:
+    """Deterministic, credential-free and network-free test-only adapter."""
+
+    descriptor: ExchangeDescriptor
+    capabilities: CapabilitySnapshot
+    references: tuple[ContractReference, ...]
+
+    def __post_init__(self) -> None:
+        if self.capabilities.exchange_id != self.descriptor.exchange_id:
+            raise MalformedReferenceError("capability exchange does not match descriptor")
+        if not isinstance(self.references, tuple):
+            object.__setattr__(self, "references", tuple(self.references))
+        if any(not isinstance(reference, ContractReference) for reference in self.references):
+            raise MalformedReferenceError("invalid contract reference")
+        contract_ids = [reference.contract_id for reference in self.references]
+        native_symbols = [reference.native_symbol for reference in self.references]
+        if any(
+            reference.exchange_id != self.descriptor.exchange_id for reference in self.references
+        ):
+            raise MalformedReferenceError("reference exchange does not match descriptor")
+        if len(contract_ids) != len(set(contract_ids)) or len(native_symbols) != len(
+            set(native_symbols)
+        ):
+            raise MalformedReferenceError("duplicate contract reference mapping")
+
+    def describe_exchange(self) -> ExchangeDescriptor:
+        return self.descriptor
+
+    def capability_snapshot(self) -> CapabilitySnapshot:
+        return self.capabilities
+
+    def list_contract_references(self) -> tuple[ContractReference, ...]:
+        return self.references
+
+    def resolve_reference(
+        self,
+        *,
+        contract_id: StableId | None = None,
+        native_symbol: str | None = None,
+    ) -> ContractReference:
+        if contract_id is None and native_symbol is None:
+            raise UnknownContractError("a canonical or native reference is required")
+        if contract_id is not None and (
+            not isinstance(contract_id, StableId) or contract_id.kind is not IdentityKind.INSTRUMENT
+        ):
+            raise MalformedReferenceError("contract has the wrong identity kind")
+        if native_symbol is not None and not NATIVE_SYMBOL_PATTERN.fullmatch(native_symbol):
+            raise MalformedReferenceError("invalid native symbol")
+        matches = [
+            reference
+            for reference in self.references
+            if (contract_id is None or reference.contract_id == contract_id)
+            and (native_symbol is None or reference.native_symbol == native_symbol)
+        ]
+        if not matches:
+            raise UnknownContractError("reference is unknown")
+        if len(matches) != 1:
+            raise ReferenceUnavailableError("reference mapping is ambiguous")
+        return matches[0]
 
 
 def stable(kind: IdentityKind, value: str) -> StableId:
