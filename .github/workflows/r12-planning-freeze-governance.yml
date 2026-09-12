@@ -1,11 +1,10 @@
 name: R12 Planning Freeze Governance
 
+# R12 is already independently approved, merged and checkpoint-promoted as
+# HCT-CP-0014 / PLANNING_FREEZE_APPROVED. Keep this workflow available for
+# explicit historical/manual revalidation only; later implementation-phase PRs
+# use their own phase-specific governance checks.
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'docs/**'
-      - '.github/workflows/r12-planning-freeze-governance.yml'
   workflow_dispatch:
 
 permissions:
@@ -21,7 +20,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Verify R12 candidate package
+      - name: Verify R12 promoted package
         shell: bash
         run: |
           set -euo pipefail
@@ -34,47 +33,35 @@ jobs:
             docs/101-r12-freeze-governance-change-control-and-deferred-decisions.md
             docs/102-r12-freeze-acceptance-matrix.md
             docs/103-r12-final-planning-freeze-audit.md
+            docs/105-r12-freeze-approval-and-checkpoint-promotion.md
+            checkpoints/history/HCT-CP-0014.json
           )
           for file in "${required[@]}"; do
-            test -s "$file" || { echo "Missing or empty required file: $file"; exit 1; }
+            test -s "$file" || { echo "Missing or empty R12 promoted artifact: $file"; exit 1; }
           done
 
-      - name: Verify fail-closed authorization boundary
+      - name: Verify current checkpoint records freeze approval
         shell: bash
         run: |
           set -euo pipefail
-          audit=docs/103-r12-final-planning-freeze-audit.md
+          grep -Fq 'PLANNING_FREEZE_APPROVED' docs/11-checkpoint.md
+          grep -Fq 'HCT-CP-0014' docs/11-checkpoint.md
+          grep -Fq '"status": "PLANNING_FREEZE_APPROVED"' checkpoints/workstreams/planning/latest.json
+
+      - name: Verify higher operational gates remain fail-closed at freeze checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp=checkpoints/history/HCT-CP-0014.json
           for flag in \
-            implementation_authorized=false \
-            production_credentials_authorized=false \
-            production_deployment_authorized=false \
-            limited_live_authorized=false \
-            live_trading_authorized=false; do
-            grep -Fq "$flag" "$audit" || { echo "Required fail-closed flag missing: $flag"; exit 1; }
+            '"implementation_authorized": false' \
+            '"production_credentials_authorized": false' \
+            '"production_deployment_authorized": false' \
+            '"limited_live_authorized": false' \
+            '"live_trading_authorized": false'; do
+            grep -Fq "$flag" "$cp" || { echo "Expected freeze-checkpoint flag missing: $flag"; exit 1; }
           done
 
-      - name: Verify planning-only diff boundary
-        shell: bash
+      - name: Governance summary
         run: |
-          set -euo pipefail
-          git fetch origin "${{ github.base_ref }}" --depth=1
-          changed="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")"
-          echo "$changed"
-          invalid="$(printf '%s\n' "$changed" | grep -Ev '^(docs/|\.github/workflows/r12-planning-freeze-governance\.yml$)' || true)"
-          if [ -n "$invalid" ]; then
-            echo 'R12 Planning Freeze PR contains changes outside the approved planning/governance boundary:'
-            echo "$invalid"
-            exit 1
-          fi
-
-      - name: Verify freeze review markers
-        shell: bash
-        run: |
-          set -euo pipefail
-          grep -Fq 'READY_FOR_INDEPENDENT_HIGH_ASSURANCE_REVIEW' docs/103-r12-final-planning-freeze-audit.md
-          grep -Fq 'INDEPENDENT_REVIEW_REQUIRED' docs/103-r12-final-planning-freeze-audit.md
-          grep -Fq 'HCT-REQ-BASELINE-V1-CANDIDATE' docs/99-r12-frozen-requirements-baseline.md
-
-      - name: Governance check summary
-        run: |
-          echo 'R12 candidate package exists, authorization remains fail-closed, and diff stays within planning/governance scope.'
+          echo 'Historical R12 promoted state is internally present. This manual workflow does not authorize implementation or any live stage.'
