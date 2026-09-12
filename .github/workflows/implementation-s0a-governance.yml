@@ -1,0 +1,87 @@
+name: HCT-IMP-0001-S0A Governance
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "adr/HCT-ADR-0042-s0a-toolchain.md"
+      - "apps/**"
+      - "packages/**"
+      - "scripts/**"
+      - "evidence/**"
+      - "README.md"
+      - ".github/workflows/implementation-s0a-governance.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  s0a-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Assert raw pull request head
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "${{ github.event.pull_request.head.sha }}"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: python -m pip install --disable-pip-version-check uv==0.12.13
+
+      - name: Validate backend lock and checks
+        run: |
+          uv sync --project apps/backend --locked --all-groups
+          python scripts/generate_contracts.py --check
+          uv run --project apps/backend python scripts/validate_contract_parity.py
+          cd apps/backend
+          uv run pytest --cov=hct_backend --cov-report=term-missing
+          uv run ruff check src tests
+          uv run mypy src
+          cd ../..
+          uv build --project apps/backend --out-dir /tmp/hct-backend-dist
+          uv run --project apps/backend --with pip-audit==2.10.1 pip-audit --local
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.18.0"
+          cache: npm
+          cache-dependency-path: apps/frontend/package-lock.json
+
+      - name: Validate frontend lock and checks
+        working-directory: apps/frontend
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run lint
+          npm run format:check
+          npm run build
+          npm audit --audit-level=high --omit=optional
+
+      - name: Validate S0A boundary
+        run: |
+          uv run --project apps/backend python scripts/validate_s0a.py
+          python scripts/scan_s0a_secrets.py
+
+      - name: Validate patch formatting
+        env:
+          BASE_SHA: c9fadaaf1aea61930d825b8247465c70963d2267
+        run: |
+          head="$(git rev-parse HEAD)"
+          test "$(git rev-parse "$BASE_SHA")" = "$BASE_SHA"
+          echo "candidate diff check: $BASE_SHA...$head"
+          git diff --check "$BASE_SHA...$head"
