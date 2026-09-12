@@ -84,7 +84,8 @@ jobs:
           grep -Fq 'MEXC adapters' docs/109-implementation-authorization-s0b-candidate.md
           grep -Fq 'production deployment' docs/109-implementation-authorization-s0b-candidate.md
           grep -Fq 'limited-live or real-money trading' docs/109-implementation-authorization-s0b-candidate.md
-          grep -Fq 'The S0B SecretStore API SHALL NOT return raw secret strings/bytes' docs/109-implementation-authorization-s0b-candidate.md
+          grep -Fq 'The abstraction SHALL NOT expose or persist real API keys' docs/109-implementation-authorization-s0b-candidate.md
+          grep -Fq 'The S0B SecretStore API SHALL NOT return raw secret strings/bytes' work-orders/HCT-IMP-0002-S0B.md
           grep -Fq 'No exchange/network/trading capability exists' work-orders/HCT-IMP-0002-S0B.md
 
       - name: Verify governance-only diff boundary
@@ -103,6 +104,7 @@ jobs:
             echo "$invalid"
             exit 1
           fi
+          echo "candidate diff check: $base...$head"
           git diff --check "$base...$head"
 
       - name: Governance summary
