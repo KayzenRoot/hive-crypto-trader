@@ -1,11 +1,11 @@
 # HCT-IMP-0004-S1A - Exchange Abstraction, Capability & Contract Reference Foundation
 
-Status: `PENDING_AUTHORIZATION`
+Status: `AUTHORIZED`
 Risk class: `HIGH_ASSURANCE`
-Parent authorization increment: `HCT-IMPL-AUTH-0004 / PENDING_INDEPENDENT_REVIEW`
-Proposed authorization checkpoint: `HCT-CP-0021 / IMPLEMENTATION_AUTHORIZED_S1A`
+Parent authorization increment: `HCT-IMPL-AUTH-0004 / COMPLETED_APPROVED`
+Authorization checkpoint: `HCT-CP-0021 / IMPLEMENTATION_AUTHORIZED_S1A`
 Planning baseline: `HCT-CP-0014 / PLANNING_FREEZE_APPROVED`
-Proposed authorization ceiling: `NON_TRADING_STAGE_1_EXCHANGE_ABSTRACTION_CAPABILITY_CONTRACT_FOUNDATION_ONLY`
+Authorization ceiling: `NON_TRADING_STAGE_1_EXCHANGE_ABSTRACTION_CAPABILITY_CONTRACT_FOUNDATION_ONLY`
 
 ## OBJECTIVE
 Implement the first bounded Stage-1 exchange-domain foundation by creating an HCT-owned, provider-neutral, read-only exchange abstraction with immutable capability and contract/reference semantics, while introducing **no concrete exchange networking, credentials, market ingest, orders, money-state or trading authority**.
@@ -13,7 +13,7 @@ Implement the first bounded Stage-1 exchange-domain foundation by creating an HC
 The implementation must make later MEXC integration safer by ensuring core HCT modules consume canonical HCT contracts rather than MEXC request/response payloads or exchange-native symbol strings.
 
 ## AUTHORIZATION PRECONDITION
-Execution is authorized only after a later canonical checkpoint proves all of the following exactly:
+Execution is authorized only while the canonical checkpoint proves all of the following exactly:
 - `checkpoint_id="HCT-CP-0021"`;
 - `status="IMPLEMENTATION_AUTHORIZED_S1A"`;
 - `implementation_authorized=true`;
@@ -26,8 +26,16 @@ Execution is authorized only after a later canonical checkpoint proves all of th
 
 Any context drift fails closed before product-code mutation.
 
+Authorization evidence:
+- authorization PR: `#46`;
+- exact approved authorization head: `8e6ebe7a3ecf7b108a2bd57d5249b3eda310f388`;
+- authorization merge: `7a458504de8721fdaffe6c3262781d1d5a675291`;
+- exact-head governance run: `34705660182 / implementation-authorization-s1a-governance / success`;
+- independent verdict: `APPROVED`, CRITICAL `0`, HIGH `0`;
+- promotion record: `docs/116-s1a-implementation-authorization-approval-and-checkpoint-promotion.md`.
+
 ## CONTEXT
-S0A established the canonical repository/runtime/shared-contract foundation. S0B established SecurityContext, tenant/account/environment binding and opaque secret-reference boundaries. S0C established audit/evidence/config-version integrity semantics. `HCT-CP-0020` consumed S0C authority and returned product implementation to fail closed.
+S0A established the canonical repository/runtime/shared-contract foundation. S0B established SecurityContext, tenant/account/environment binding and opaque secret-reference boundaries. S0C established audit/evidence/config-version integrity semantics. `HCT-CP-0020` consumed S0C authority and returned product implementation to fail closed; `HCT-CP-0021` now grants only this bounded S1A authority.
 
 R11 Stage 1 begins `Exchange and realtime truth`. The first safe dependency is the exchange abstraction itself. A concrete MEXC adapter, universe engine, quota governor or market ingest must not become the place where canonical exchange identity and capability semantics are invented ad hoc.
 
@@ -58,7 +66,7 @@ Priority follows `docs/00-source-hierarchy.md`.
 
 At minimum:
 - `checkpoints/workstreams/planning/latest.json`;
-- `checkpoints/history/HCT-CP-0021.json` after authorization promotion;
+- `checkpoints/history/HCT-CP-0021.json`;
 - `docs/00-source-hierarchy.md`;
 - `docs/03-scope.md`;
 - `docs/09-definition-of-done.md`;
@@ -75,6 +83,7 @@ At minimum:
 - `docs/108-s0a-implementation-approval-and-checkpoint-promotion.md`;
 - `docs/111-s0b-implementation-approval-and-checkpoint-promotion.md`;
 - `docs/114-s0c-implementation-approval-and-checkpoint-promotion.md`;
+- `docs/116-s1a-implementation-authorization-approval-and-checkpoint-promotion.md`;
 - `work-orders/HCT-IMP-0004-S1A.md`;
 - authorization Issue #45 and its exact approval evidence.
 
