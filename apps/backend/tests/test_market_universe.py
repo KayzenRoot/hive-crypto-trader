@@ -248,6 +248,11 @@ def test_entries_and_snapshots_are_immutable_and_identity_is_dedicated() -> None
     assert item.exchange_id == descriptor().exchange_id
     with pytest.raises(UniverseConsistencyError):
         replace(item, environment=Environment.REPLAY)
+    with pytest.raises(UniverseInputError):
+        replace(
+            item,
+            snapshot_id=stable(IdentityKind.REFERENCE_SNAPSHOT, "reference-identity"),
+        )
     with pytest.raises(FrozenInstanceError):
         item.entries = ()  # type: ignore[misc]
     with pytest.raises(FrozenInstanceError):
