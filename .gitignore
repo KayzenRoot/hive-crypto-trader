@@ -10,3 +10,4 @@ node_modules/
 coverage/
 .coverage
 *.egg-info/
+build/

@@ -58,6 +58,7 @@ money-state, production deployment or live-capable control was added.
 | Contract generation `python scripts/generate_contracts.py --check` | PASS |
 | Backend dependency lock `uv lock --check` / `uv sync --locked --all-groups` | PASS |
 | Backend unit/endpoint/contract tests | PASS — 6 passed; 90% total coverage |
+| Independent backend package build `uv build` | PASS |
 | Backend Ruff | PASS |
 | Backend mypy strict | PASS |
 | Frontend clean install `npm ci` | PASS |
