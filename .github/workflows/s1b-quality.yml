@@ -89,6 +89,11 @@ jobs:
           uv run --project apps/backend python scripts/validate_contract_parity.py
           uv run --project apps/backend pytest --cov=hct_backend --cov-report=term-missing apps/backend/tests
           uv run --project apps/backend ruff check apps/backend/src apps/backend/tests scripts/scan_s1b_boundaries.py
+          uv run --project apps/backend ruff format --check \
+            apps/backend/src/hct_backend/mexc_reference.py \
+            apps/backend/tests/test_mexc_reference.py \
+            apps/backend/tests/test_scan_s1b_boundaries.py \
+            scripts/scan_s1b_boundaries.py
           uv run --project apps/backend mypy apps/backend/src
           uv build --project apps/backend --out-dir /tmp/hct-backend-dist-s1b
           uv run --project apps/backend --with pip-audit==2.10.1 pip-audit --local

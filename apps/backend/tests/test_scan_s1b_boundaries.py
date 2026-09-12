@@ -10,11 +10,11 @@ def test_production_scan_allows_only_the_fixed_provider_transport_imports() -> N
     candidate = scanner.S1B_PRODUCTION_MODULE
     text = (
         'MEXC_BASE_URL = "https://api.mexc.com"\n'
-        'MEXC_CONTRACT_DETAIL_PATH = "/api/v1/contract/detail"\n'
+        'MEXC_CONTRACT_DETAIL_PATH = "/api/v1/contract/detail/country"\n'
         "import http.client\n"
         "import ssl\n"
         "connection = http.client.HTTPSConnection(MEXC_HOST)\n"
-        'connection.request("GET", "/api/v1/contract/detail")\n'
+        'connection.request("GET", "/api/v1/contract/detail/country")\n'
     )
     assert scanner.scan_production_python(candidate, text) == []
 
@@ -35,7 +35,7 @@ def test_production_scan_rejects_endpoint_escape_and_unauthorized_urls() -> None
     assert scanner.scan_production_python(
         candidate,
         'MEXC_BASE_URL = "https://api.mexc.com"\n'
-        'MEXC_CONTRACT_DETAIL_PATH = "/api/v1/contract/detail"\n'
+        'MEXC_CONTRACT_DETAIL_PATH = "/api/v1/contract/detail/country"\n'
         "import http.client\n"
         "connection = http.client.HTTPSConnection(user_host)\n"
         'connection.request("GET", user_path)\n',
@@ -43,7 +43,7 @@ def test_production_scan_rejects_endpoint_escape_and_unauthorized_urls() -> None
     assert scanner.scan_production_python(
         candidate,
         'MEXC_BASE_URL = "https://api.mexc.com"\n'
-        'MEXC_CONTRACT_DETAIL_PATH = "/api/v1/contract/detail"\n'
+        'MEXC_CONTRACT_DETAIL_PATH = "/api/v1/contract/detail/country"\n'
         'OTHER = "https://example.invalid/route"\n',
     )
 

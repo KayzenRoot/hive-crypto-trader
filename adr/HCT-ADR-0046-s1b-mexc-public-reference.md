@@ -8,11 +8,13 @@ Authorization ceiling: `NON_TRADING_STAGE_1_MEXC_PUBLIC_REFERENCE_CAPABILITY_RES
 ## Decision
 
 S1B uses one concrete MEXC Futures public reference read, `GET
-https://api.mexc.com/api/v1/contract/detail`, behind the approved S1A
-`ExchangeReferenceAdapter` port. The production transport is HTTPS-only,
-unauthenticated, finite, bounded and read-only. Provider-native values are
-parsed inside the MEXC boundary and translated into immutable S1A canonical
-models. No MEXC payload dictionary or provider DTO crosses that boundary.
+https://api.mexc.com/api/v1/contract/detail/country`, behind the approved S1A
+`ExchangeReferenceAdapter` port. The current detailed provider reference
+documents an object-shaped `data` value and typed `futureType` field. The
+production transport is HTTPS-only, unauthenticated, finite, bounded and
+read-only. Provider-native values are parsed inside the MEXC boundary and
+translated into immutable S1A canonical models. No MEXC payload dictionary or
+provider DTO crosses that boundary.
 
 This decision adds reference evidence only. It does not grant Security, Risk,
 Execution, order, account, private-state, deployment or live-trading authority.
@@ -20,28 +22,36 @@ Execution, order, account, private-state, deployment or live-trading authority.
 ## Official provider evidence
 
 The following first-party MEXC sources were consulted on `2026-09-12` at
-`2026-09-12T19:29:32Z` UTC. The timestamp records this execution's access
+`2026-09-12T20:47:12Z` UTC. The timestamp records this execution's access
 time; the source content remains external evidence and is not authorization.
 
 1. [MEXC Futures integration guide](https://www.mexc.com/api-docs/futures/integration-guide)
    — current official documentation entry point and Futures API scope.
-2. [MEXC Contract API reference](https://mexcdevelop.github.io/apidocs/contract_v1_en/)
-   — `Get the contract information`, `GET api/v1/contract/detail`, response
-   fields `symbol`, `displayNameEn`, `baseCoin`, `quoteCoin`, `settleCoin`,
-   `priceScale`, `volScale`, `priceUnit`, `volUnit`, `minVol`, `maxVol` and
-   `state`.
+2. [MEXC Get Contract Info](https://www.mexc.com/api-docs/futures/market-endpoints/get-contract-info)
+   — current detailed route `GET /api/v1/contract/detail/country`, object
+   `data`, and typed `futureType` (`1` perpetual, `2` delivery), alongside
+   `symbol`, `displayNameEn`, scales, units, bounds and state.
 3. [MEXC Futures API access domain update](https://www.mexc.com/announcements/article/futures-api-access-domain-update-17827791532974)
    — official migration from `https://contract.mexc.com` to
    `https://api.mexc.com`; the old host is not allowlisted.
 4. [MEXC API overview](https://www.mexc.com/mexc-api)
-   — current official reference to the Futures contract-detail endpoint at
-   `https://api.mexc.com/api/v1/contract/detail`.
+   — current FAQ reference to the supported-pairs route at
+   `https://api.mexc.com/api/v1/contract/detail`; its list-shaped legacy
+   envelope is retained as an unresolved provider-documentation conflict and
+   is not used as the typed canonical source.
+
+The one permitted bounded diagnostic attempt against the FAQ's legacy route
+used no credentials, no redirect, no persistence, a 2-second connect timeout,
+5-second total timeout and a 262144-byte maximum. The transfer exceeded the
+maximum before completion, so no raw response or digest was retained. A safe
+prefix showed the legacy list envelope and `futureType=1`/`PERPETUAL`; this was
+not used as complete production evidence.
 
 ## Allowlist and transport policy
 
 - Allowlisted host: `api.mexc.com` only.
 - Allowlisted base URL: `https://api.mexc.com` only.
-- Allowlisted path: `/api/v1/contract/detail` only.
+- Allowlisted path: `/api/v1/contract/detail/country` only.
 - Method: `GET` only; no query string, caller-supplied path or caller-supplied
   URL is accepted.
 - TLS is required. Redirects are not followed by the bounded transport.
@@ -60,8 +70,10 @@ time; the source content remains external evidence and is not authorization.
 
 ## Provider boundary and canonical translation
 
-The response envelope must contain `success=true`, `code=0` and a non-empty
-`data` list. Each material contract entry is validated before translation.
+The response envelope must contain `success=true`, `code=0` and a `data` object
+with all material contract fields. The legacy list-shaped route is rejected;
+there is no heuristic fallback between provider shapes. The material contract
+object is validated before translation.
 Unknown extra provider fields are ignored; they cannot mutate canonical
 semantics. Missing, malformed, contradictory or unrecognized material values
 fail closed with a bounded reference error.
@@ -72,7 +84,10 @@ fail closed with a bounded reference error.
 | `baseCoin` | `base_asset` | Uppercase canonical token; participates in deterministic instrument identity. |
 | `quoteCoin` | `quote_asset` | Uppercase canonical token; participates in deterministic instrument identity. |
 | `settleCoin` | `settlement_asset` | Uppercase canonical token; participates in deterministic instrument identity. |
-| `displayNameEn` | `contract_type=PERPETUAL` | Accepted only when the documented reference shape explicitly identifies a `SWAP`; otherwise unavailable. |
+| `futureType=1` | `contract_type=PERPETUAL` | Typed provider authority; required and accepted for this S1B ceiling. |
+| `futureType=2` | unavailable | Delivery contracts are not approved by S1B and fail closed. |
+| missing/unknown `futureType` | unavailable | Unknown typed authority fails closed. |
+| `displayNameEn` | presentation consistency | `PERPETUAL` is accepted without a `SWAP` suffix; explicit delivery/perpetual conflict with `futureType` fails closed. |
 | `state=0` | `lifecycle=ACTIVE` | Official meaning: enabled. |
 | `state=1..4` | `lifecycle=INACTIVE` | Official meanings: delivery, completed, offline or pause. Unknown states fail closed. |
 | `priceUnit` | `price_increment` | Parsed as exact JSON decimal; positive and finite. |
@@ -108,11 +123,13 @@ authorized slices.
 
 ## Validation strategy
 
-Tests use deterministic JSON fixtures derived from the documented response
-shape and an injected fake transport. CI never calls MEXC, DNS or the public
-internet. Focused negative tests cover URL/host/path enforcement, timeout and
-response bounds, JSON/content/schema failures, decimal/rule contradictions,
-unknown lifecycle/type, canonical identity stability and UNKNOWN capability
-semantics. The S1B scanner fails closed for changed-file escape, unauthorized
+Tests use deterministic JSON fixtures derived from the selected object-shaped
+response. CI never calls MEXC, DNS or the public internet. Private fixture
+construction is separate from the production `load()` surface, which has no
+caller-supplied transport, URL or observation time. Focused negative tests
+cover URL/host/path enforcement, timeout and response bounds, JSON/content/
+schema failures, typed contract conflicts and unknown types, decimal/rule
+contradictions, canonical identity stability and UNKNOWN capability semantics.
+The S1B scanner fails closed for changed-file escape, unauthorized
 network/auth/private/stream/order/persistence/deployment surfaces and generic
 external URLs.

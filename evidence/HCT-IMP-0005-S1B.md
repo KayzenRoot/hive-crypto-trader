@@ -1,6 +1,6 @@
 # HCT-IMP-0005-S1B - Execution Evidence
 
-Status: `AUTHOR_PREFLIGHT_PENDING_EXACT_HEAD_CI`
+Status: `CORRECTION_LOCAL_PREFLIGHT_PENDING_EXACT_HEAD_CI`
 Risk: `HIGH_ASSURANCE`
 UADS Work Order: `wo_cb644fc4f8742991`
 UADS execution run: `er_b5631e8540a6f401`
@@ -42,20 +42,28 @@ real-money trading.
 
 ADR: `adr/HCT-ADR-0046-s1b-mexc-public-reference.md`.
 
-Official MEXC sources consulted on `2026-09-12T19:29:32Z`:
+Official MEXC sources consulted on `2026-09-12T20:47:12Z`:
 
 - `https://www.mexc.com/api-docs/futures/integration-guide`
-- `https://mexcdevelop.github.io/apidocs/contract_v1_en/`
+- `https://www.mexc.com/api-docs/futures/market-endpoints/get-contract-info`
 - `https://www.mexc.com/announcements/article/futures-api-access-domain-update-17827791532974`
 - `https://www.mexc.com/mexc-api`
 
 The fixed allowlist is HTTPS host `api.mexc.com`, base URL
-`https://api.mexc.com`, and `GET /api/v1/contract/detail`. Caller-supplied
-hosts, paths, queries, fragments, ports, credentials and redirects are not
-accepted. The transport is one-shot with connect timeout `2.0s`, read timeout
-`3.0s`, total deadline `5.0s`, maximum body `262144` bytes and maximum read
-chunk `8192` bytes. It performs no retry, session, reconnect, quota or stream
-runtime behavior.
+`https://api.mexc.com`, and `GET /api/v1/contract/detail/country`.
+Caller-supplied hosts, paths, queries, fragments, ports, credentials and
+redirects are not accepted. The transport is one-shot with connect timeout
+`2.0s`, read timeout `3.0s`, total deadline `5.0s`, maximum body `262144`
+bytes and maximum read chunk `8192` bytes. It performs no retry, session,
+reconnect, quota or stream runtime behavior.
+
+The current detailed MEXC reference documents an object-shaped `data` value
+and typed `futureType` (`1` perpetual, `2` delivery). The API overview still
+mentions the legacy list-shaped `/api/v1/contract/detail` route for supported
+pairs; that documentation conflict is not silently merged. The legacy shape is
+rejected and remains deferred outside the selected canonical source. The one
+permitted bounded diagnostic attempt to that legacy route exceeded the
+262144-byte limit before completion; no raw payload or digest was retained.
 
 ## Mapping and fail-closed behavior
 
@@ -63,8 +71,11 @@ The adapter maps the official contract-detail shape as follows:
 
 - `symbol` is native mapping metadata; it is not canonical identity.
 - `baseCoin`, `quoteCoin`, and `settleCoin` become explicit canonical assets.
-- an English display name ending in `SWAP` maps to `PERPETUAL`; other contract
-  types fail closed.
+- `futureType=1` maps to `PERPETUAL`; `futureType=2` (delivery), missing or
+  unknown values fail closed because S1B does not authorize delivery semantics.
+- `displayNameEn` is only a presentation consistency check: `PERPETUAL` does
+  not require a `SWAP` suffix, while an explicit typed/presentation conflict
+  fails closed.
 - provider state `0` maps to `ACTIVE`; states `1` through `4` map to
   `INACTIVE`; unknown states fail closed.
 - `priceUnit`, `volUnit`, `priceScale`, `volScale`, `minVol`, and `maxVol` are
@@ -80,8 +91,10 @@ remain explicitly deferred because they are not needed for the authorized
 public-reference ceiling. Unknown or contradictory material data is rejected.
 
 Fixtures are deterministic and local. No live MEXC call is used by tests or CI.
-The provider payload is parsed at the adapter boundary and cannot leak into
-canonical domain semantics.
+The public production `load()` has no caller-supplied transport, endpoint or
+observation time; private `_from_payload` construction is used only for
+deterministic tests. The provider payload is parsed at the adapter boundary and
+cannot leak into canonical domain semantics.
 
 ## Changed files and justification
 
@@ -96,7 +109,7 @@ canonical domain semantics.
 - `scripts/scan_s1b_boundaries.py` - AST-aware S1B scope, endpoint, import,
   capability, secret and changed-file boundary scan.
 - `.github/workflows/s1b-quality.yml` - PR-only exact-head governance receipt
-  with full regression, audit and build gates.
+  with full regression, audit, build and targeted Ruff-format gates.
 - `evidence/HCT-IMP-0005-S1B.md` - this bounded evidence handoff.
 
 No checkpoint, frozen requirement, Scope, Decisions Ledger, Work Order,
@@ -122,20 +135,35 @@ Recorded local results for the current candidate before hosted CI:
   npm audit: `PASS / 0 vulnerabilities`.
 - `git diff --check`: `PASS`.
 
+Correction-specific local verification after the independent H001-H003
+findings:
+
+- Focused MEXC adapter and S1B scanner tests: `52 passed`.
+- Backend Ruff check: `PASS`; strict mypy: `PASS`.
+- Targeted Ruff format check over the four changed Python files: `PASS`.
+- Production load signature has no transport/time injection parameters:
+  `PASS`.
+
 The legacy S0A
 whole-tree lexical validator is not invoked because its frozen marker list
 intentionally rejects the authorized MEXC provider vocabulary; its S0A
 contract/regression tests remain in the direct regression matrix and the
 S1B-aware scanner provides the applicable changed-candidate secret and
-capability boundary. UADS non-review gates are recorded PASS in the sidecar
-ledger against the candidate change digest. The UADS assurance packet still
-requires distinct non-implementer
+capability boundary. The prior UADS non-review gates were recorded PASS in the
+sidecar ledger against the pre-correction candidate digest. For this correction,
+the existing UADS run is already stopped; `uads verify` refused with
+`cannot verify before dispatch or after the run has stopped`. Therefore no new
+UADS digest/evidence claim is made here; the correction-specific local gates
+above are direct command evidence. The UADS assurance packet still requires distinct non-implementer
 `independent-reviewer` and `security-reviewer` sessions; this execution will
 not self-approve or replace them.
 
 ## Hosted handoff and stop condition
 
-- Final exact implementation head: pending final local commit and push.
+- Correction findings H001-H003: locally addressed; final exact implementation
+  head pending commit and push.
+- The broad pre-existing repository format check remains out of scope; the
+  hosted gate checks the four changed Python files explicitly.
 - Exact `s1b-quality` run/check: pending fresh CI for the final head.
 - Author-side findings: pending final preflight.
 - Independent review: not performed by this execution and not replaced by

@@ -12,7 +12,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Protocol
 from urllib.parse import urlsplit
 
 from hct_backend.contracts import IdentityKind, StableId
@@ -31,9 +30,10 @@ from hct_backend.exchange_reference import (
 )
 
 MEXC_BASE_URL = "https://api.mexc.com"
-MEXC_CONTRACT_DETAIL_ENDPOINT = f"{MEXC_BASE_URL}/api/v1/contract/detail"
+MEXC_CONTRACT_DETAIL_ENDPOINT = f"{MEXC_BASE_URL}/api/v1/contract/detail/country"
 MEXC_HOST = "api.mexc.com"
-MEXC_CONTRACT_DETAIL_PATH = "/api/v1/contract/detail"
+MEXC_CONTRACT_DETAIL_PATH = "/api/v1/contract/detail/country"
+MEXC_REFERENCE_SOURCE = "mexc-public-contract-detail-country"
 CONNECT_TIMEOUT_SECONDS = 2.0
 READ_TIMEOUT_SECONDS = 3.0
 TOTAL_TIMEOUT_SECONDS = 5.0
@@ -42,7 +42,6 @@ READ_CHUNK_BYTES = 8_192
 
 _ASSET_PATTERN = re.compile(r"^[A-Z][A-Z0-9._-]{0,31}$")
 _NATIVE_SYMBOL_PATTERN = re.compile(r"^[A-Za-z0-9._:/-]{1,64}$")
-_SWAP_SUFFIX_PATTERN = re.compile(r"(?:^|\s)SWAP\s*$", re.IGNORECASE)
 _MATERIAL_FIELDS = frozenset(
     {
         "symbol",
@@ -50,6 +49,7 @@ _MATERIAL_FIELDS = frozenset(
         "quoteCoin",
         "settleCoin",
         "displayNameEn",
+        "futureType",
         "priceScale",
         "volScale",
         "priceUnit",
@@ -59,12 +59,6 @@ _MATERIAL_FIELDS = frozenset(
         "state",
     }
 )
-
-
-class MexcReferenceTransport(Protocol):
-    """Minimal injectable transport contract used by the adapter."""
-
-    def fetch_contract_detail(self) -> bytes: ...
 
 
 def _reject_json_constant(value: str) -> object:
@@ -216,18 +210,10 @@ def _parse_payload(payload: bytes, observed_at: datetime) -> tuple[ContractRefer
         raise MalformedReferenceError("MEXC response envelope is not an object")
     if document.get("success") is not True or document.get("code") != 0:
         raise ReferenceUnavailableError("MEXC public reference reported failure")
-    entries = document.get("data")
-    if not isinstance(entries, list) or not entries:
-        raise MalformedReferenceError("MEXC contract detail data is empty or malformed")
-
-    references = tuple(_parse_entry(entry, observed_at) for entry in entries)
-    contract_ids = [reference.contract_id for reference in references]
-    native_symbols = [reference.native_symbol for reference in references]
-    if len(contract_ids) != len(set(contract_ids)):
-        raise MalformedReferenceError("MEXC payload contains duplicate canonical contracts")
-    if len(native_symbols) != len(set(native_symbols)):
-        raise MalformedReferenceError("MEXC payload contains duplicate native symbols")
-    return references
+    entry = document.get("data")
+    if not isinstance(entry, Mapping):
+        raise MalformedReferenceError("MEXC contract detail data is not the documented object")
+    return (_parse_entry(entry, observed_at),)
 
 
 def _parse_entry(entry: object, observed_at: datetime) -> ContractReference:
@@ -241,8 +227,26 @@ def _parse_entry(entry: object, observed_at: datetime) -> ContractReference:
     quote_asset = _asset(entry["quoteCoin"], "quote asset")
     settlement_asset = _asset(entry["settleCoin"], "settlement asset")
     display_name = _bounded_text(entry["displayNameEn"], "English display name")
-    if not _SWAP_SUFFIX_PATTERN.search(display_name):
-        raise MalformedReferenceError("MEXC contract type is not explicitly identified as SWAP")
+
+    raw_future_type = entry["futureType"]
+    if not isinstance(raw_future_type, int) or isinstance(raw_future_type, bool):
+        raise MalformedReferenceError("MEXC futureType is not an integer")
+    presentation = display_name.upper()
+    presentation_type = (
+        ContractType.PERPETUAL
+        if "PERPETUAL" in presentation or presentation.endswith("SWAP")
+        else ContractType.FUTURES
+        if "DELIVERY" in presentation
+        else None
+    )
+    if raw_future_type == 1:
+        contract_type = ContractType.PERPETUAL
+    elif raw_future_type == 2:
+        raise MalformedReferenceError("MEXC delivery contracts are unsupported in S1B")
+    else:
+        raise MalformedReferenceError("MEXC futureType is unknown")
+    if presentation_type is not None and presentation_type is not contract_type:
+        raise MalformedReferenceError("MEXC typed contract type conflicts with display name")
 
     raw_state = entry["state"]
     if not isinstance(raw_state, int) or isinstance(raw_state, bool):
@@ -268,7 +272,6 @@ def _parse_entry(entry: object, observed_at: datetime) -> ContractReference:
     _multiple(min_quantity, quantity_increment, "minVol")
     _multiple(max_quantity, quantity_increment, "maxVol")
 
-    contract_type = ContractType.PERPETUAL
     contract_id = _canonical_instrument_id(
         base_asset=base_asset,
         quote_asset=quote_asset,
@@ -301,7 +304,7 @@ def _parse_entry(entry: object, observed_at: datetime) -> ContractReference:
         contract_type=contract_type,
         price_increment=price_increment,
         quantity_increment=quantity_increment,
-        source="mexc-public-contract-detail",
+        source=MEXC_REFERENCE_SOURCE,
         observed_at=observed_at,
         base_asset=base_asset,
         quote_asset=quote_asset,
@@ -319,7 +322,7 @@ def _descriptor(observed_at: datetime) -> ExchangeDescriptor:
         exchange_id=exchange_id,
         display_name="MEXC Futures",
         reference_version=1,
-        source="mexc-public-contract-detail",
+        source=MEXC_REFERENCE_SOURCE,
         observed_at=observed_at,
         metadata=(
             ("endpoint", MEXC_CONTRACT_DETAIL_PATH),
@@ -337,12 +340,12 @@ def _capabilities(
     snapshot_id = _stable(
         IdentityKind.CAPABILITY_SNAPSHOT, f"mexc-capability-{evidence_digest[:32]}"
     )
-    evidence = "mexc-public-contract-detail-validated"
+    evidence = f"{MEXC_REFERENCE_SOURCE}-validated"
     return CapabilitySnapshot(
         snapshot_id=snapshot_id,
         exchange_id=exchange_id,
         version=1,
-        source="mexc-public-contract-detail",
+        source=MEXC_REFERENCE_SOURCE,
         observed_at=observed_at,
         declarations=(
             CapabilityDeclaration(
@@ -387,22 +390,21 @@ class MexcPublicReferenceAdapter:
             raise MalformedReferenceError("MEXC adapter has duplicate native references")
 
     @classmethod
-    def load(
-        cls,
-        *,
-        transport: MexcReferenceTransport | None = None,
-        observed_at: datetime | None = None,
-    ) -> MexcPublicReferenceAdapter:
-        timestamp = datetime.now(UTC) if observed_at is None else observed_at
-        if timestamp.tzinfo is None or timestamp.utcoffset() is None:
-            raise MalformedReferenceError("MEXC observation time must be timezone-aware")
-        selected_transport = _MexcHttpsTransport() if transport is None else transport
+    def load(cls) -> MexcPublicReferenceAdapter:
+        timestamp = datetime.now(UTC)
         try:
-            payload = selected_transport.fetch_contract_detail()
+            payload = _MexcHttpsTransport().fetch_contract_detail()
         except (ReferenceUnavailableError, MalformedReferenceError):
             raise
         except (OSError, TimeoutError) as error:
             raise ReferenceUnavailableError("MEXC public reference transport failed") from error
+        return cls._from_payload(payload, timestamp)
+
+    @classmethod
+    def _from_payload(cls, payload: bytes, observed_at: datetime) -> MexcPublicReferenceAdapter:
+        timestamp = observed_at
+        if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+            raise MalformedReferenceError("MEXC observation time must be timezone-aware")
         references = _parse_payload(payload, timestamp.astimezone(UTC))
         descriptor = _descriptor(timestamp.astimezone(UTC))
         capabilities = _capabilities(references, timestamp.astimezone(UTC))

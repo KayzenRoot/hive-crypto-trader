@@ -211,29 +211,36 @@ def scan_production_python(name: str, text: str) -> list[str]:
             if (
                 isinstance(node.func, ast.Attribute)
                 and node.func.attr == "request"
-                and (len(node.args) < 2 or not (
-                    isinstance(node.args[0], ast.Constant)
-                    and node.args[0].value == "GET"
-                    and (
-                        (
-                            isinstance(node.args[1], ast.Constant)
-                            and node.args[1].value == "/api/v1/contract/detail"
-                        )
-                        or (
-                            isinstance(node.args[1], ast.Name)
-                            and node.args[1].id == "MEXC_CONTRACT_DETAIL_PATH"
+                and (
+                    len(node.args) < 2
+                    or not (
+                        isinstance(node.args[0], ast.Constant)
+                        and node.args[0].value == "GET"
+                        and (
+                            (
+                                isinstance(node.args[1], ast.Constant)
+                                and node.args[1].value
+                                == "/api/v1/contract/detail/country"
+                            )
+                            or (
+                                isinstance(node.args[1], ast.Name)
+                                and node.args[1].id == "MEXC_CONTRACT_DETAIL_PATH"
+                            )
                         )
                     )
-                ))
+                )
             ):
                 failures.append(f"request escaped fixed public GET endpoint: {name}")
             if (
                 isinstance(node.func, ast.Attribute)
                 and node.func.attr == "HTTPSConnection"
-                and (len(node.args) != 1 or not (
-                    isinstance(node.args[0], ast.Name)
-                    and node.args[0].id == "MEXC_HOST"
-                ))
+                and (
+                    len(node.args) != 1
+                    or not (
+                        isinstance(node.args[0], ast.Name)
+                        and node.args[0].id == "MEXC_HOST"
+                    )
+                )
             ):
                 failures.append(f"HTTPSConnection escaped fixed MEXC host: {name}")
         elif isinstance(node, ast.Name) and _forbidden_name(node.id):
@@ -243,7 +250,7 @@ def scan_production_python(name: str, text: str) -> list[str]:
 
     if 'MEXC_BASE_URL = "https://api.mexc.com"' not in text:
         failures.append(f"missing fixed MEXC HTTPS base URL: {name}")
-    if 'MEXC_CONTRACT_DETAIL_PATH = "/api/v1/contract/detail"' not in text:
+    if 'MEXC_CONTRACT_DETAIL_PATH = "/api/v1/contract/detail/country"' not in text:
         failures.append(f"missing fixed MEXC contract-detail path: {name}")
     for value in _constant_strings(tree):
         if (

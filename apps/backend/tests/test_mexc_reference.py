@@ -1,4 +1,5 @@
 import http.client
+import inspect
 import json
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -11,6 +12,7 @@ from hct_backend.exchange_reference import (
     CapabilityName,
     CapabilityState,
     CapabilityUnknownError,
+    ContractType,
     MalformedReferenceError,
     ReferenceUnavailableError,
 )
@@ -29,7 +31,7 @@ OBSERVED_AT = datetime(2026, 9, 12, 19, 0, tzinfo=UTC)
 def _entry(**overrides: object) -> dict[str, object]:
     value: dict[str, object] = {
         "symbol": "BTC_USDT",
-        "displayNameEn": "BTC_USDT SWAP",
+        "displayNameEn": "BTC_USDT PERPETUAL",
         "baseCoin": "BTC",
         "quoteCoin": "USDT",
         "settleCoin": "USDT",
@@ -40,6 +42,7 @@ def _entry(**overrides: object) -> dict[str, object]:
         "minVol": 1,
         "maxVol": 100,
         "state": 0,
+        "futureType": 1,
         "apiAllowed": True,
         "unknownProviderField": "must not affect canonical output",
     }
@@ -47,18 +50,12 @@ def _entry(**overrides: object) -> dict[str, object]:
     return value
 
 
-def _payload(*entries: dict[str, object]) -> bytes:
+def _payload(entry: dict[str, object]) -> bytes:
+    return json.dumps({"success": True, "code": 0, "data": entry}).encode("utf-8")
+
+
+def _legacy_list_payload(*entries: dict[str, object]) -> bytes:
     return json.dumps({"success": True, "code": 0, "data": list(entries)}).encode("utf-8")
-
-
-class FakeTransport:
-    def __init__(self, payload: bytes | Exception) -> None:
-        self.payload = payload
-
-    def fetch_contract_detail(self) -> bytes:
-        if isinstance(self.payload, Exception):
-            raise self.payload
-        return self.payload
 
 
 class FakeSocket:
@@ -112,10 +109,8 @@ class FakeConnection:
 
 
 def _adapter(*entries: dict[str, object]) -> MexcPublicReferenceAdapter:
-    return MexcPublicReferenceAdapter.load(
-        transport=FakeTransport(_payload(*entries)),
-        observed_at=OBSERVED_AT,
-    )
+    assert len(entries) == 1
+    return MexcPublicReferenceAdapter._from_payload(_payload(entries[0]), OBSERVED_AT)
 
 
 def test_valid_official_shape_maps_to_immutable_s1a_reference() -> None:
@@ -130,6 +125,7 @@ def test_valid_official_shape_maps_to_immutable_s1a_reference() -> None:
     assert reference.quantity_increment == 1
     assert reference.min_quantity == 1
     assert reference.max_quantity == 100
+    assert reference.contract_type is ContractType.PERPETUAL
     assert adapter.describe_exchange().display_name == "MEXC Futures"
     assert (
         adapter.capability_snapshot().state_for(CapabilityName.CONTRACT_REFERENCE)
@@ -178,7 +174,10 @@ def test_capability_unknown_is_not_truthy_or_default_upgraded() -> None:
         {"minVol": 3, "volUnit": 2},
         {"minVol": 20, "maxVol": 10},
         {"state": 99},
-        {"displayNameEn": "BTC_USDT FUTURE"},
+        {"displayNameEn": "BTC_USDT DELIVERY", "futureType": 2},
+        {"futureType": 2},
+        {"futureType": 99},
+        {"futureType": "1"},
         {"priceUnit": "0.1"},
         {"baseCoin": "btc"},
     ],
@@ -195,13 +194,24 @@ def test_missing_material_field_fails_closed() -> None:
         _adapter(value)
 
 
+def test_typed_perpetual_authority_does_not_require_swap_presentation() -> None:
+    reference = _adapter(_entry(displayNameEn="BTC_USDT PERPETUAL")).list_contract_references()[0]
+    assert reference.contract_type is ContractType.PERPETUAL
+
+
+def test_typed_contract_type_conflict_with_presentation_fails_closed() -> None:
+    with pytest.raises(MalformedReferenceError):
+        _adapter(_entry(displayNameEn="BTC_USDT DELIVERY"))
+
+
 @pytest.mark.parametrize(
     "url",
     [
         "http://api.mexc.com/api/v1/contract/detail",
+        "https://api.mexc.com/api/v1/contract/detail",
         "https://contract.mexc.com/api/v1/contract/detail",
         "https://api.mexc.com/api/v1/private/order/list",
-        "https://api.mexc.com/api/v1/contract/detail?symbol=BTC_USDT",
+        "https://api.mexc.com/api/v1/contract/detail/country?symbol=BTC_USDT",
         "https://api.mexc.com/api/v1/contract/detail/../private/order",
     ],
 )
@@ -212,28 +222,27 @@ def test_public_endpoint_allowlist_rejects_substitution(url: str) -> None:
 
 def test_fixed_endpoint_is_the_only_production_endpoint() -> None:
     _validate_public_endpoint(MEXC_CONTRACT_DETAIL_ENDPOINT)
-    assert MEXC_CONTRACT_DETAIL_ENDPOINT == "https://api.mexc.com/api/v1/contract/detail"
+    assert MEXC_CONTRACT_DETAIL_ENDPOINT == "https://api.mexc.com/api/v1/contract/detail/country"
 
 
 def test_malformed_or_oversized_payload_fails_closed() -> None:
     with pytest.raises(MalformedReferenceError):
-        MexcPublicReferenceAdapter.load(
-            transport=FakeTransport(b"not-json"),
-            observed_at=OBSERVED_AT,
-        )
+        MexcPublicReferenceAdapter._from_payload(b"not-json", OBSERVED_AT)
     with pytest.raises(MalformedReferenceError):
-        MexcPublicReferenceAdapter.load(
-            transport=FakeTransport(b"{" + b"a" * MAX_RESPONSE_BYTES + b"}"),
-            observed_at=OBSERVED_AT,
+        MexcPublicReferenceAdapter._from_payload(
+            b"{" + b"a" * MAX_RESPONSE_BYTES + b"}", OBSERVED_AT
         )
 
 
 def test_transport_failure_is_bounded_provider_error() -> None:
+    def raise_timeout(_self: _MexcHttpsTransport) -> bytes:
+        raise TimeoutError("test timeout")
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(_MexcHttpsTransport, "fetch_contract_detail", raise_timeout)
     with pytest.raises(ReferenceUnavailableError):
-        MexcPublicReferenceAdapter.load(
-            transport=FakeTransport(TimeoutError("test timeout")),
-            observed_at=OBSERVED_AT,
-        )
+        MexcPublicReferenceAdapter.load()
+    monkeypatch.undo()
 
 
 def test_fixed_https_transport_gets_bounded_json_response(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -247,7 +256,7 @@ def test_fixed_https_transport_gets_bounded_json_response(monkeypatch: pytest.Mo
 
     assert _MexcHttpsTransport().fetch_contract_detail() == b"{}"
     assert connection.requests == [
-        ("GET", "/api/v1/contract/detail", {"Accept": "application/json"})
+        ("GET", "/api/v1/contract/detail/country", {"Accept": "application/json"})
     ]
     assert connection.sock.timeouts
     assert connection.closed is True
@@ -347,9 +356,7 @@ def test_provider_failure_envelope_is_unavailable() -> None:
 
 def test_duplicate_canonical_or_native_entries_fail_closed() -> None:
     with pytest.raises(MalformedReferenceError):
-        _parse_payload(_payload(_entry(), _entry(symbol="BTCUSDT")), OBSERVED_AT)
-    with pytest.raises(MalformedReferenceError):
-        _parse_payload(_payload(_entry(), _entry(baseCoin="ETH", symbol="BTC_USDT")), OBSERVED_AT)
+        _parse_payload(_legacy_list_payload(_entry(), _entry(symbol="BTCUSDT")), OBSERVED_AT)
 
 
 def test_inactive_provider_state_maps_to_inactive() -> None:
@@ -357,17 +364,30 @@ def test_inactive_provider_state_maps_to_inactive() -> None:
     assert reference.lifecycle.value == "INACTIVE"
 
 
-def test_load_requires_timezone_aware_observation_and_translates_transport_errors() -> None:
+def test_private_fixture_path_requires_timezone_aware_observation() -> None:
     with pytest.raises(MalformedReferenceError):
-        MexcPublicReferenceAdapter.load(
-            transport=FakeTransport(_payload(_entry())),
-            observed_at=datetime(2026, 9, 12, 19, 0),
-        )
-    with pytest.raises(ReferenceUnavailableError):
-        MexcPublicReferenceAdapter.load(
-            transport=FakeTransport(OSError("socket failure")),
-            observed_at=OBSERVED_AT,
-        )
+        MexcPublicReferenceAdapter._from_payload(_payload(_entry()), datetime(2026, 9, 12, 19, 0))
+
+
+def test_production_load_has_no_source_or_timestamp_injection_surface() -> None:
+    assert tuple(inspect.signature(MexcPublicReferenceAdapter.load).parameters) == ()
+    with pytest.raises(TypeError):
+        MexcPublicReferenceAdapter.load(transport=object())  # type: ignore[call-arg]
+
+
+def test_production_load_uses_fixed_transport_and_internal_observation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[_MexcHttpsTransport] = []
+
+    def fetch(_self: _MexcHttpsTransport) -> bytes:
+        calls.append(_self)
+        return _payload(_entry())
+
+    monkeypatch.setattr(_MexcHttpsTransport, "fetch_contract_detail", fetch)
+    adapter = MexcPublicReferenceAdapter.load()
+    assert len(calls) == 1
+    assert adapter.describe_exchange().observed_at.tzinfo is not None
 
 
 def test_reference_resolution_requires_canonical_instrument_identity_or_native_mapping() -> None:
