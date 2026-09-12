@@ -25,13 +25,17 @@ FORBIDDEN_SOURCE_PATTERNS = (
     re.compile(r"\b(?:leverage|positions?|fills?|balances?|pnl)\b", re.IGNORECASE),
 )
 SECRET_PATTERNS = (
-    re.compile(r"-----BEGIN [A-Z ]+ PRIVATE KEY-----"),
+    re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----"),
     re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"),
-    re.compile(r"\b(?:sk|ghp|github_pat)-[A-Za-z0-9_]{20,}\b"),
+    re.compile(r"\b(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]{20,}\b"),
+    re.compile(r"\b(?:sk|ghp|github_pat)[_-][A-Za-z0-9_]{20,}\b"),
     re.compile(r"(?i)\b(?:api[_-]?key|secret(?:[_-]?key)?|token|password)\s*[:=]\s*[\"'][^\"']{12,}[\"']"),
 )
-IGNORED_BINARY_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".ico", ".pyc", ".whl"}
 TOOLING_FILES = {"scripts/scan_s0b_boundaries.py", "scripts/validate_s0a.py"}
+
+
+class BoundaryScanError(RuntimeError):
+    """Raised when a changed candidate cannot be inspected safely."""
 
 
 def changed_names(base: str) -> list[str]:
@@ -51,26 +55,51 @@ def changed_names(base: str) -> list[str]:
         text=True,
     )
     names = {line for line in result.stdout.splitlines() if line}
-    if head == base:
-        untracked = subprocess.run(
-            ["git", "ls-files", "--others", "--exclude-standard"],
+    for diff_args in (("--",), ("--cached", "--")):
+        working_tree = subprocess.run(
+            ["git", "diff", "--name-only", *diff_args],
             cwd=ROOT,
             check=True,
             capture_output=True,
             text=True,
         )
-        names.update(line for line in untracked.stdout.splitlines() if line)
+        names.update(line for line in working_tree.stdout.splitlines() if line)
+    untracked = subprocess.run(
+        ["git", "ls-files", "--others", "--exclude-standard"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    names.update(line for line in untracked.stdout.splitlines() if line)
     return sorted(names)
 
 
-def read_changed_text(name: str) -> str | None:
+def read_changed_text(name: str) -> str:
     path = ROOT / name
-    if not path.is_file() or path.suffix.lower() in IGNORED_BINARY_SUFFIXES:
-        return None
+    if not path.is_file():
+        raise BoundaryScanError(f"changed candidate is missing or unreadable: {name}")
     try:
         return path.read_text(encoding="utf-8")
     except (UnicodeDecodeError, OSError):
-        return None
+        raise BoundaryScanError(f"changed candidate is not readable UTF-8 text: {name}") from None
+
+
+def scan_secret_text(name: str, text: str) -> list[str]:
+    return [f"secret pattern {pattern.pattern!r}: {name}" for pattern in SECRET_PATTERNS if pattern.search(text)]
+
+
+def scan_capability_text(name: str, text: str) -> list[str]:
+    if name in TOOLING_FILES or not name.startswith(("apps/backend/", "packages/")):
+        return []
+    failures = [
+        f"prohibited capability marker {pattern.pattern!r}: {name}"
+        for pattern in FORBIDDEN_SOURCE_PATTERNS
+        if pattern.search(text)
+    ]
+    if re.search(r"https?://", text, re.IGNORECASE):
+        failures.append(f"external network URL in implementation surface: {name}")
+    return failures
 
 
 def main() -> int:
@@ -84,19 +113,13 @@ def main() -> int:
         if name.startswith(("checkpoints/", "docs/", "work-orders/", "apps/frontend/", "packages/contracts/")):
             failures.append(f"forbidden frozen/public surface changed: {name}")
 
-        text = read_changed_text(name)
-        if text is None:
+        try:
+            text = read_changed_text(name)
+        except BoundaryScanError as error:
+            failures.append(str(error))
             continue
-        for pattern in SECRET_PATTERNS:
-            if pattern.search(text):
-                failures.append(f"secret pattern {pattern.pattern!r}: {name}")
-        if name in TOOLING_FILES or not name.startswith(("apps/backend/", "packages/")):
-            continue
-        for pattern in FORBIDDEN_SOURCE_PATTERNS:
-            if pattern.search(text):
-                failures.append(f"prohibited capability marker {pattern.pattern!r}: {name}")
-        if re.search(r"https?://", text, re.IGNORECASE):
-            failures.append(f"external network URL in implementation surface: {name}")
+        failures.extend(scan_secret_text(name, text))
+        failures.extend(scan_capability_text(name, text))
 
     if failures:
         print("S0B secret/capability boundary: FAIL")

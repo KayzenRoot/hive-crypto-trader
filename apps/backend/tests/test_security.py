@@ -18,9 +18,12 @@ from hct_backend.security import (
     PolicyNamespaceID,
     PolicyVersion,
     PrincipalID,
+    ReferenceKind,
     ReferenceOnlySecretStore,
     ResourceID,
     ScopedResource,
+    SecretClassification,
+    SecretPurpose,
     SecretRef,
     SecretReferenceMetadata,
     SecurityBoundaryError,
@@ -185,6 +188,37 @@ def test_required_role_scope_policy_and_binding_are_exact() -> None:
         authorize_scope(context, resource, binding=make_binding(account="account-b"), now=NOW)
 
 
+@pytest.mark.parametrize(
+    ("binding_field", "binding", "expected_error"),
+    [
+        ("tenant", make_binding(tenant="tenant-b"), "binding tenant mismatch"),
+        ("account", make_binding(account="account-b"), "binding account mismatch"),
+        (
+            "environment",
+            make_binding(environment=Environment.REPLAY),
+            "binding environment mismatch",
+        ),
+    ],
+)
+def test_binding_mismatch_matrix_is_direct_and_fail_closed(
+    binding_field: str,
+    binding: TenantExchangeAccountBinding,
+    expected_error: str,
+) -> None:
+    del binding_field
+    with pytest.raises(AuthorizationDenied, match=expected_error):
+        authorize_scope(make_context(), make_resource(), binding=binding, now=NOW)
+
+
+def test_account_scoped_resource_requires_context_account_scope() -> None:
+    with pytest.raises(AuthorizationDenied, match="account mismatch"):
+        authorize_scope(
+            make_context(account=None),
+            make_resource(account="account-a"),
+            now=NOW,
+        )
+
+
 def test_missing_or_wildcard_evidence_fails_closed() -> None:
     with pytest.raises(SecurityBoundaryError, match="missing role"):
         build_trusted_authority_evidence(
@@ -252,15 +286,40 @@ def test_opaque_references_have_safe_representation_and_metadata_only_store() ->
         "reference_type": "CredentialRef",
         "reference_state": "opaque",
     }
+    assert "audit-a" not in repr(secret)
+    assert "audit-a" not in str(secret)
+    assert secret.safe_metadata() == {
+        "reference_type": "SecretRef",
+        "reference_state": "opaque",
+    }
     metadata = SecretReferenceMetadata(
-        reference_kind="credential",
-        purpose="account-access",
-        classification="secret",
+        reference_kind=ReferenceKind.CREDENTIAL,
+        purpose=SecretPurpose.ACCOUNT_ACCESS,
+        classification=SecretClassification.SECRET_REFERENCE,
         environment=Environment.PAPER,
     )
     store = ReferenceOnlySecretStore({credential: metadata})
     assert store.supports(credential)
     assert store.describe(credential) == metadata
+    safe_binding = make_binding().safe_metadata()
+    assert "cred-ref-account-a" not in repr(safe_binding)
+    assert "credential_ref" not in safe_binding
+    assert metadata.safe_metadata() == {
+        "reference_kind": "credential",
+        "purpose": "account-access",
+        "classification": "secret-reference",
+        "environment": "PAPER",
+    }
     assert not store.supports(secret)
     assert NullSecretStore().describe(secret) is None
     assert not NullSecretStore().supports(credential)
+
+
+def test_secret_metadata_rejects_uncontrolled_text_values() -> None:
+    with pytest.raises(SecurityBoundaryError, match="metadata types"):
+        SecretReferenceMetadata(
+            reference_kind="credential",  # type: ignore[arg-type]
+            purpose="account-access",  # type: ignore[arg-type]
+            classification="secret",  # type: ignore[arg-type]
+            environment=Environment.PAPER,
+        )

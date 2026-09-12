@@ -48,8 +48,10 @@ expired contexts fail closed.
 `TenantExchangeAccountBinding` is an immutable identity/reference primitive
 containing tenant, exchange-account, environment, an opaque credential
 reference, a policy namespace and a binding version. It contains no credential
-material, endpoint, client or signing object. Construction rejects a binding
-whose identity/environment evidence is inconsistent.
+material, endpoint, client or signing object. Construction validates the
+structural types and binding version. Contextual tenant/account/environment
+consistency is checked when the binding is authorized against a
+`SecurityContext` and resource by the guard.
 
 The pure `authorize_scope` guard requires exact context and resource scope,
 required role/scope/policy evidence and a matching binding. Identifier

@@ -37,6 +37,20 @@ class AssuranceLevel(StrEnum):
     HIGH = "HIGH"
 
 
+class ReferenceKind(StrEnum):
+    CREDENTIAL = "credential"
+    SECRET = "secret"
+
+
+class SecretPurpose(StrEnum):
+    ACCOUNT_ACCESS = "account-access"
+    AUDIT_REFERENCE = "audit-reference"
+
+
+class SecretClassification(StrEnum):
+    SECRET_REFERENCE = "secret-reference"
+
+
 def _validate_identity(value: str, label: str) -> str:
     if not isinstance(value, str) or not _ID_PATTERN.fullmatch(value):
         raise SecurityBoundaryError(f"invalid {label}")
@@ -533,17 +547,30 @@ def authorize_scope(
 
 @dataclass(frozen=True, slots=True)
 class SecretReferenceMetadata:
-    reference_kind: str
-    purpose: str
-    classification: str
+    reference_kind: ReferenceKind
+    purpose: SecretPurpose
+    classification: SecretClassification
     environment: Environment
 
     def __post_init__(self) -> None:
-        if not isinstance(self.environment, Environment):
-            raise SecurityBoundaryError("invalid reference environment")
-        _validate_evidence(self.reference_kind, "reference kind")
-        _validate_evidence(self.purpose, "reference purpose")
-        _validate_evidence(self.classification, "reference classification")
+        if not all(
+            isinstance(value, expected)
+            for value, expected in (
+                (self.reference_kind, ReferenceKind),
+                (self.purpose, SecretPurpose),
+                (self.classification, SecretClassification),
+                (self.environment, Environment),
+            )
+        ):
+            raise SecurityBoundaryError("invalid reference metadata types")
+
+    def safe_metadata(self) -> dict[str, str]:
+        return {
+            "reference_kind": self.reference_kind.value,
+            "purpose": self.purpose.value,
+            "classification": self.classification.value,
+            "environment": self.environment.value,
+        }
 
 
 class SecretStore(Protocol):

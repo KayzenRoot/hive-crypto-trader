@@ -1,6 +1,6 @@
 # HCT-IMP-0002-S0B Implementation Evidence
 
-Status: `IMPLEMENTATION_CANDIDATE`
+Status: `IMPLEMENTATION_CORRECTION_CANDIDATE`
 Risk: `HIGH_ASSURANCE`
 Work Order: `HCT-IMP-0002-S0B`
 
@@ -60,8 +60,9 @@ dependency lock, exchange path, network path or frontend authority was added.
 `SecurityContext` can only be constructed from `TrustedAuthorityEvidence`
 created by the explicit server-side evidence factory. Direct construction and
 raw client mappings fail closed. Context and binding objects are frozen,
-versioned and environment-aware. Guards require exact tenant, membership,
-account, environment, object, role/scope/policy and binding evidence.
+versioned and environment-aware. Binding construction validates structural
+types/version; the authorization guard rejects contextual tenant, membership,
+account, environment, object, role/scope/policy and binding mismatches.
 
 `CredentialRef` and `SecretRef` accept only opaque reference identifiers and
 redact their values from `repr`, `str` and safe metadata. `SecretStore` exposes
@@ -76,14 +77,19 @@ external-provider path.
 | Context Lock / canonical refs | PASS — main and authorized branch both matched the exact SHA |
 | Contract generation `python scripts/generate_contracts.py --check` | PASS |
 | Canonical/runtime contract parity | PASS — 10 schemas |
-| Backend tests | PASS — 21 tests |
-| Backend coverage | PASS — 93% total coverage |
+| Backend tests after bounded correction | PASS locally — 34 tests; exact correction CI result is authoritative and will be recorded after the new run |
+| Backend coverage after bounded correction | Pending exact correction CI result; no local percentage is used as final evidence |
 | Backend Ruff | PASS |
 | Backend strict mypy | PASS |
 | Backend `uv build` | PASS |
 | Python dependency audit | PASS — no known vulnerabilities |
 | S0A route/contract boundary regression | PASS |
 | S0B changed-text secret/capability scan | PASS |
+| Direct binding mismatch matrix | PASS — tenant, account and environment |
+| Account-required resource without context account | PASS |
+| Direct `SecretRef` safe representation/metadata | PASS |
+| Scanner regression suite | PASS — token/private-key/assignment signatures, opaque refs and unreadable candidate |
+| Controlled secret metadata vocabulary | PASS |
 | Frontend typecheck | PASS |
 | Frontend tests | PASS — 13 tests |
 | Frontend lint | PASS |
@@ -91,7 +97,7 @@ external-provider path.
 | npm audit | PASS — 0 vulnerabilities |
 | Frontend format check | PASS under repository content with explicit Windows CRLF end-of-line; default local check reports the Windows checkout line-ending mismatch, while Linux CI is the authoritative default-format environment |
 | Candidate-aware `git diff --check` | Required again against exact final PR base after commit |
-| Exact raw-head CI | Required after push; final run/check belongs in PR and Issue handoff |
+| Exact raw-head CI | Required after correction push; final run/check and exact coverage belong in PR and Issue handoff |
 
 The backend test run emitted only the existing FastAPI/Starlette TestClient
 deprecation warnings. They did not affect the exit status.
