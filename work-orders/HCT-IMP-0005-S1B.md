@@ -1,11 +1,12 @@
 # HCT-IMP-0005-S1B - MEXC Public Reference Adapter & Capability/Rule Resolver
 
-Status: `PENDING_AUTHORIZATION`
+Status: `AUTHORIZED`
 Risk class: `HIGH_ASSURANCE`
-Parent authorization increment: `HCT-IMPL-AUTH-0005 / INDEPENDENT_REVIEW_REQUIRED`
+Parent authorization increment: `HCT-IMPL-AUTH-0005 / COMPLETED_APPROVED`
 Planning baseline: `HCT-CP-0014 / PLANNING_FREEZE_APPROVED`
 Required pre-execution checkpoint: `HCT-CP-0023 / IMPLEMENTATION_AUTHORIZED_S1B`
-Proposed authorization ceiling: `NON_TRADING_STAGE_1_MEXC_PUBLIC_REFERENCE_CAPABILITY_RESOLVER_ONLY`
+Authorization ceiling: `NON_TRADING_STAGE_1_MEXC_PUBLIC_REFERENCE_CAPABILITY_RESOLVER_ONLY`
+Implementation issue: `#51`
 
 ## OBJECTIVE
 Implement the smallest concrete MEXC dependency after S1A by adding a MEXC Futures adapter restricted to public, unauthenticated, read-only reference/capability discovery and deterministic translation into HCT-owned S1A exchange models.
@@ -51,7 +52,8 @@ Supporting architecture:
 - `docs/23-multi-exchange-adapter-architecture.md`;
 - `docs/54-r05-realtime-requirements-addendum.md`;
 - `docs/91-r11-integrated-authority-state-dependency-architecture.md`;
-- `docs/117-s1a-implementation-approval-and-checkpoint-promotion.md`.
+- `docs/117-s1a-implementation-approval-and-checkpoint-promotion.md`;
+- `docs/119-s1b-implementation-authorization-approval-and-checkpoint-promotion.md`.
 
 ## REQUIRED SOURCES TO READ BEFORE MUTATION
 Priority follows `docs/00-source-hierarchy.md`.
@@ -74,8 +76,10 @@ At minimum:
 - `docs/104-chat-delivery-and-prompt-artifact-policy.md`;
 - `docs/117-s1a-implementation-approval-and-checkpoint-promotion.md`;
 - `docs/118-implementation-authorization-s1b-candidate.md`;
+- `docs/119-s1b-implementation-authorization-approval-and-checkpoint-promotion.md`;
 - `work-orders/HCT-IMP-0005-S1B.md`;
 - authorization Issue #49 and its exact approval evidence;
+- implementation Issue #51;
 - current S1A implementation/evidence/tests before choosing adapter integration points.
 
 The executor must also consult official MEXC public API documentation for the exact public reference endpoints and fields used. Provider documentation is external evidence, not permission to widen scope.

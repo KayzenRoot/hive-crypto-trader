@@ -1,15 +1,15 @@
 # Checkpoint
 
-Checkpoint ID: `HCT-CP-0022`
-Status: `S1A_IMPLEMENTATION_APPROVED_MERGED`
+Checkpoint ID: `HCT-CP-0023`
+Status: `IMPLEMENTATION_AUTHORIZED_S1B`
 Canonical branch: `main`
 Risk class: `HIGH_ASSURANCE`
 Functional product planning: `FROZEN`
 Planning Freeze checkpoint: `HCT-CP-0014 / PLANNING_FREEZE_APPROVED`
 Completed implementation slices: `HCT-IMP-0001-S0A`, `HCT-IMP-0002-S0B`, `HCT-IMP-0003-S0C`, `HCT-IMP-0004-S1A`
-Current implementation authorization: `NONE_FAIL_CLOSED`
-Implementation authorization scope: `[]`
-Implementation authorization ceiling: `NONE_PENDING_NEXT_GOVERNED_AUTHORIZATION`
+Current implementation authorization: `GRANTED_BOUNDED`
+Implementation authorization scope: `[HCT-IMP-0005-S1B]`
+Implementation authorization ceiling: `NON_TRADING_STAGE_1_MEXC_PUBLIC_REFERENCE_CAPABILITY_RESOLVER_ONLY`
 
 ## Current canonical authority
 R12 Planning Freeze remains approved and authoritative. The frozen composite requirements baseline remains governed by:
@@ -24,69 +24,66 @@ Completed and independently approved implementation foundations are:
 - `HCT-IMP-0003-S0C - Audit/Evidence Integrity & Configuration/Version Semantics Foundation`;
 - `HCT-IMP-0004-S1A - Exchange Abstraction, Capability & Contract Reference Foundation`.
 
-`HCT-CP-0022` closes S1A and consumes its single-slice authorization. No new product-code mutation is authorized by this checkpoint.
+`HCT-CP-0023` authorizes exactly one new implementation slice: `HCT-IMP-0005-S1B`.
 
-## S1A implementation approval provenance
-Implementation PR: `#48`
+## S1B authorization provenance
+Authorization increment: `HCT-IMPL-AUTH-0005`
+Authorization Issue: `#49`
+Authorization PR: `#50`
+Implementation Issue: `#51`
 
-Authorized execution base:
-`ad8037a2e662eb2100d7626870f31bc97d824fc6`
+Authorization base:
+`3ee039deafbfc5505f0b74ce38c721aa384a0953`
 
-Exact independently approved implementation head:
-`01e3d6f920063a332daf1e5a1291b0dc43e74811`
+Exact independently approved authorization candidate head:
+`692ebfe5ffa18546e72ae047ac6073d3ffd59442`
 
-Governed implementation merge commit:
-`326389d735e3f7eed625b344c8058827def2c381`
+Governed authorization merge commit:
+`e7077ab949ca0ecde5fd04d33c869d9d7404b34c`
 
 Independent HIGH_ASSURANCE / HEDS Delta verdict: `APPROVED`
 
 Independent evidence:
-- PR #48 comment `5647803935`;
-- Issue #47 comment `5647804897`;
+- PR #50 comment `5647988390`;
+- Issue #49 comment `5647988480`;
 - unresolved CRITICAL findings: `0`;
 - unresolved HIGH findings: `0`.
 
-Exact hosted implementation evidence:
-- workflow: `HCT-IMP-0004-S1A Implementation Governance`;
-- run: `34710650648`;
-- check/job: `s1a-quality / 103598706917`;
-- exact head: `01e3d6f920063a332daf1e5a1291b0dc43e74811`;
+Governance acceptance evidence:
+- PR #50 comment `5648018965`;
+- Issue #49 comment `5648019880`.
+
+Exact hosted authorization evidence:
+- workflow: `HCT-IMPL-AUTH-0005 S1B Authorization Governance`;
+- run: `34712055642`;
+- check/job: `implementation-authorization-s1b-governance / 103602466585`;
+- exact head: `692ebfe5ffa18546e72ae047ac6073d3ffd59442`;
 - event: `pull_request`;
 - result: `completed / success`;
-- all job steps: `PASS`.
+- all substantive job steps: `PASS`.
 
-Accepted engineering evidence:
-- backend: `81 PASS / 1177 statements / 123 missed / 90%`;
-- focused S0A/S0B/S0C regressions: `59 PASS`;
-- canonical generation/parity: `10 schemas PASS`;
-- frontend: `13 PASS`, typecheck/lint/changed-generated-contract format/build `PASS`;
-- Python dependency audit: `PASS / no known vulnerabilities`;
-- npm audit: `PASS / 0 vulnerabilities`;
-- S0A boundary/secret scans: `PASS`;
-- S1A boundary/secret scan: `PASS`;
-- H001 structured capability-boundary scanner: `PASS`;
-- H002 test-only adapter not shipped in production: `PASS`.
+Full approval/promotion record: `docs/119-s1b-implementation-authorization-approval-and-checkpoint-promotion.md`.
 
-Full approval/promotion record: `docs/117-s1a-implementation-approval-and-checkpoint-promotion.md`.
+## Authorized S1B boundary
+S1B may implement only the bounded first concrete MEXC reference dependency behind the completed S1A provider-neutral boundary:
+- explicitly allowlisted public, unauthenticated MEXC Futures reference REST reads;
+- MEXC provider parsing confined to the adapter/provider boundary;
+- deterministic provider-to-canonical translation into S1A exchange descriptor, capability and contract/reference models;
+- canonical/native symbol mapping where native strings never become sole canonical identity;
+- explicit `SUPPORTED`, `UNSUPPORTED` and fail-closed `UNKNOWN` capability/rule semantics;
+- strict malformed/inconsistent payload, decimal, increment, min/max and lifecycle validation;
+- finite HTTPS timeout and bounded response handling for one-shot reference reads;
+- deterministic fixtures/mocked transport with no live-MEXC CI dependency;
+- official MEXC provider documentation evidence for only the in-scope public reference fields/endpoints;
+- S0A/S0B/S0C/S1A regressions, exact-head CI, security/dependency audits and static unauthorized-capability scans.
 
-## Accepted S1A boundary
-S1A adds only the bounded provider-neutral, read-only, network-free Stage-1 exchange-reference foundation:
-- canonical exchange/instrument/capability/reference identity kinds;
-- immutable provider-neutral exchange descriptors;
-- immutable/versioned capability snapshots with explicit `SUPPORTED`, `UNSUPPORTED` and fail-closed `UNKNOWN` semantics;
-- immutable contract/reference metadata with exact Decimal validation and deterministic fingerprints;
-- narrow read-only `ExchangeReferenceAdapter` protocol;
-- deterministic test-only fake adapter outside shipped production source;
-- deterministic negative-capability and secret boundary scanning;
-- exact-head HIGH_ASSURANCE CI/evidence.
-
-No concrete venue transport or state-changing exchange authority was added.
+This authorization does not itself grant trading authority. Reference/capability metadata is descriptive evidence only.
 
 ## Current authorization firewall
 Authoritative flags:
-- `implementation_authorized=false`
-- `implementation_authorization_scope=[]`
-- `implementation_authorization_ceiling="NONE_PENDING_NEXT_GOVERNED_AUTHORIZATION"`
+- `implementation_authorized=true`
+- `implementation_authorization_scope=["HCT-IMP-0005-S1B"]`
+- `implementation_authorization_ceiling="NON_TRADING_STAGE_1_MEXC_PUBLIC_REFERENCE_CAPABILITY_RESOLVER_ONLY"`
 - `production_credentials_authorized=false`
 - `production_deployment_authorized=false`
 - `limited_live_authorized=false`
@@ -96,18 +93,19 @@ Unknown or ambiguous authority fails closed.
 
 ## Authorization NOT granted
 The following remain blocked until separate governed authorization:
-- concrete MEXC adapter/client/SDK/REST/WebSocket/network connectivity;
-- authentication, request signing, API keys, credentials, secret lifecycle or production SecretStore provider;
-- private/account streams;
-- public realtime market-data ingest;
-- Market Universe eligibility/runtime;
-- API quota/WS/backpressure/reconnect/session runtime;
+- MEXC WebSocket, streaming, subscriptions, reconnect/resubscribe or session-generation runtime;
+- public realtime ticker/trade/candle/order-book/funding/open-interest ingest;
+- private/account/order/position/balance REST or stream endpoints;
+- authentication, request signing, API keys, credentials, secret lifecycle or production SecretStore provider integration;
+- order placement/cancel/replace/amend, trigger/TP/SL/trailing, leverage or margin mutation;
+- fills, positions, balances, OMS, reconciliation or protection;
+- Market Universe eligibility/scanner runtime;
+- API Quota, WebSocket & Backpressure Governor runtime;
 - Data Quality & Freshness runtime;
 - order-book reconstruction, Market-State Fabric and cache/hot-state runtime;
-- order placement/cancel/replace, fills, positions, balances, OMS, reconciliation and protection;
-- Safety, Session Policy, Risk, Portfolio Exposure, Position Sizing, Leverage and Risk Reservation;
-- persistent exchange/reference state or RLS;
+- persistence/database/RLS;
 - public trading routes or frontend trading controls;
+- Safety, Session Policy, Risk, Portfolio Exposure, Position Sizing, Leverage and Risk Reservation;
 - strategy/signal/intelligence/RAG/agent/Brain/Copilot capability;
 - production deployment;
 - limited-live;
@@ -115,6 +113,8 @@ The following remain blocked until separate governed authorization:
 - every later Stage-1 or Stage-2+ implementation slice.
 
 ## Prior completion provenance
+S1A remains completed under `HCT-CP-0022 / S1A_IMPLEMENTATION_APPROVED_MERGED`, approval record `docs/117-s1a-implementation-approval-and-checkpoint-promotion.md`.
+
 S0C remains completed under `HCT-CP-0020 / S0C_IMPLEMENTATION_APPROVED_MERGED`, approval record `docs/114-s0c-implementation-approval-and-checkpoint-promotion.md`.
 
 S0B remains completed under `HCT-CP-0018 / S0B_IMPLEMENTATION_APPROVED_MERGED`, approval record `docs/111-s0b-implementation-approval-and-checkpoint-promotion.md`.
@@ -134,17 +134,18 @@ Planning Freeze remains approved through `HCT-CP-0014`, with frozen source ident
 - `HCT-IMP-0003-S0C`
 - `HCT-IMPL-AUTH-0004`
 - `HCT-IMP-0004-S1A`
+- `HCT-IMPL-AUTH-0005`
 
-## Known governance gap
-The historical S0B/S0C workflows contain old hardcoded authorization-base assertions and may fail when broad backend paths trigger them after later checkpoints. This is a separate CI-maintenance concern. S1A did not modify those historical workflows and instead executed the required prior-stage regressions directly in its exact-head gate.
+## Known governance note
+Historical S0B/S0C workflows contain old hardcoded authorization-base assertions and may fail when broad backend paths trigger them after later checkpoints. This remains a separate CI-maintenance concern. S1B implementation evidence must execute the required prior-stage regressions directly instead of relying on historical workflow status as substitute proof.
 
 ## Current blockers
-Concrete MEXC/network connectivity, credentials, market ingest, money-state, risk/execution authority, production deployment, limited-live and real-money trading remain blocked by future independent gates.
+WebSocket/private MEXC access, credentials, market ingest, Universe runtime, quota/WS runtime, money-state, risk/execution authority, persistence, production deployment, limited-live and real-money trading remain blocked by future independent gates.
 
 ## Next necessary action
-Select the next bounded dependency from the frozen R11 Stage-1 order and prepare a separate HIGH_ASSURANCE implementation-authorization candidate.
+Execute `HCT-IMP-0005-S1B` from a fresh repository synchronization and exact Context Lock against `HCT-CP-0023`.
 
-No new product-code mutation may begin until its exact scope, tests, evidence, STOP CONDITION and authorization ceiling are independently approved and promoted by a later checkpoint.
+The executor must remain inside the public, unauthenticated, read-only MEXC reference/capability boundary, use official MEXC documentation only as mapping evidence, satisfy the Work Order test/evidence obligations, and STOP with the implementation PR open and unmerged after exact-head hosted evidence and author-side preflight for fresh independent HIGH_ASSURANCE/HEDS Delta review.
 
 ## Global chat and prompt delivery policy
 All HCT chats and executor/reviewer handoffs SHALL follow `docs/104-chat-delivery-and-prompt-artifact-policy.md`.
