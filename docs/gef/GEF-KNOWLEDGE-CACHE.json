@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "GEF_KNOWLEDGE_CACHE_V1",
+  "validityRule": "Cache never overrides current repository sources. Each entry is valid only while its listed source/checkpoint inputs remain compatible.",
+  "failureFingerprintCache": [
+    {
+      "id": "FAIL-HISTORICAL-SLICE-WORKFLOW-STALE-BASE",
+      "symptom": "Older implementation workflow triggers on later apps/backend changes and fails its slice-specific hardcoded base assertion.",
+      "observedOn": "PR #42",
+      "classification": "CI_GOVERNANCE_IMPACT_FILTER_GAP",
+      "knownResolution": "Do not treat as current-slice product failure when current exact-head slice workflow proves the inherited regression. Fix workflow impact/filter policy in a separate governance increment.",
+      "validWhile": [
+        "historical workflow remains unchanged",
+        "current slice runs explicit inherited regression tests"
+      ],
+      "source": "PR #42 author-side handoff"
+    }
+  ],
+  "negativeCapabilityCache": [
+    {
+      "id": "NEG-NO-LIVE-AUTHORITY",
+      "fact": "Production credentials, production deployment, limited-live and live trading are not authorized at HCT-CP-0019.",
+      "validityInputs": [
+        "checkpoints/workstreams/planning/latest.json",
+        "docs/11-checkpoint.md"
+      ],
+      "invalidateOn": "checkpoint/authorization flag change"
+    },
+    {
+      "id": "NEG-NO-EXCHANGE-ON-BASELINE",
+      "fact": "Baseline Stage-0 main has no authorized exchange/network trading capability.",
+      "validityInputs": [
+        "29dc6636360953941a7e4fb41a0876c5bc46dcd6",
+        "HCT-CP-0019"
+      ],
+      "invalidateOn": "Stage-1 authorization or relevant product delta"
+    }
+  ],
+  "architectureQuestionCache": [
+    {
+      "id": "AQ-SOURCE-HIERARCHY",
+      "answer": "checkpoint/current state > ADR/Decision Ledger > Scope > DoD > Architecture > Requirements > planning notes > chat prose",
+      "source": "canonical HCT governance",
+      "invalidateOn": "approved source hierarchy change"
+    },
+    {
+      "id": "AQ-PROMPT-DELIVERY",
+      "answer": "Complete executor/reviewer prompts are PDF-only.",
+      "source": "docs/104-chat-delivery-and-prompt-artifact-policy.md",
+      "invalidateOn": "explicit governed policy change"
+    },
+    {
+      "id": "AQ-REVIEW-INDEPENDENCE",
+      "answer": "Separate execution stream reconstructing the verdict establishes independence; same GitHub identity does not by itself invalidate it.",
+      "source": "docs/104-chat-delivery-and-prompt-artifact-policy.md",
+      "invalidateOn": "governed review-policy change"
+    },
+    {
+      "id": "AQ-GEF-AUTHORITY",
+      "answer": "GEF optimizes execution/review but never widens HCT checkpoint authorization or live/deployment authority.",
+      "source": "UADS GEF V1 adoption policy",
+      "invalidateOn": "explicit higher-precedence canonical decision"
+    }
+  ]
+}
