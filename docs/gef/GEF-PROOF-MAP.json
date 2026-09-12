@@ -1,0 +1,82 @@
+{
+  "schemaVersion": "GEF_PROOF_MAP_V1",
+  "shadowAssurance": "ON",
+  "carryForwardAuthoritative": false,
+  "proofs": [
+    {
+      "proofId": "HCT-PLANNING-FREEZE",
+      "status": "CANONICAL_APPROVED",
+      "checkpoint": "HCT-CP-0014",
+      "validityInputs": [
+        "docs/99-r12-frozen-requirements-baseline.md",
+        "docs/100-r12-requirements-traceability-and-no-loss-proof.md",
+        "docs/101-r12-freeze-governance-change-control-and-deferred-decisions.md",
+        "planning-freeze workflow/config"
+      ],
+      "invalidation": [
+        "frozen requirement blob change",
+        "source hierarchy change",
+        "planning freeze governance change"
+      ]
+    },
+    {
+      "proofId": "HCT-S0A-QUALITY",
+      "status": "CANONICAL_APPROVED",
+      "checkpoint": "HCT-CP-0016",
+      "check": "s0a-quality",
+      "head": "a61aa61e70694cb7727b7f4342482f7d7e026aa4",
+      "validityInputs": [
+        "S0A contract/runtime files",
+        "S0A tests",
+        "contract generator/parity",
+        "frontend status surface",
+        "toolchain/locks",
+        "s0a workflow"
+      ],
+      "invalidation": [
+        "public contract/runtime route change",
+        "contract generator/parity change",
+        "frontend status parser change",
+        "toolchain/lock change",
+        "workflow change"
+      ]
+    },
+    {
+      "proofId": "HCT-S0B-QUALITY",
+      "status": "CANONICAL_APPROVED",
+      "checkpoint": "HCT-CP-0018",
+      "check": "s0b-quality",
+      "head": "38d697419e9ad1cabda293b6b9c090314e94f862",
+      "validityInputs": [
+        "SecurityContext/security IDs",
+        "tenant/account/environment guards",
+        "SecretRef/CredentialRef",
+        "S0B scanner/tests",
+        "toolchain/locks",
+        "s0b workflow"
+      ],
+      "invalidation": [
+        "security primitive change",
+        "binding/guard change",
+        "SecretStore/reference change",
+        "scanner/test change",
+        "toolchain/lock change",
+        "workflow change"
+      ]
+    },
+    {
+      "proofId": "HCT-S0C-CANDIDATE",
+      "status": "ACTIVE_CANDIDATE_NOT_CANONICAL",
+      "pr": 42,
+      "head": "f41262a53a59295fecbe3506e774a9b8592ad0cb",
+      "receipts": [34699046327, 34699046325],
+      "carryForward": "NOT_ALLOWED_UNTIL_INDEPENDENT_APPROVAL_AND_CHECKPOINT_PROMOTION",
+      "invalidation": [
+        "any new PR head",
+        "required gate rerun failure",
+        "independent review finding",
+        "base/checkpoint drift"
+      ]
+    }
+  ]
+}
