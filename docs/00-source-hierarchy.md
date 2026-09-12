@@ -1,6 +1,6 @@
 # Source Hierarchy
 
-Status: `R12_FREEZE_CANDIDATE`
+Status: `PLANNING_FREEZE_APPROVED`
 
 Hive Crypto Trader uses repository state as canonical truth. Conversation memory is never authoritative.
 
@@ -21,6 +21,8 @@ On governed `FREEZE_APPROVED` promotion, frozen requirements authority becomes t
 - `docs/100-r12-requirements-traceability-and-no-loss-proof.md`;
 - the exact nine requirement source blobs recorded by that manifest;
 - `docs/101-r12-freeze-governance-change-control-and-deferred-decisions.md` for post-freeze change control and deferred decisions.
+
+Checkpoint `HCT-CP-0014` records that this `FREEZE_APPROVED` promotion has occurred; therefore the composite frozen requirements authority is active.
 
 The composite baseline does not lower the precedence of Checkpoint, Decisions Ledger, Scope, DoD or Architecture. It replaces direct reliance on only `docs/02-requirements.md` as the complete requirements layer.
 

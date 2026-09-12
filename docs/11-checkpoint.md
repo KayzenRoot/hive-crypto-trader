@@ -1,41 +1,54 @@
 # Checkpoint
 
-Checkpoint ID: `HCT-CP-0013`
-Status: `PRODUCT_DISCOVERY_ROUND_11_APPROVED`
+Checkpoint ID: `HCT-CP-0014`
+Status: `PLANNING_FREEZE_APPROVED`
 Canonical branch: `main`
-Last canonical planning merge: `cf1d83874a34ac49e0a1417eba47a9410c29e765` (`HCT-PLAN-0001-R11`)
+Last canonical planning merge: `e06bb3ef8bccf9370ebe92ddb26769f0d468768f` (`HCT-PLAN-0001-R12`)
+Approved candidate head: `bb3dc002bec5e83d67c900d0cbcf9651459726da`
 Risk class: `HIGH_ASSURANCE`
-Functional product planning: `IN_PROGRESS`
+Functional product planning: `FROZEN`
 Implementation authorization: `NOT_GRANTED`
 
-## Approved through R11
-- R01–R10 foundations remain approved and authoritative.
-- R11 integrates the approved round stack into one system model rather than treating each module as an isolated design.
-- Trading authority is a restrictive lattice across exchange capability/rules, Security/Tenant, Harness, Safety, Session Policy, Risk, R05 data authority/freshness, reconciliation/protection and R07 promotion/environment eligibility. No later component may relax another authoritative restriction.
-- Position Sizing/Leverage use a bounded proposal followed by projected post-trade RiskSnapshot approval; Risk Reservation is committed before exposure-increasing submit.
-- State-changing exchange commands consume a Canonical Authorization Bundle binding all required identity/environment/exchange/data/Safety/Session/Risk/Reservation/action/lease context.
-- Degraded modes distinguish NEW/ADD exposure from REDUCE/CLOSE/PROTECT/RECONCILIATION so risk creation can stop without blindly disabling safety recovery.
-- Harness/capability isolation may restrict but cannot weaken required Safety/Risk/protection/reconciliation paths.
-- A Source-of-Truth Matrix gives each authoritative state family one domain owner; cache, UI, analytics and telemetry remain projections.
-- Realtime ownership is separated among quota/WS resources, raw normalized ingest, data quality, coherent Market-State generation and cache/hot-state projections.
-- RAG is the governed memory facade; Temporal Memory owns deeper temporal mechanisms; Learning Lifecycle owns candidates/versions; Promotion Laboratory remains independent proof authority.
-- Strategy/Agents/News/Memory produce or route evidence; Brain fuses candidate decisions; Copilot orchestrates workflows; deterministic Safety/Session/Risk/Execution retain hard authority.
-- LIVE/PAPER/SHADOW/REPLAY environment identity is a cross-domain high-assurance invariant.
-- Typed cross-domain IDs and behaviorally material versions/hashes are required; mutable display names are non-authoritative.
-- Failure/degradation propagation and logical implementation dependency stages are explicit.
-- All 42 accepted modules are classified as `V1_CORE`, `V1_MINIMUM`, `IMPORTANT_POST_V1` or `FUTURE`; architecture readiness is distinct from production/live activation.
-- Signals feedback cannot directly self-modify live behavior; Admin and Trading Cockpits retain separate privilege planes; observability references domain truth rather than creating shadow authority.
-- Multi-tenancy/security, cockpit safety, Admin/Harness and minimum audit/observability/incident capabilities are explicit V1 foundations.
-- Advanced microstructure, full agent/news depth and advanced continual-learning behavior are capability-gated beyond their minimum V1 foundations.
-- Requirements freeze inputs are explicitly inventoried in `docs/96-r11-requirements-freeze-input-inventory.md` for lossless R12 consolidation.
-- Canonical Architecture and Product Module Map were corrected during R11 final review to remove an obsolete sequential authority-chain representation.
+## R12 Planning Freeze approval
+`HCT-PLAN-0001-R12` completed the planning-freeze candidate, independent review and governed merge sequence.
 
-## R11 audit
-- Final audit: `docs/97-r11-final-integration-audit.md`
-- Verdict: `APPROVED`
-- Acceptance gates: 31/31 PASS
-- Initial gaps: 32; unresolved CRITICAL/HIGH gaps: 0
-- Decisions Ledger consolidated through `HCT-DEC-0141`
+Independent HIGH_ASSURANCE verdict for exact head `bb3dc002bec5e83d67c900d0cbcf9651459726da`: `APPROVED`.
+
+Objective evidence:
+- frozen requirement source identity: `9/9 PASS`;
+- requirements no-loss audit: `PASS`;
+- R12 gap audit: `20/20 PASS`;
+- cross-document consistency: `PASS`;
+- unresolved CRITICAL findings: `0`;
+- unresolved HIGH findings: `0`;
+- authorization firewall: `PASS`;
+- exact-head GitHub Actions run `34663747001`: `planning-freeze-governance = success`;
+- PR #27 governed merge commit: `e06bb3ef8bccf9370ebe92ddb26769f0d468768f`;
+- promotion record: `docs/105-r12-freeze-approval-and-checkpoint-promotion.md`.
+
+The earlier Codex `BLOCKED` result tied to expected head `f0b662fbdf99cd186051313b0fa50ac4f86ec735` is superseded procedural evidence caused by an obsolete expected SHA and is not a substantive R12 finding.
+
+## Frozen requirements authority
+The governed `FREEZE_APPROVED` state activates the composite frozen requirements authority defined by:
+- `docs/99-r12-frozen-requirements-baseline.md`;
+- `docs/100-r12-requirements-traceability-and-no-loss-proof.md`;
+- the exact nine requirement source blobs recorded by that baseline;
+- `docs/101-r12-freeze-governance-change-control-and-deferred-decisions.md`.
+
+Material post-freeze changes require governed impact analysis and revalidation. Historical candidate labels inside approved R12 evidence remain provenance and do not reduce this promoted checkpoint authority.
+
+## Approved planning foundation
+R01–R11 foundations remain approved and authoritative except where the R12 frozen composite baseline or higher-priority canonical source explicitly governs later planning state.
+
+R12 additionally establishes:
+- project-wide HIGH_ASSURANCE Definition of Done;
+- freeze-aware source hierarchy;
+- frozen source identity and lossless traceability;
+- explicit freeze/change-control and deferred-decision governance;
+- system acceptance matrix;
+- residual-risk handling;
+- implementation handoff boundary;
+- PDF-only executor/reviewer prompt delivery policy across chats.
 
 ## Completed increments
 - `HCT-BOOT-0001`
@@ -50,21 +63,36 @@ Implementation authorization: `NOT_GRANTED`
 - `HCT-PLAN-0001-R09`
 - `HCT-PLAN-0001-R10`
 - `HCT-PLAN-0001-R11`
+- `HCT-PLAN-0001-R12`
+
+## Authorization firewall
+Planning Freeze approval does not authorize product implementation or any higher operational stage.
+
+Current authoritative flags:
+- `implementation_authorized=false`
+- `production_credentials_authorized=false`
+- `production_deployment_authorized=false`
+- `limited_live_authorized=false`
+- `live_trading_authorized=false`
+
+No agent, chat, executor, reviewer, PR merge or planning artifact may infer a higher authorization from `FREEZE_APPROVED`.
 
 ## Current blockers
-None for entering the R12 planning-freeze candidate. Implementation, production secrets/credentials, deployment, limited-live and real-money trading remain not granted.
+No unresolved CRITICAL/HIGH planning-freeze blocker remains.
+
+Implementation remains intentionally blocked until a separate HIGH_ASSURANCE implementation-authorization increment is approved.
+
+Production credentials, production deployment, limited-live and real-money trading remain separately blocked by their own future gates.
 
 ## Next necessary action
-Continue `HCT-PLAN-0001` with formal `HCT-PLAN-0001-R12`: Planning Freeze Candidate.
+Create a separate HIGH_ASSURANCE implementation-authorization Work Order bound to the frozen R12 baseline.
 
-R12 must:
-- consolidate the nine canonical requirement inputs losslessly with objective source-to-frozen traceability;
-- harden `docs/09-definition-of-done.md` from bootstrap status into the project-wide HIGH_ASSURANCE DoD;
-- align source hierarchy/canonical statuses;
-- run one final cross-document/cross-module contradiction and gap audit;
-- issue an explicit freeze/no-freeze verdict.
-
-Planning freeze must not automatically authorize implementation, production deployment, production credentials, limited-live activation or real-money trading.
+That increment must:
+- select the first bounded implementation slice;
+- reference exact frozen requirements/source locators and architecture boundaries;
+- define scope/out-of-scope, acceptance criteria, tests, evidence and STOP CONDITION;
+- preserve the five authorization boundaries unless the specific gate is explicitly and independently approved;
+- obtain governed implementation authorization before product code begins.
 
 ## Global chat and prompt delivery policy
 All HCT chats and executor handoffs SHALL follow `docs/104-chat-delivery-and-prompt-artifact-policy.md`.
@@ -78,6 +106,6 @@ For the first executor prompt of a repository/session, the PDF must include safe
 This policy persists across chat changes and review cycles unless the user explicitly changes the project policy.
 
 ## Resume rule
-A new chat must recover from the machine-readable planning checkpoint and repository source hierarchy, validate Git state, read `docs/104-chat-delivery-and-prompt-artifact-policy.md`, and resume only from `next_necessary_action`.
+A new chat must recover from `checkpoints/workstreams/planning/latest.json`, `docs/11-checkpoint.md` and `docs/00-source-hierarchy.md`, validate Git state, read `docs/104-chat-delivery-and-prompt-artifact-policy.md`, and resume only from `next_necessary_action`.
 
-Before producing any executor prompt, a new chat MUST enforce the PDF-only prompt delivery rule from `docs/104-chat-delivery-and-prompt-artifact-policy.md`.
+Before producing any executor prompt, a new chat MUST enforce the PDF-only prompt delivery rule.
