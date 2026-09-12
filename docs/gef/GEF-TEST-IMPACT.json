@@ -1,0 +1,82 @@
+{
+  "schemaVersion": "GEF_TEST_IMPACT_V1",
+  "mode": "SHADOW_ONLY",
+  "baselineHead": "29dc6636360953941a7e4fb41a0876c5bc46dcd6",
+  "mappings": [
+    {
+      "source": [
+        "apps/backend/src/hct_backend/contracts.py",
+        "packages/contracts/openapi.json",
+        "scripts/generate_contracts.py",
+        "scripts/validate_contract_parity.py"
+      ],
+      "testsOrProofs": [
+        "apps/backend/tests/test_contracts.py",
+        "contract generation --check",
+        "contract parity",
+        "scripts/validate_s0a.py",
+        "frontend contract/status tests"
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "source": [
+        "apps/backend/src/hct_backend/security.py",
+        "scripts/scan_s0b_boundaries.py"
+      ],
+      "testsOrProofs": [
+        "apps/backend/tests/test_security.py",
+        "apps/backend/tests/test_scan_s0b_boundaries.py",
+        "s0b-quality"
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "source": ["apps/frontend/**"],
+      "testsOrProofs": [
+        "npm run typecheck",
+        "npm test",
+        "npm run lint",
+        "npm run format:check",
+        "npm run build",
+        "npm audit"
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "source": ["apps/backend/**"],
+      "testsOrProofs": [
+        "full backend pytest",
+        "Ruff",
+        "strict mypy",
+        "uv build",
+        "pip-audit"
+      ],
+      "confidence": "HIGH"
+    },
+    {
+      "source": ["adr/**", "docs/**", "work-orders/**", "checkpoints/**"],
+      "testsOrProofs": [
+        "governance/source checks determined by affected workflow",
+        "independent semantic review"
+      ],
+      "confidence": "MEDIUM",
+      "note": "Do not infer product-test skipping from docs-only changes until Shadow Assurance has enough cycles."
+    },
+    {
+      "source": [
+        "apps/backend/src/hct_backend/provenance.py",
+        "apps/backend/tests/test_provenance.py",
+        "scripts/scan_s0c_boundaries.py"
+      ],
+      "testsOrProofs": [
+        "s0c-quality",
+        "S0A/S0B regression set",
+        "S0C boundary scan"
+      ],
+      "confidence": "HIGH",
+      "status": "ACTIVE_PR42_CANDIDATE_NOT_ON_BASELINE_MAIN"
+    }
+  ],
+  "rule": "Mappings select impacted proofs/tests only as an optimization hint during Shadow Assurance; existing mandatory hosted gates still run."
+}
