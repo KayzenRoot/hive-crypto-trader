@@ -6,6 +6,7 @@ on:
     paths:
       - 'docs/**'
       - '.github/workflows/r12-planning-freeze-governance.yml'
+      - '.github/workflows/r12-independent-ai-review.yml'
   workflow_dispatch:
 
 permissions:
@@ -34,6 +35,7 @@ jobs:
             docs/101-r12-freeze-governance-change-control-and-deferred-decisions.md
             docs/102-r12-freeze-acceptance-matrix.md
             docs/103-r12-final-planning-freeze-audit.md
+            .github/workflows/r12-independent-ai-review.yml
           )
           for file in "${required[@]}"; do
             test -s "$file" || { echo "Missing or empty required file: $file"; exit 1; }
@@ -60,7 +62,7 @@ jobs:
           git fetch origin "${{ github.base_ref }}" --depth=1
           changed="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")"
           echo "$changed"
-          invalid="$(printf '%s\n' "$changed" | grep -Ev '^(docs/|\.github/workflows/r12-planning-freeze-governance\.yml$)' || true)"
+          invalid="$(printf '%s\n' "$changed" | grep -Ev '^(docs/|\.github/workflows/r12-planning-freeze-governance\.yml$|\.github/workflows/r12-independent-ai-review\.yml$)' || true)"
           if [ -n "$invalid" ]; then
             echo 'R12 Planning Freeze PR contains changes outside the approved planning/governance boundary:'
             echo "$invalid"
