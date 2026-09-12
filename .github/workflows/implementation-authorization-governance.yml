@@ -1,0 +1,84 @@
+name: Implementation Authorization Governance
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/106-implementation-authorization-candidate.md'
+      - 'work-orders/HCT-IMPL-AUTH-0001.md'
+      - 'work-orders/HCT-IMP-0001-S0A.md'
+      - '.github/workflows/implementation-authorization-governance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  authorization-governance:
+    name: implementation-authorization-governance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify authorization candidate package
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            docs/106-implementation-authorization-candidate.md
+            work-orders/HCT-IMPL-AUTH-0001.md
+            work-orders/HCT-IMP-0001-S0A.md
+          )
+          for file in "${required[@]}"; do
+            test -s "$file" || { echo "Missing or empty required file: $file"; exit 1; }
+          done
+
+      - name: Verify pending authorization state
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'Status: `INDEPENDENT_REVIEW_REQUIRED`' docs/106-implementation-authorization-candidate.md
+          grep -Fq 'Status: `PENDING_AUTHORIZATION`' work-orders/HCT-IMP-0001-S0A.md
+          grep -Fq 'Do not begin product implementation' docs/106-implementation-authorization-candidate.md
+
+      - name: Verify bounded implementation ceiling
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'HCT-IMP-0001-S0A' docs/106-implementation-authorization-candidate.md
+          grep -Fq 'NON_TRADING_STAGE_0_FOUNDATION_ONLY' docs/106-implementation-authorization-candidate.md
+          grep -Fq 'production_credentials_authorized=false' docs/106-implementation-authorization-candidate.md
+          grep -Fq 'production_deployment_authorized=false' docs/106-implementation-authorization-candidate.md
+          grep -Fq 'limited_live_authorized=false' docs/106-implementation-authorization-candidate.md
+          grep -Fq 'live_trading_authorized=false' docs/106-implementation-authorization-candidate.md
+
+      - name: Verify prohibited capability boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'MEXC or any exchange API connectivity' docs/106-implementation-authorization-candidate.md
+          grep -Fq 'API keys, secrets' docs/106-implementation-authorization-candidate.md
+          grep -Fq 'real-money trading' docs/106-implementation-authorization-candidate.md
+          grep -Fq 'MEXC or any exchange client/adapter' work-orders/HCT-IMP-0001-S0A.md
+          grep -Fq 'no credentials of any kind' work-orders/HCT-IMP-0001-S0A.md
+
+      - name: Verify governance-only diff boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          changed="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")"
+          printf '%s\n' "$changed"
+          invalid="$(printf '%s\n' "$changed" | grep -Ev '^(docs/106-implementation-authorization-candidate\.md|work-orders/HCT-IMPL-AUTH-0001\.md|work-orders/HCT-IMP-0001-S0A\.md|\.github/workflows/implementation-authorization-governance\.yml)$' || true)"
+          if [ -n "$invalid" ]; then
+            echo 'Authorization PR contains changes outside the approved governance-only boundary:'
+            echo "$invalid"
+            exit 1
+          fi
+
+      - name: Governance summary
+        run: |
+          echo 'Implementation authorization candidate is bounded to HCT-IMP-0001-S0A, remains pre-authorization, and grants no production/live authority.'
