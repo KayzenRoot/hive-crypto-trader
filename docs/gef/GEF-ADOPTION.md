@@ -7,6 +7,7 @@ Project fingerprint: `sha256:28ad059f859668b3447b58db4f45ecc09111b79d886f83ec600
 Baseline head: `main@29dc6636360953941a7e4fb41a0876c5bc46dcd6`
 Adoption branch: `governance/UADS-GEF-V1-adoption`
 Adoption issue: `#43`
+Adoption PR: `#44`
 Active functional work preserved: `PR #42 / Issue #41 / implementation/HCT-IMP-0003-S0C`
 
 ## Purpose
@@ -82,7 +83,7 @@ mode: `PARTIALLY_GOVERNED`
 projectFingerprint: `sha256:28ad059f859668b3447b58db4f45ecc09111b79d886f83ec60000b2ad72162bc`
 baselineHead: `29dc6636360953941a7e4fb41a0876c5bc46dcd6`
 adoptionBranch: `governance/UADS-GEF-V1-adoption`
-pr: `PENDING_CREATION`
+pr: `#44`
 filesCreated: `docs/gef/* plus .github/workflows/gef-adoption-governance.yml`
 filesAdapted: `none; existing canonical files preserved`
 currentPromptMode: `GEF_V1`
@@ -91,7 +92,7 @@ shadowAssurance: `ON`
 existingGates: `planning-freeze governance; implementation authorization gates; s0a-quality; s0b-quality; active s0c-quality`
 gaps: `native DWP not yet implemented; token/search/time telemetry unavailable historically; proof carry-forward not yet authoritative; historical workflow impact filters require later cleanup`
 risks: `proof reuse must stay shadow-only; GEF must not override HCT authorization/checkpoint semantics`
-nextAction: `open and independently review the GEF adoption PR; after merge, use GEF packs/HEDS Delta by default`
+nextAction: `independently review PR #44; merge only after exact-head GEF adoption governance passes; keep PR #42 on its existing review path`
 status: `READY_WITH_GAPS`
 
 ## STOP CONDITION
