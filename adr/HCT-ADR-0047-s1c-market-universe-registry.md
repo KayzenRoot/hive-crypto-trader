@@ -31,6 +31,11 @@ cross-exchange inputs are consistency failures and produce no snapshot. The
 registry rejects malformed typed inputs instead of accepting booleans, defaults,
 raw dictionaries or provider DTOs as evidence.
 
+The state/reason boundary is fail-closed at the public `UniverseEntry`
+constructor: `ELIGIBLE` has exactly the eligible-proof reason, `INELIGIBLE`
+contains only explicit ineligible reasons, and `UNKNOWN` contains only unknown
+reasons. Empty, duplicate, unordered or cross-family reason evidence is invalid.
+
 ## Identity, environment, version and determinism
 
 The canonical `IdentityKind.UNIVERSE_SNAPSHOT` identifies a universe snapshot;
@@ -38,6 +43,14 @@ The canonical `IdentityKind.UNIVERSE_SNAPSHOT` identifies a universe snapshot;
 Each snapshot binds one `ExchangeID`, one `Environment`, the capability and
 reference source identities/versions/fingerprints, a positive policy version,
 deterministically ordered immutable entries and a SHA-256 fingerprint.
+
+The complete policy material is canonicalized as the policy version, sorted
+required capability set and required contract-type policy. Its SHA-256
+`policy_fingerprint` is bound into every snapshot and its fingerprint, so a
+material policy-definition change cannot retain the same snapshot evidence under
+the same version. The snapshot identity is content-addressed exactly as
+`universe-{environment}-{fingerprint[:32]}` and construction rejects any
+identity/fingerprint mismatch, including same-environment substitutions.
 
 The recompute timestamp is metadata and is not fingerprint material. The
 fingerprint uses sorted canonical IDs and normalized source material, so input

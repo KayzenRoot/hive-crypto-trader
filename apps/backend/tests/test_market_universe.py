@@ -194,6 +194,111 @@ def test_material_source_policy_and_mapping_changes_change_fingerprint() -> None
     assert base.fingerprint != changed_capability.fingerprint
 
 
+def test_policy_material_is_canonical_and_bound_to_snapshot_evidence() -> None:
+    ordered = MarketUniverseRegistry(
+        required_capabilities=(
+            CapabilityName.EXCHANGE_DESCRIPTION,
+            CapabilityName.PUBLIC_REFERENCE,
+            CapabilityName.CONTRACT_REFERENCE,
+        )
+    )
+    permuted = MarketUniverseRegistry(
+        required_capabilities=(
+            CapabilityName.CONTRACT_REFERENCE,
+            CapabilityName.EXCHANGE_DESCRIPTION,
+            CapabilityName.PUBLIC_REFERENCE,
+        )
+    )
+    ordered_snapshot = ordered.recompute(
+        descriptor(),
+        capabilities(),
+        (reference(),),
+        environment=Environment.PAPER,
+        recomputed_at=NOW,
+    )
+    permuted_snapshot = permuted.recompute(
+        descriptor(),
+        capabilities(),
+        (reference(),),
+        environment=Environment.PAPER,
+        recomputed_at=NOW,
+    )
+    assert ordered.policy_fingerprint == permuted.policy_fingerprint
+    assert ordered_snapshot.policy_fingerprint == permuted_snapshot.policy_fingerprint
+    assert ordered_snapshot.fingerprint == permuted_snapshot.fingerprint
+    assert ordered_snapshot.snapshot_id == permuted_snapshot.snapshot_id
+
+    changed_capabilities = MarketUniverseRegistry(
+        required_capabilities=(CapabilityName.EXCHANGE_DESCRIPTION, CapabilityName.PUBLIC_REFERENCE)
+    )
+    changed_contract_type = MarketUniverseRegistry(required_contract_type=ContractType.FUTURES)
+    changed_capability_snapshot = changed_capabilities.recompute(
+        descriptor(),
+        capabilities(),
+        (reference(),),
+        environment=Environment.PAPER,
+        recomputed_at=NOW,
+    )
+    changed_type_snapshot = changed_contract_type.recompute(
+        descriptor(),
+        capabilities(),
+        (reference(),),
+        environment=Environment.PAPER,
+        recomputed_at=NOW,
+    )
+    assert changed_capabilities.policy_fingerprint != ordered.policy_fingerprint
+    assert changed_contract_type.policy_fingerprint != ordered.policy_fingerprint
+    assert changed_capability_snapshot.fingerprint != ordered_snapshot.fingerprint
+    assert changed_type_snapshot.fingerprint != ordered_snapshot.fingerprint
+
+
+@pytest.mark.parametrize(
+    ("state", "reason_codes"),
+    [
+        (
+            UniverseEligibilityState.ELIGIBLE,
+            (UniverseReasonCode.INELIGIBLE_LIFECYCLE,),
+        ),
+        (
+            UniverseEligibilityState.ELIGIBLE,
+            (UniverseReasonCode.UNKNOWN_REQUIRED_CAPABILITY,),
+        ),
+        (
+            UniverseEligibilityState.UNKNOWN,
+            (UniverseReasonCode.ELIGIBLE_REFERENCE_PROVEN,),
+        ),
+        (
+            UniverseEligibilityState.INELIGIBLE,
+            (UniverseReasonCode.ELIGIBLE_REFERENCE_PROVEN,),
+        ),
+        (
+            UniverseEligibilityState.INELIGIBLE,
+            (UniverseReasonCode.UNKNOWN_REQUIRED_REFERENCE,),
+        ),
+    ],
+)
+def test_universe_entry_rejects_contradictory_state_reason_families(
+    state: UniverseEligibilityState,
+    reason_codes: tuple[UniverseReasonCode, ...],
+) -> None:
+    item = snapshot(reference()).entries[0]
+    with pytest.raises(UniverseConsistencyError):
+        replace(item, state=state, reason_codes=reason_codes)
+
+
+def test_snapshot_id_is_exactly_bound_to_canonical_fingerprint() -> None:
+    item = snapshot(reference())
+    assert item.snapshot_id.value == f"universe-paper-{item.fingerprint[:32]}"
+    with pytest.raises(UniverseConsistencyError):
+        replace(
+            item,
+            snapshot_id=stable(
+                IdentityKind.UNIVERSE_SNAPSHOT,
+                "universe-paper-" + "a" * 32,
+            ),
+        )
+
+
 def test_duplicate_contradictory_and_cross_exchange_evidence_fails_closed() -> None:
     with pytest.raises(UniverseConsistencyError):
         snapshot(reference(), reference("eth-usdt-perpetual", "ref-1", native_symbol="ETH_USDT"))

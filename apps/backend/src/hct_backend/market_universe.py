@@ -44,6 +44,22 @@ class UniverseReasonCode(StrEnum):
     UNKNOWN_REQUIRED_REFERENCE = "UNKNOWN_REQUIRED_REFERENCE"
 
 
+_ELIGIBLE_REASONS = frozenset({UniverseReasonCode.ELIGIBLE_REFERENCE_PROVEN})
+_INELIGIBLE_REASONS = frozenset(
+    {
+        UniverseReasonCode.INELIGIBLE_CONTRACT_TYPE,
+        UniverseReasonCode.INELIGIBLE_LIFECYCLE,
+        UniverseReasonCode.INELIGIBLE_REQUIRED_CAPABILITY_UNSUPPORTED,
+    }
+)
+_UNKNOWN_REASONS = frozenset(
+    {
+        UniverseReasonCode.UNKNOWN_REQUIRED_CAPABILITY,
+        UniverseReasonCode.UNKNOWN_REQUIRED_REFERENCE,
+    }
+)
+
+
 class UniverseError(ValueError):
     """Base error for fail-closed registry validation."""
 
@@ -120,6 +136,18 @@ class UniverseEntry:
             raise UniverseInputError("invalid universe reason code")
         if tuple(sorted(set(self.reason_codes), key=lambda item: item.value)) != self.reason_codes:
             raise UniverseInputError("universe reason codes must be unique and ordered")
+        reason_set = set(self.reason_codes)
+        allowed_reasons = {
+            UniverseEligibilityState.ELIGIBLE: _ELIGIBLE_REASONS,
+            UniverseEligibilityState.INELIGIBLE: _INELIGIBLE_REASONS,
+            UniverseEligibilityState.UNKNOWN: _UNKNOWN_REASONS,
+        }[self.state]
+        if self.state is UniverseEligibilityState.ELIGIBLE:
+            valid = reason_set == allowed_reasons
+        else:
+            valid = reason_set.issubset(allowed_reasons)
+        if not valid:
+            raise UniverseConsistencyError("universe state and reason codes are incompatible")
 
     @property
     def fingerprint(self) -> str:
@@ -152,6 +180,7 @@ class UniverseSnapshot:
     capability_source: str
     capability_fingerprint: str
     policy_version: int
+    policy_fingerprint: str
     recomputed_at: datetime
     entries: tuple[UniverseEntry, ...]
 
@@ -172,6 +201,7 @@ class UniverseSnapshot:
             raise UniverseInputError("exchange source is required")
         if not isinstance(self.capability_source, str) or not self.capability_source:
             raise UniverseInputError("capability source is required")
+        _fingerprint(self.policy_fingerprint, "policy fingerprint")
         object.__setattr__(self, "recomputed_at", _utc(self.recomputed_at, "recomputed_at"))
         if not isinstance(self.entries, tuple) or not self.entries:
             raise UniverseInputError("universe snapshot requires at least one entry")
@@ -182,24 +212,30 @@ class UniverseSnapshot:
         contract_ids = [entry.contract_id for entry in self.entries]
         if len(contract_ids) != len(set(contract_ids)):
             raise UniverseConsistencyError("universe snapshot contains duplicate contracts")
+        expected_fingerprint = self.fingerprint
+        expected_id = f"universe-{self.environment.value.lower()}-{expected_fingerprint[:32]}"
+        if self.snapshot_id.value != expected_id:
+            raise UniverseConsistencyError("universe snapshot identity is not content-addressed")
+
+    def _fingerprint_material(self) -> dict[str, object]:
+        return {
+            "exchange_id": self.exchange_id.as_text(),
+            "environment": self.environment.value,
+            "exchange_reference_version": self.exchange_reference_version,
+            "exchange_source": self.exchange_source,
+            "exchange_fingerprint": self.exchange_fingerprint,
+            "capability_snapshot_id": self.capability_snapshot_id.as_text(),
+            "capability_version": self.capability_version,
+            "capability_source": self.capability_source,
+            "capability_fingerprint": self.capability_fingerprint,
+            "policy_version": self.policy_version,
+            "policy_fingerprint": self.policy_fingerprint,
+            "entries": [entry.fingerprint for entry in self.entries],
+        }
 
     @property
     def fingerprint(self) -> str:
-        return _hash(
-            {
-                "exchange_id": self.exchange_id.as_text(),
-                "environment": self.environment.value,
-                "exchange_reference_version": self.exchange_reference_version,
-                "exchange_source": self.exchange_source,
-                "exchange_fingerprint": self.exchange_fingerprint,
-                "capability_snapshot_id": self.capability_snapshot_id.as_text(),
-                "capability_version": self.capability_version,
-                "capability_source": self.capability_source,
-                "capability_fingerprint": self.capability_fingerprint,
-                "policy_version": self.policy_version,
-                "entries": [entry.fingerprint for entry in self.entries],
-            }
-        )
+        return _hash(self._fingerprint_material())
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,6 +260,19 @@ class MarketUniverseRegistry:
             raise UniverseInputError("duplicate required capability")
         if not isinstance(self.required_contract_type, ContractType):
             raise UniverseInputError("invalid required contract type")
+
+    @property
+    def policy_fingerprint(self) -> str:
+        return _hash(self._policy_material())
+
+    def _policy_material(self) -> dict[str, object]:
+        return {
+            "policy_version": self.policy_version,
+            "required_capabilities": sorted(
+                capability.value for capability in self.required_capabilities
+            ),
+            "required_contract_type": self.required_contract_type.value,
+        }
 
     def recompute(
         self,
@@ -267,6 +316,7 @@ class MarketUniverseRegistry:
             "capability_source": capabilities.source,
             "capability_fingerprint": capabilities.fingerprint,
             "policy_version": self.policy_version,
+            "policy_fingerprint": self.policy_fingerprint,
             "entries": [entry.fingerprint for entry in entries],
         }
         fingerprint = _hash(material)
@@ -286,6 +336,7 @@ class MarketUniverseRegistry:
             capability_source=capabilities.source,
             capability_fingerprint=capabilities.fingerprint,
             policy_version=self.policy_version,
+            policy_fingerprint=self.policy_fingerprint,
             recomputed_at=observed,
             entries=entries,
         )
