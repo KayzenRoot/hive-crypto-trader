@@ -9,13 +9,13 @@ on:
       - "scripts/**"
       - "evidence/HCT-IMP-0003-S0C.md"
       - ".github/workflows/implementation-s0c-governance.yml"
-  workflow_dispatch:
 
 permissions:
   contents: read
 
 env:
   AUTHORIZED_BASE_SHA: 29dc6636360953941a7e4fb41a0876c5bc46dcd6
+  MERGE_COMPAT_BASE_SHA: fdb31fe609ae3e5964fab13423292c892f3e91d1
 
 jobs:
   s0c-quality:
@@ -26,13 +26,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Assert exact raw pull request head and authorized base
-        if: github.event_name == 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
+          test "${{ github.event_name }}" = "pull_request"
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
           test "${{ github.event.pull_request.base.sha }}" = "$AUTHORIZED_BASE_SHA"
 
@@ -54,7 +54,6 @@ jobs:
           grep -Fq 'HCT-CP-0019' docs/11-checkpoint.md
 
       - name: Validate candidate changed-file boundary
-        if: github.event_name == 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
@@ -124,6 +123,115 @@ jobs:
 
       - name: Publish governance summary
         run: |
-          echo 'S0C implementation gates passed on the exact raw head.'
+          echo 's0c-quality is a pull_request-only exact raw-head receipt.'
           echo 'Bounded subject: audit/evidence integrity plus configuration/release/policy version semantics.'
           echo 'No persistence, external provider, exchange, deployment, limited-live or live-trading authority is authorized.'
+
+  s0c-merge-compatibility:
+    name: s0c-merge-compatibility
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact raw pull request head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Assert pinned merge compatibility context
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ github.event_name }}" = "pull_request"
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          test "${{ github.event.pull_request.base.sha }}" = "$AUTHORIZED_BASE_SHA"
+          test "$(git merge-base "$AUTHORIZED_BASE_SHA" HEAD)" = "$AUTHORIZED_BASE_SHA"
+          git fetch --no-tags origin refs/heads/main:refs/remotes/origin/main
+          test "$(git rev-parse origin/main)" = "$MERGE_COMPAT_BASE_SHA"
+
+      - name: Prove authorized-base to merge-compat drift is GEF-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only "$AUTHORIZED_BASE_SHA...$MERGE_COMPAT_BASE_SHA")"
+          printf '%s\n' "$changed"
+          invalid="$(printf '%s\n' "$changed" | grep -Ev '^(docs/gef/|\.github/workflows/gef-adoption-governance\.yml$)' || true)"
+          if [ -n "$invalid" ]; then
+            echo 'Pinned merge-compat base contains non-GEF drift:'
+            echo "$invalid"
+            exit 1
+          fi
+          git diff --check "$AUTHORIZED_BASE_SHA...$MERGE_COMPAT_BASE_SHA"
+
+      - name: Create temporary local merge of pinned current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'HCT S0C merge compatibility'
+          git config user.email 'hct-s0c-merge-compatibility@users.noreply.github.com'
+          git merge --no-ff --no-edit "$MERGE_COMPAT_BASE_SHA"
+          git diff --check "$MERGE_COMPAT_BASE_SHA...HEAD"
+          {
+            echo '## S0C merge compatibility receipt'
+            echo "- authorized base: $AUTHORIZED_BASE_SHA"
+            echo "- raw candidate head: ${{ github.event.pull_request.head.sha }}"
+            echo "- pinned merge-compat main: $MERGE_COMPAT_BASE_SHA"
+            echo "- temporary synthetic merge: $(git rev-parse HEAD)"
+            echo '- merge is runner-local and is never pushed'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Set up Python and locked backend environment
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv and locked dependencies
+        run: |
+          python -m pip install --disable-pip-version-check uv==0.12.13
+          uv sync --project apps/backend --locked --all-groups
+
+      - name: Validate merged contracts, backend, and dependency audit
+        run: |
+          uv run --project apps/backend python scripts/generate_contracts.py --check
+          uv run --project apps/backend python scripts/validate_contract_parity.py
+          cd apps/backend
+          uv run pytest --cov=hct_backend --cov-report=term-missing
+          uv run ruff check src tests
+          uv run mypy src
+          cd ../..
+          uv build --project apps/backend --out-dir /tmp/hct-backend-dist
+          uv run --project apps/backend --with pip-audit==2.10.1 pip-audit --local
+
+      - name: Run merged S0A and S0B regressions
+        run: |
+          uv run --project apps/backend python scripts/validate_s0a.py
+          uv run --project apps/backend python scripts/scan_s0a_secrets.py
+          uv run --project apps/backend pytest apps/backend/tests/test_contracts.py apps/backend/tests/test_security.py apps/backend/tests/test_scan_s0b_boundaries.py
+
+      - name: Run merged S0C boundary gate against merge base
+        env:
+          BASE_SHA: ${{ env.MERGE_COMPAT_BASE_SHA }}
+        run: |
+          uv run --project apps/backend python scripts/scan_s0c_boundaries.py
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.18.0"
+          cache: npm
+          cache-dependency-path: apps/frontend/package-lock.json
+
+      - name: Validate merged frontend regression surface
+        working-directory: apps/frontend
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run lint
+          npm run format:check
+          npm run build
+          npm audit --audit-level=high --omit=optional
+
+      - name: Publish merge compatibility summary
+        run: |
+          echo 's0c-merge-compatibility passed on a runner-local synthetic merge.'
+          echo 'The receipt is compatibility evidence only and is not source truth or authorization.'

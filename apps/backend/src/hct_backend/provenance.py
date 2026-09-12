@@ -40,6 +40,8 @@ _SECRET_TEXT_PATTERN: Final = re.compile(
     r"(?i)(?:-----begin|api[_-]?key|private[_-]?key|access[_-]?token|password|"
     r"gh[pousr]_|github_pat_|(?:AKIA|ASIA)[0-9A-Z]{16}|sk[_-][A-Za-z0-9_]{20,})"
 )
+_CORRECTION_CONSTRUCTION_TOKEN: Final = object()
+_CHAIN_RECEIPT_SCHEMA_VERSION: Final = 1
 
 
 class ProvenanceBoundaryError(ValueError):
@@ -171,7 +173,9 @@ def _canonical_atom(value: SafeValue | Environment | object) -> CanonicalAtom:
     if isinstance(value, StableId):
         return value.as_text()
     if isinstance(value, (CredentialRef, SecretRef)):
-        return f"OPAQUE:{type(value).__name__}"
+        digest_input = f"{type(value).__name__}\0{value.value}".encode()
+        digest = hashlib.sha256(digest_input).hexdigest()
+        return f"OPAQUE_REF_V1:{type(value).__name__}:{digest}"
     raise ProvenanceBoundaryError("unsupported canonical value")
 
 
@@ -502,7 +506,12 @@ class AuditRecord:
         record_version: int = 1,
         attributes: tuple[RecordAttribute, ...] = (),
         correction_of: EnvironmentScopedId | None = None,
+        _correction_token: object | None = None,
     ) -> AuditRecord:
+        if correction_of is not None and _correction_token is not _CORRECTION_CONSTRUCTION_TOKEN:
+            raise IntegrityError(
+                "correction construction requires the controlled original-record path"
+            )
         _utc(occurred_at, "occurred_at")
         payload_hash = fingerprint(
             _payload_fields(
@@ -645,7 +654,12 @@ class EvidenceRecord:
         record_version: int = 1,
         attributes: tuple[RecordAttribute, ...] = (),
         correction_of: EnvironmentScopedId | None = None,
+        _correction_token: object | None = None,
     ) -> EvidenceRecord:
+        if correction_of is not None and _correction_token is not _CORRECTION_CONSTRUCTION_TOKEN:
+            raise IntegrityError(
+                "correction construction requires the controlled original-record path"
+            )
         _utc(recorded_at, "recorded_at")
         payload_hash = fingerprint(
             _payload_fields(
@@ -742,8 +756,45 @@ def link_record(record: Record, *, sequence: int, predecessor_fingerprint: str |
     return replace(record, sequence=sequence, predecessor_fingerprint=predecessor_fingerprint)
 
 
-def verify_chain(records: Sequence[Record]) -> None:
-    """Verify ordered, linked, same-scope records and fail on gaps/reorder."""
+@dataclass(frozen=True, slots=True)
+class ChainReceipt:
+    """Immutable terminal evidence for complete-history chain verification."""
+
+    record_count: int
+    terminal_sequence: int
+    terminal_fingerprint: str
+    scope: ProvenanceScope
+    schema_version: int = _CHAIN_RECEIPT_SCHEMA_VERSION
+
+    def __post_init__(self) -> None:
+        if self.schema_version != _CHAIN_RECEIPT_SCHEMA_VERSION:
+            raise IntegrityError("unsupported chain receipt schema")
+        if not isinstance(self.record_count, int) or isinstance(self.record_count, bool):
+            raise IntegrityError("invalid chain receipt record count")
+        if self.record_count < 1 or self.terminal_sequence != self.record_count:
+            raise IntegrityError("invalid chain receipt terminal sequence")
+        _validate_hash(self.terminal_fingerprint, "chain receipt terminal fingerprint")
+        if not isinstance(self.scope, ProvenanceScope):
+            raise IntegrityError("invalid chain receipt scope")
+
+    @classmethod
+    def from_records(cls, records: Sequence[Record]) -> ChainReceipt:
+        verify_chain(records)
+        if not records:
+            raise IntegrityError("cannot create a receipt for an empty chain")
+        terminal = records[-1]
+        return cls(
+            record_count=len(records),
+            terminal_sequence=terminal.sequence,
+            terminal_fingerprint=terminal.fingerprint,
+            scope=terminal.scope,
+        )
+
+
+def verify_chain(
+    records: Sequence[Record], *, receipt: ChainReceipt | None = None
+) -> None:
+    """Verify links, and use a receipt when complete-history proof is required."""
 
     if not isinstance(records, (tuple, list)):
         raise IntegrityError("chain must be an ordered immutable/list sequence")
@@ -764,6 +815,18 @@ def verify_chain(records: Sequence[Record]) -> None:
         ):
             raise IntegrityError("chain scope mismatch")
         previous = record
+    if receipt is not None:
+        if not isinstance(receipt, ChainReceipt):
+            raise IntegrityError("invalid chain receipt")
+        if previous is None:
+            raise IntegrityError("chain receipt cannot validate an empty chain")
+        if (
+            receipt.record_count != len(records)
+            or receipt.terminal_sequence != previous.sequence
+            or receipt.terminal_fingerprint != previous.fingerprint
+            or receipt.scope != previous.scope
+        ):
+            raise IntegrityError("chain receipt mismatch")
 
 
 @dataclass(frozen=True, slots=True)
@@ -787,8 +850,13 @@ class AppendOnlyChain:
         assert isinstance(linked, (AuditRecord, EvidenceRecord))
         return AppendOnlyChain(records=(*self.records, linked))
 
+    @property
+    def receipt(self) -> ChainReceipt:
+        return ChainReceipt.from_records(self.records)
+
 
 def _validate_correction(original: Record, correction: Record) -> None:
+    original.verify()
     if correction.correction_of != original.record_id:
         raise IntegrityError("correction predecessor mismatch")
     if correction.record_id == original.record_id:
@@ -805,21 +873,29 @@ def correct_audit_record(
     event_id: EnvironmentScopedId,
     occurred_at: datetime,
     attributes: tuple[RecordAttribute, ...],
+    scope: ProvenanceScope | None = None,
 ) -> AuditRecord:
+    if not isinstance(original, AuditRecord):
+        raise IntegrityError("audit correction requires an original audit record")
+    original.verify()
     if event_id.environment is not original.environment:
         raise IntegrityError("correction crosses environment")
+    correction_scope = original.scope if scope is None else scope
+    if correction_scope != original.scope:
+        raise IntegrityError("correction scope mismatch")
     corrected = AuditRecord.create(
         event_id=event_id,
         environment=original.environment,
         event_type=original.envelope.event_type,
         occurred_at=occurred_at,
-        scope=original.scope,
+        scope=correction_scope,
         truth=original.truth,
         source=original.source,
         authority=original.authority,
         record_version=original.record_version,
         attributes=attributes,
         correction_of=original.record_id,
+        _correction_token=_CORRECTION_CONSTRUCTION_TOKEN,
     )
     _validate_correction(original, corrected)
     return corrected
@@ -831,21 +907,29 @@ def correct_evidence_record(
     evidence_id: EnvironmentScopedId,
     recorded_at: datetime,
     attributes: tuple[RecordAttribute, ...],
+    scope: ProvenanceScope | None = None,
 ) -> EvidenceRecord:
+    if not isinstance(original, EvidenceRecord):
+        raise IntegrityError("evidence correction requires an original evidence record")
+    original.verify()
     if evidence_id.environment is not original.environment:
         raise IntegrityError("correction crosses environment")
+    correction_scope = original.scope if scope is None else scope
+    if correction_scope != original.scope:
+        raise IntegrityError("correction scope mismatch")
     corrected = EvidenceRecord.create(
         evidence_id=evidence_id,
         environment=original.environment,
         evidence_type=original.envelope.evidence_type,
         recorded_at=recorded_at,
-        scope=original.scope,
+        scope=correction_scope,
         truth=original.truth,
         source=original.source,
         authority=original.authority,
         record_version=original.record_version,
         attributes=attributes,
         correction_of=original.record_id,
+        _correction_token=_CORRECTION_CONSTRUCTION_TOKEN,
     )
     _validate_correction(original, corrected)
     return corrected

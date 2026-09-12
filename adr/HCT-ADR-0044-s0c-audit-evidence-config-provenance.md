@@ -29,20 +29,27 @@ creating a second public contract or a route that can be called by a client.
    while any material field change changes the fingerprint.
 4. `AppendOnlyChain` is an immutable in-memory test/runtime value. It links
    records with a sequence and predecessor fingerprint and verifies insertion,
-   deletion, reorder, tamper, environment, tenant, and account mismatches.
-   It is not persistent ledger storage and has no database, WORM, object-store,
+   reorder, tamper, environment, tenant, and account mismatches. Complete
+   history verification uses an immutable `ChainReceipt` containing the
+   record count, terminal sequence/fingerprint, and exact scope; an unanchored
+   structural verifier does not claim suffix-deletion detection. It is not
+   persistent ledger storage and has no database, WORM, object-store,
    blockchain, or external-signing behavior.
 5. Corrections are new immutable records with a new identity and fingerprint
-   referencing the predecessor. The original record is never rewritten.
-   Corrections must remain in the same environment and tenant/account scope.
+   referencing the predecessor. Public record creation rejects arbitrary
+   correction links; controlled helpers require the actual original record,
+   verify its integrity, and bind the correction to its exact environment and
+   tenant/account scope. The original record is never rewritten.
 6. Truth, source, and authority vocabularies are closed enums. Derived and
    telemetry records can only carry `NO_TRADING_AUTHORITY`; no class in this
    module grants trading, monetary, deployment, or production authority.
 7. `ConfigSnapshot` and `ConfigProvenance` accept only typed safe metadata,
    controlled version/reference fields, and opaque references where a
-   reference is genuinely required. Raw keys, tokens, private material,
-   secret values, arbitrary dictionaries, unbounded text, and prompt/reasoning
-   payloads are structurally rejected or fail closed.
+   reference is genuinely required. Opaque reference identity is retained only
+   through a deterministic domain-separated one-way digest; raw reference
+   values are never canonicalized or serialized. Raw keys, tokens, private
+   material, secret values, arbitrary dictionaries, unbounded text, and
+   prompt/reasoning payloads are structurally rejected or fail closed.
 8. Release, configuration, and policy identities are included in the
    provenance fingerprint and can be checked together for exact environment,
    version, and hash agreement. No runtime mutation, feature-flag provider,

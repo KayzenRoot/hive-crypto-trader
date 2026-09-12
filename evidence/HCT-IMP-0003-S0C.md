@@ -12,7 +12,7 @@ Work Order: `HCT-IMP-0003-S0C`
 - Authorized checkpoint: `HCT-CP-0019 / IMPLEMENTATION_AUTHORIZED_S0C`
 - Canonical `main` at execution start: `29dc6636360953941a7e4fb41a0876c5bc46dcd6`
 - Authorized branch at execution start: `implementation/HCT-IMP-0003-S0C`
-- Authorized branch at execution start: `29dc6636360953941a7e4fb41a0876c5bc46dcd6`
+- Candidate head at correction start: `f41262a53a59295fecbe3506e774a9b8592ad0cb`
 - Authorization scope: exactly `HCT-IMP-0003-S0C`
 - Authorization ceiling: `NON_TRADING_STAGE_0_AUDIT_EVIDENCE_CONFIG_VERSION_FOUNDATION_ONLY`
 - `implementation_authorized`: `true`
@@ -44,8 +44,10 @@ destructive cleanup, or history rewrite was used.
   the frozen S0A envelopes with typed S0B environment/tenant/account scope;
   closed truth/source/authority classes; bounded canonicalization and SHA-256;
   immutable audit/evidence records; predecessor-linked in-memory chains;
-  immutable corrections; safe configuration snapshots; and exact
-  release/configuration/policy provenance checks.
+  immutable corrections through a controlled original-record boundary;
+  terminal chain receipts for complete-history verification; safe
+  configuration snapshots; and exact release/configuration/policy provenance
+  checks.
 - `apps/backend/tests/test_provenance.py`: deterministic construction,
   material hash change, malformed/tampered payload, chain gap/reorder/
   predecessor, immutable correction, scope, authority, opaque-reference, and
@@ -55,25 +57,33 @@ destructive cleanup, or history rewrite was used.
 - `scripts/scan_s0c_boundaries.py`: exact-base changed-text allowlist,
   secret-shaped material scan, prohibited-capability scan, and unreadable
   candidate failure.
-- `.github/workflows/implementation-s0c-governance.yml`: exact-head,
-  CP0019, changed-file, locked-toolchain, regression, audit, and boundary
-  gates with check name `s0c-quality`.
+- `.github/workflows/implementation-s0c-governance.yml`: pull-request-only
+  exact-head `s0c-quality`, CP0019, changed-file, locked-toolchain,
+  regression, audit, boundary, and pinned `s0c-merge-compatibility` gates.
 
 ## Integrity and authority evidence
 
 `canonicalize` accepts only an immutable tuple of controlled scalar field
 pairs, rejects mappings/nested payloads, sorts field names, normalizes UTC
-timestamps, and represents opaque references without their underlying value.
-`fingerprint` is SHA-256 over that canonical form. Record payload hashes and
-domain fingerprints cover identity, environment, event type, scope, truth,
-source, authority, allowlisted attributes, correction link, sequence, and
-predecessor as applicable.
+timestamps, and represents opaque references with a stable,
+type-separated, non-reversible SHA-256 binding rather than their underlying
+value. The same reference is stable, different reference identities differ,
+and credential/secret reference types remain distinct. `fingerprint` is
+SHA-256 over that canonical form. Record payload hashes and domain
+fingerprints cover identity, environment, event type, scope, truth, source,
+authority, allowlisted attributes, correction link, sequence, and predecessor
+as applicable.
 
 `AppendOnlyChain` returns a new immutable chain on append and verifies exact
 sequence, predecessor fingerprint, environment, tenant, and account scope.
-Gaps, deletion, reorder, tampered links, and cross-scope records fail closed.
-Corrections create a new identity and fingerprint referencing the original;
-the original object remains unchanged and cross-environment corrections fail.
+Gaps, reorder, tampered links, and cross-scope records fail closed. An
+immutable `ChainReceipt` binds record count, terminal sequence/fingerprint,
+and exact scope so receipt-backed verification rejects tail deletion and
+terminal tamper; unanchored structural verification does not claim suffix
+deletion detection. Corrections create a new identity and fingerprint only
+through a controlled helper tied to an actual integrity-verified original;
+the original object remains unchanged and environment/tenant/account scope
+changes fail closed.
 
 Truth/source/authority are closed vocabularies. Derived and telemetry values
 can carry only `NO_TRADING_AUTHORITY`. No audit, evidence, configuration,
@@ -99,34 +109,46 @@ The S0C scanner is fail-closed for changed paths, unreadable text, secret
 signatures, external network/provider markers, exchange/trading markers, and
 higher-risk deployment markers. The workflow separately rejects checkpoint,
 frozen-doc, work-order, frontend, public-contract, and dependency-lock
-changes.
+
+The authorized execution base remains `29dc6636360953941a7e4fb41a0876c5bc46dcd6`.
+After the UADS GEF V1 governance merge, current `main` is pinned separately
+at `fdb31fe609ae3e5964fab13423292c892f3e91d1`; this is governance-only
+compatibility-base drift, not a change to S0C authorization or product scope.
 
 ## Checks executed
 
 | Check | Result |
 |---|---|
 | Context Lock / canonical refs | PASS — exact CP0019 base and branch refs matched |
-| Contract generation reproducibility | PASS |
-| Canonical/runtime contract parity | PASS — 10 schemas |
-| Backend tests | PASS — 56 tests |
-| Backend coverage | PASS — TOTAL 859 statements / 96 missed / 89% |
-| Backend Ruff | PASS |
-| Backend strict mypy | PASS |
-| Backend `uv build` | PASS — local locked project build |
-| Python dependency audit | PASS — local locked environment, no known vulnerabilities |
-| S0A route/contract boundary validation | PASS |
-| S0A secret scan | PASS — 57 changed text files |
-| S0B security and scanner regression tests | PASS |
+| H001 PR-only receipt | PASS — manual dispatch and `github.sha` fallback removed |
+| H002 opaque reference binding | PASS — type-separated digest and identity-difference tests |
+| H003 controlled correction construction | PASS — direct linkage and scope tests |
+| H004 terminal chain receipt | PASS — receipt-backed tail truncation/tamper tests |
+| H005 merge compatibility design | PENDING HOSTED — pinned synthetic-merge job required |
+| Contract generation reproducibility | PENDING HOSTED — local `uv` unavailable |
+| Canonical/runtime contract parity | PENDING HOSTED — local `uv` unavailable |
+| Backend tests | PASS — 59 tests |
+| Backend coverage | PENDING HOSTED — local `pytest-cov` unavailable |
+| Backend Ruff | PASS — changed surface clean; baseline `UP038` findings excluded locally |
+| Backend strict mypy | PASS — system Python 3.12 local check |
+| Backend `uv build` | PENDING HOSTED — local `uv` unavailable |
+| Python dependency audit | PENDING HOSTED — local `uv` unavailable |
+| S0A route/contract boundary validation | PENDING HOSTED — local `uv` unavailable |
+| S0A secret scan | PENDING HOSTED — local `uv` unavailable |
+| S0B security and scanner regression tests | PASS — included in the 59-test backend suite |
 | S0C changed-text secret/capability scan | PASS — fail-closed scanner |
-| Frontend typecheck/tests/lint/build | PASS — 13 tests, clean lint, clean build |
-| Frontend format check | Local Windows checkout reports pre-existing line-ending differences; exact Linux CI is authoritative |
-| npm audit | PASS — 0 vulnerabilities |
+| Frontend typecheck/tests/lint/build | PENDING HOSTED — merge compatibility job required |
+| Frontend format check | PENDING HOSTED — merge compatibility job is authoritative |
+| npm audit | PENDING HOSTED — merge compatibility job required |
 | Exact raw-head CI | Pending final PR head |
+| Merge compatibility CI | Pending final PR head and pinned current main |
 
 Local results above are evidence for their individual checks only. Final
-backend build, dependency audits, frontend checks, exact-head CI, final PR
-head, and exact run/check belong to the post-push governance handoff and are
-not self-referenced here.
+backend build, coverage, dependency audits, frontend checks, exact-head CI,
+merge compatibility, final PR head, and exact run/check belong to the
+post-push governance handoff and are not self-referenced here. The local
+system environment had Python 3.12, pytest, Ruff, and mypy, but no `uv` or
+`pytest-cov`; hosted locked jobs remain mandatory.
 
 ## Explicit limitations and authorization firewall
 

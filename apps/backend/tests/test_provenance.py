@@ -9,6 +9,7 @@ from hct_backend.provenance import (
     AppendOnlyChain,
     AttributeKey,
     AuthorityClass,
+    ChainReceipt,
     ConfigAttribute,
     ConfigField,
     ConfigKind,
@@ -27,7 +28,13 @@ from hct_backend.provenance import (
     fingerprint,
     verify_chain,
 )
-from hct_backend.security import ExchangeAccountID, PolicyVersion, SecretRef, TenantID
+from hct_backend.security import (
+    CredentialRef,
+    ExchangeAccountID,
+    PolicyVersion,
+    SecretRef,
+    TenantID,
+)
 
 NOW = datetime(2026, 9, 12, 12, 0, tzinfo=UTC)
 
@@ -138,6 +145,20 @@ def test_append_only_chain_detects_gap_reorder_and_predecessor_tamper() -> None:
         AppendOnlyChain(records=list(chain.records))  # type: ignore[arg-type]
 
 
+def test_chain_receipt_detects_tail_truncation_and_terminal_tamper() -> None:
+    chain = AppendOnlyChain().append(audit("receipt-1")).append(audit("receipt-2"))
+    receipt = chain.receipt
+    assert isinstance(receipt, ChainReceipt)
+    verify_chain(chain.records, receipt=receipt)
+    with pytest.raises(IntegrityError, match="receipt"):
+        verify_chain(chain.records[:1], receipt=receipt)
+    with pytest.raises(IntegrityError, match="receipt"):
+        verify_chain(
+            chain.records,
+            receipt=replace(receipt, terminal_fingerprint="c" * 64),
+        )
+
+
 def test_correction_is_new_and_original_is_unchanged() -> None:
     original = audit("original", attributes=(attr(AttributeKey.RESULT, "FAIL"),))
     corrected = correct_audit_record(
@@ -163,6 +184,79 @@ def test_correction_is_new_and_original_is_unchanged() -> None:
             ),
             occurred_at=NOW,
             attributes=(attr(AttributeKey.RESULT, "PASS"),),
+        )
+
+
+def test_direct_correction_linkage_requires_controlled_original_path() -> None:
+    from hct_backend.provenance import AuditRecord
+
+    with pytest.raises(IntegrityError, match="controlled"):
+        AuditRecord.create(
+            event_id=EnvironmentScopedId(
+                kind=IdentityKind.AUDIT, environment=Environment.PAPER, value="direct-correction"
+            ),
+            environment=Environment.PAPER,
+            event_type="FOUNDATION_CHECK",
+            occurred_at=NOW,
+            scope=scope(),
+            truth=TruthClass.AUTHORITATIVE,
+            source=SourceClass.SERVER_AUTHORITY,
+            authority=AuthorityClass.AUDIT_EVIDENCE,
+            correction_of=EnvironmentScopedId(
+                kind=IdentityKind.AUDIT, environment=Environment.PAPER, value="unproven-original"
+            ),
+        )
+    with pytest.raises(IntegrityError, match="controlled"):
+        EvidenceRecord.create(
+            evidence_id=EnvironmentScopedId(
+                kind=IdentityKind.EVIDENCE,
+                environment=Environment.PAPER,
+                value="direct-evidence-correction",
+            ),
+            environment=Environment.PAPER,
+            evidence_type="VALIDATION_RESULT",
+            recorded_at=NOW,
+            scope=scope(),
+            truth=TruthClass.OBSERVED,
+            source=SourceClass.OBSERVATION,
+            authority=AuthorityClass.AUDIT_EVIDENCE,
+            correction_of=EnvironmentScopedId(
+                kind=IdentityKind.EVIDENCE,
+                environment=Environment.PAPER,
+                value="unproven-evidence-original",
+            ),
+        )
+
+
+def test_correction_rejects_tenant_and_account_scope_changes() -> None:
+    original = audit("scope-correction")
+    with pytest.raises(IntegrityError, match="scope"):
+        correct_audit_record(
+            original,
+            event_id=EnvironmentScopedId(
+                kind=IdentityKind.AUDIT, environment=Environment.PAPER, value="tenant-change"
+            ),
+            occurred_at=NOW,
+            attributes=(attr(AttributeKey.RESULT, "PASS"),),
+            scope=ProvenanceScope(
+                environment=Environment.PAPER,
+                tenant_id=TenantID("tenant-b"),
+                account_id=ExchangeAccountID("account-a"),
+            ),
+        )
+    with pytest.raises(IntegrityError, match="scope"):
+        correct_audit_record(
+            original,
+            event_id=EnvironmentScopedId(
+                kind=IdentityKind.AUDIT, environment=Environment.PAPER, value="account-change"
+            ),
+            occurred_at=NOW,
+            attributes=(attr(AttributeKey.RESULT, "PASS"),),
+            scope=ProvenanceScope(
+                environment=Environment.PAPER,
+                tenant_id=TenantID("tenant-a"),
+                account_id=ExchangeAccountID("account-b"),
+            ),
         )
 
 
@@ -270,8 +364,19 @@ def test_derived_and_telemetry_cannot_upgrade_authority() -> None:
 def test_opaque_reference_is_safe_and_not_hashed_as_raw_value() -> None:
     reference = SecretRef("secret-ref-audit-1")
     record = audit("opaque", attributes=(attr(AttributeKey.REFERENCE, reference),))
+    same_reference = SecretRef("secret-ref-audit-1")
+    different_reference = SecretRef("secret-ref-audit-2")
+    credential_reference = CredentialRef("cred-ref-audit-1")
+    canonical = canonicalize((("attribute.reference", reference),))
     assert b"secret-ref-audit-1" not in record.envelope.payload_hash.encode()
-    assert b"secret-ref-audit-1" not in canonicalize((("attribute.reference", reference),))
+    assert b"secret-ref-audit-1" not in canonical
+    assert canonical == canonicalize((("attribute.reference", same_reference),))
+    assert canonical != canonicalize((("attribute.reference", different_reference),))
+    assert canonical != canonicalize((("attribute.reference", credential_reference),))
+    assert b"secret-ref-audit-1" not in repr(record).encode()
+    assert record.fingerprint != audit(
+        "opaque", attributes=(attr(AttributeKey.REFERENCE, different_reference),)
+    ).fingerprint
 
 
 def test_config_snapshot_and_provenance_bind_release_config_policy_and_scope() -> None:
