@@ -1,34 +1,30 @@
 # HCT-IMP-0002-S0B - SecurityContext, Tenant/Account Binding & Opaque SecretStore Foundation
 
-Status: `PENDING_AUTHORIZATION`
+Status: `AUTHORIZED`
 Risk class: `HIGH_ASSURANCE`
-Parent authorization increment: `HCT-IMPL-AUTH-0002`
-Required checkpoint before execution: future explicit promotion from `HCT-CP-0016`
-Required authorization ceiling: `NON_TRADING_STAGE_0_SECURITY_FOUNDATION_ONLY`
+Parent authorization increment: `HCT-IMPL-AUTH-0002 / COMPLETED_APPROVED`
+Authorization checkpoint: `HCT-CP-0017 / IMPLEMENTATION_AUTHORIZED_S0B`
+Planning baseline: `HCT-CP-0014 / PLANNING_FREEZE_APPROVED`
+Authorization ceiling: `NON_TRADING_STAGE_0_SECURITY_FOUNDATION_ONLY`
 
 ## OBJECTIVE
-Implement the second bounded Stage-0 foundation slice after explicit authorization: canonical SecurityContext, exact tenant/account binding, fail-closed scope guards and an opaque provider-neutral SecretStore boundary, with no real secret material, exchange connectivity, persistence, deployment or trading capability.
+Implement the second bounded Stage-0 foundation slice: canonical SecurityContext, exact tenant/account binding, fail-closed scope guards and an opaque provider-neutral SecretStore boundary, with no real secret material, exchange connectivity, persistence, production deployment or trading capability.
 
 ## CONTEXT
-S0A established the repository/runtime/contract foundation. R11 Stage 0 and R08 security requirements require server-derived authority, exact tenant/account binding and a SecretStore boundary before later exchange, realtime, risk, execution or live-capable work.
+S0A established the repository/runtime/canonical-contract foundation. R11 Stage 0 and R08 security requirements require server-derived authority, exact tenant/account binding and a SecretStore boundary before later exchange, realtime, risk, execution or live-capable work.
 
-This Work Order is executable only after a new checkpoint explicitly sets:
-- `implementation_authorized=true`
-- `implementation_authorization_scope=["HCT-IMP-0002-S0B"]`
-- `implementation_authorization_ceiling="NON_TRADING_STAGE_0_SECURITY_FOUNDATION_ONLY"`.
-
-Until then, this document is specification only.
+`HCT-IMPL-AUTH-0002` received independent HIGH_ASSURANCE `APPROVED` for exact candidate head `1ce74273aa84fbc1b0e07a1f196f4ff04a7f575d`. Exact-head governance run `34688852916` succeeded, PR #36 was governed-merged as `425c98d9c3a661cec78224bea4814305fb35c42b`, and `HCT-CP-0017` promotes this Work Order as the only authorized implementation scope.
 
 ## SCOPE
 ### S0B-1 - Typed security identity primitives
-Extend the canonical contract foundation with typed identities required by this slice, including as applicable:
-- `PrincipalID`
-- `TenantID`
-- `MembershipID`
-- `ExchangeAccountID`
-- `SessionID`
-- `CorrelationID` / `TraceID`
-- `PolicyVersion` / role-scope reference
+Extend the S0A canonical contract foundation with typed identities required by this slice, including as applicable:
+- `PrincipalID`;
+- `TenantID`;
+- `MembershipID`;
+- `ExchangeAccountID`;
+- `SessionID`;
+- `CorrelationID` / `TraceID`;
+- `PolicyVersion` / role-scope reference;
 - `CredentialRef` / `SecretRef` as opaque identifiers only.
 
 All stateful identity remains environment-aware where required by frozen architecture.
@@ -44,7 +40,7 @@ Implement an immutable/frozen versioned SecurityContext containing the minimum s
 - session identity/security version;
 - correlation/trace identity;
 - environment namespace;
-- issued/effective/expiry/version metadata where required by the chosen bounded design.
+- issued/effective/expiry/version metadata where required by the bounded design.
 
 The context SHALL be created through a trusted/server-side construction boundary. Raw client tenant/account fields SHALL NOT construct authority directly.
 
@@ -89,7 +85,7 @@ Do not implement:
 - API keys, secret keys, private keys, access/refresh tokens, seed phrases or any real/test-looking secret value;
 - secret import/verification/activation/rotation/revocation/deletion lifecycle;
 - encryption/decryption, envelope encryption, KMS/HSM;
-- AWS/GCP/Azure/Vault secret provider adapters;
+- AWS/GCP/Azure/Vault secret-provider adapters;
 - OAuth/OIDC, login endpoints, MFA, passkeys/WebAuthn, recovery, browser session/token transport;
 - database persistence/RLS;
 - cache/queue/worker tenant isolation beyond pure contracts needed by this slice;
@@ -106,21 +102,22 @@ Do not implement:
 
 ## FILES / SOURCES TO READ
 Before mutation, at minimum:
-- `checkpoints/workstreams/planning/latest.json`
-- promoted checkpoint that explicitly authorizes S0B;
-- `docs/11-checkpoint.md`
-- `docs/00-source-hierarchy.md`
-- `docs/09-definition-of-done.md`
-- `docs/10-decisions-ledger.md`
-- `docs/70-r08-critical-tenant-security-architecture.md`
-- `docs/73-r08-multitenant-security-requirements-addendum.md`
-- `docs/91-r11-integrated-authority-state-dependency-architecture.md`
-- `docs/100-r12-requirements-traceability-and-no-loss-proof.md`
-- `docs/108-s0a-implementation-approval-and-checkpoint-promotion.md`
-- `docs/109-implementation-authorization-s0b-candidate.md`
-- `work-orders/HCT-IMPL-AUTH-0002.md`
+- `checkpoints/workstreams/planning/latest.json`;
+- `checkpoints/history/HCT-CP-0017.json`;
+- `docs/11-checkpoint.md`;
+- `docs/00-source-hierarchy.md`;
+- `docs/09-definition-of-done.md`;
+- `docs/10-decisions-ledger.md`;
+- `docs/70-r08-critical-tenant-security-architecture.md`;
+- `docs/73-r08-multitenant-security-requirements-addendum.md`;
+- `docs/91-r11-integrated-authority-state-dependency-architecture.md`;
+- `docs/100-r12-requirements-traceability-and-no-loss-proof.md`;
+- `docs/108-s0a-implementation-approval-and-checkpoint-promotion.md`;
+- `docs/109-implementation-authorization-s0b-candidate.md`;
+- `docs/110-s0b-implementation-authorization-approval-and-checkpoint-promotion.md`;
+- `work-orders/HCT-IMPL-AUTH-0002.md`;
 - S0A ADR/contracts/tests/evidence;
-- Issue #35 and the future S0B implementation issue.
+- this Work Order.
 
 ## REQUIREMENTS
 ### REQ-S0B-001 - Server-derived authority
@@ -148,7 +145,7 @@ CredentialRef/SecretRef SHALL contain no secret value and SHALL have safe/redact
 The S0B SecretStore interface SHALL not return raw secret material and SHALL not connect to external providers.
 
 ### REQ-S0B-009 - No external authority
-S0B SHALL introduce no exchange, network, persistence, deployment or trading authority.
+S0B SHALL introduce no exchange, network, persistence, production-deployment or trading authority.
 
 ### REQ-S0B-010 - Frontend non-authority
 No frontend state or browser-supplied field becomes authoritative SecurityContext evidence.
@@ -163,12 +160,12 @@ Exact-head tests/CI/evidence SHALL prove all required negative cases and absence
 - Keep opaque secret references distinct from secret material.
 - No secret value appears in serializable public contracts.
 - No network/provider implementation in SecretStore.
-- No persistence in this slice unless a future governed correction explicitly authorizes it.
+- No persistence in this slice.
 - Keep APIs minimal and deterministic.
 - Any material architecture deviation requires STOP + governed change control.
 
 ## CONSTRAINTS
-- Work only after exact checkpoint authorization.
+- Work only after exact Context Lock proves `HCT-CP-0017` authorizes this exact Work Order.
 - Use a governed implementation branch and PR.
 - No force push/history rewrite.
 - Do not modify frozen planning semantics.
@@ -182,11 +179,11 @@ C. Trusted/server-side construction path is explicit and testable.
 D. Client tenant/account fields cannot directly create authority.
 E. Tenant/account/environment binding is immutable and fails closed on mismatch.
 F. Object/scope authorization guard rejects cross-tenant/account cases.
-G. Missing/malformed/unsupported/stale context cases defined by the implementation reject deterministically.
+G. Missing/malformed/unsupported/stale context cases reject deterministically.
 H. CredentialRef/SecretRef is opaque and non-secret.
 I. Secret references are safely represented/redacted in logs/repr/serialization as designed.
 J. SecretStore is provider-neutral and cannot return raw secret material.
-K. No external secret provider integration exists.
+K. No external secret-provider integration exists.
 L. No exchange/network/trading capability exists.
 M. No DB/RLS/auth-provider/browser-login implementation exists.
 N. Frontend remains non-authoritative.
@@ -199,7 +196,7 @@ T. Exact raw-head CI passes.
 U. Independent HIGH_ASSURANCE review returns APPROVED with CRITICAL=0 and HIGH=0.
 
 ## TESTS
-At minimum, if authorized:
+At minimum:
 - SecurityContext happy-path construction from trusted evidence;
 - immutability/frozen behavior;
 - client-only tenant/account input cannot create authoritative context;
@@ -218,7 +215,7 @@ At minimum, if authorized:
 - fake/null SecretStore cannot resolve external providers or expose raw secret data;
 - generated/shared contract parity/reproducibility;
 - secret scan over all changed text/fixtures;
-- prohibited capability scan for exchange/provider/trading code;
+- prohibited-capability scan for exchange/provider/trading code;
 - existing S0A regression suite;
 - strict type/lint/build/dependency audit;
 - `git diff --check` against exact PR base.
@@ -226,7 +223,6 @@ At minimum, if authorized:
 Property/fuzz tests SHOULD be used where effective for cross-tenant/account/environment mismatch matrices and malformed identity inputs.
 
 ## DELIVERABLES
-If authorized, expected implementation deliverables include:
 - one security-boundary ADR before substantive code;
 - canonical/shared contract updates;
 - backend SecurityContext/binding/guard implementation;
