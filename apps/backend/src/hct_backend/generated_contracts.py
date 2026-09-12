@@ -1,7 +1,7 @@
 """Generated from packages/contracts/openapi.json; do not edit."""
 # ruff: noqa: E501
 
-CONTRACT_SHA256 = "aeebefe1610c3c4664d453aca9c33aa8395172f50a5477b7ec2e0e7eaeb95289"
+CONTRACT_SHA256 = "f5a8f8077d26b733db5f227f62757bad0d3c298d719dfc0d9aac18233baa569b"
 SCHEMAS = {'AuditEnvelope': {'additionalProperties': False,
                    'properties': {'environment': {'$ref': '#/components/schemas/Environment'},
                                   'event_id': {'$ref': '#/components/schemas/EnvironmentScopedId'},
@@ -72,7 +72,8 @@ SCHEMAS = {'AuditEnvelope': {'additionalProperties': False,
                            'EXCHANGE',
                            'INSTRUMENT',
                            'CAPABILITY_SNAPSHOT',
-                           'REFERENCE_SNAPSHOT'],
+                           'REFERENCE_SNAPSHOT',
+                           'UNIVERSE_SNAPSHOT'],
                   'type': 'string'},
  'ReadinessResponse': {'additionalProperties': False,
                        'properties': {'checks': {'additionalProperties': {'const': 'ready',
@@ -103,7 +104,7 @@ SCHEMAS = {'AuditEnvelope': {'additionalProperties': False,
                                   'contract_sha256'],
                      'type': 'object'}}
 ENVIRONMENTS = ('LIVE', 'PAPER', 'SHADOW', 'REPLAY')
-IDENTITY_KINDS = ('SERVICE', 'RELEASE', 'CONFIG', 'AUDIT', 'EVIDENCE', 'EXCHANGE', 'INSTRUMENT', 'CAPABILITY_SNAPSHOT', 'REFERENCE_SNAPSHOT')
+IDENTITY_KINDS = ('SERVICE', 'RELEASE', 'CONFIG', 'AUDIT', 'EVIDENCE', 'EXCHANGE', 'INSTRUMENT', 'CAPABILITY_SNAPSHOT', 'REFERENCE_SNAPSHOT', 'UNIVERSE_SNAPSHOT')
 ERROR_CODES = ('INVALID_REQUEST', 'NOT_READY', 'INTERNAL')
 SAFE_ENDPOINTS = ('/health', '/ready', '/version')
 ID_VALUE_PATTERN = r"^[a-z0-9][a-z0-9._-]{0,63}$"

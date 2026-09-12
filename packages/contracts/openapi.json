@@ -53,7 +53,7 @@
       },
       "IdentityKind": {
         "type": "string",
-        "enum": ["SERVICE", "RELEASE", "CONFIG", "AUDIT", "EVIDENCE", "EXCHANGE", "INSTRUMENT", "CAPABILITY_SNAPSHOT", "REFERENCE_SNAPSHOT"]
+        "enum": ["SERVICE", "RELEASE", "CONFIG", "AUDIT", "EVIDENCE", "EXCHANGE", "INSTRUMENT", "CAPABILITY_SNAPSHOT", "REFERENCE_SNAPSHOT", "UNIVERSE_SNAPSHOT"]
       },
       "StableId": {
         "type": "object",
