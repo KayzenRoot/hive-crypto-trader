@@ -1,0 +1,91 @@
+{
+  "schemaVersion": "GEF_PROJECT_PROFILE_V1",
+  "gefVersion": "UADS-GEF-V1",
+  "project": {
+    "name": "Hive Crypto Trader",
+    "code": "HCT",
+    "mode": "PARTIALLY_GOVERNED"
+  },
+  "repository": {
+    "provider": "github",
+    "fullName": "KayzenRoot/hive-crypto-trader",
+    "repositoryId": 1366643720,
+    "defaultBranch": "main",
+    "visibility": "public",
+    "baselineHead": "29dc6636360953941a7e4fb41a0876c5bc46dcd6",
+    "fingerprintBasis": "github:KayzenRoot/hive-crypto-trader|repo_id:1366643720|default_branch:main",
+    "projectFingerprint": "sha256:28ad059f859668b3447b58db4f45ecc09111b79d886f83ec60000b2ad72162bc"
+  },
+  "canonicalPaths": {
+    "checkpoint": "checkpoints/workstreams/planning/latest.json",
+    "checkpointDoc": "docs/11-checkpoint.md",
+    "sourceHierarchy": "docs/00-source-hierarchy.md",
+    "definitionOfDone": "docs/09-definition-of-done.md",
+    "decisionsLedger": "docs/10-decisions-ledger.md",
+    "promptPolicy": "docs/104-chat-delivery-and-prompt-artifact-policy.md",
+    "adrs": "adr/",
+    "workOrders": "work-orders/",
+    "evidence": "evidence/",
+    "contracts": "packages/contracts/openapi.json"
+  },
+  "toolchain": {
+    "backend": {
+      "language": "Python",
+      "version": "3.12",
+      "packageManager": "uv",
+      "frameworks": ["FastAPI 0.141.1", "Pydantic 2.13.5"],
+      "test": "pytest 9.1.1 / pytest-cov 7.1.0",
+      "lint": "Ruff 0.16.7",
+      "typecheck": "mypy 2.3.1 strict"
+    },
+    "frontend": {
+      "language": "TypeScript 5.9.3",
+      "runtime": "Node 24.18.0 in CI",
+      "packageManager": "npm",
+      "frameworks": ["React 19.3.0", "Vite 8.3.0"],
+      "test": "Vitest 5.0.0",
+      "lint": "ESLint 10.10.0",
+      "format": "Prettier 3.9.6"
+    }
+  },
+  "commands": {
+    "contractGenerationCheck": "python scripts/generate_contracts.py --check",
+    "contractParity": "uv run --project apps/backend python scripts/validate_contract_parity.py",
+    "backendTests": "uv run --project apps/backend pytest --cov=hct_backend --cov-report=term-missing",
+    "backendLint": "uv run --project apps/backend ruff check apps/backend/src apps/backend/tests",
+    "backendTypecheck": "uv run --project apps/backend mypy apps/backend/src",
+    "backendBuild": "uv build --project apps/backend",
+    "pythonAudit": "uv run --project apps/backend --with pip-audit==2.10.1 pip-audit --local",
+    "frontendInstall": "npm ci",
+    "frontendTypecheck": "npm run typecheck",
+    "frontendTests": "npm test",
+    "frontendLint": "npm run lint",
+    "frontendFormat": "npm run format:check",
+    "frontendBuild": "npm run build",
+    "frontendAudit": "npm audit --audit-level=high --omit=optional"
+  },
+  "assurance": {
+    "defaultRiskClass": "HIGH_ASSURANCE",
+    "exactHeadRequired": true,
+    "independentReviewRequired": true,
+    "shadowAssurance": "ON",
+    "promptDelivery": "PDF_ONLY"
+  },
+  "capabilities": {
+    "planningFreeze": true,
+    "boundedImplementationAuthorization": true,
+    "exactHeadCI": true,
+    "independentReview": true,
+    "machineEvidenceNativeRuntime": false,
+    "proofCarryForwardAuthoritative": false,
+    "hedsDelta": "ADOPTING"
+  },
+  "activeWork": {
+    "issue": 41,
+    "pullRequest": 42,
+    "branch": "implementation/HCT-IMP-0003-S0C",
+    "head": "f41262a53a59295fecbe3506e774a9b8592ad0cb",
+    "status": "OPEN_UNMERGED_INDEPENDENT_REVIEW_REQUIRED"
+  },
+  "promptCompilerVersion": "UADS-GEF-V1"
+}
