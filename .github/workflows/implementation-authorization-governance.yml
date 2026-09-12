@@ -8,6 +8,7 @@ on:
       - 'work-orders/HCT-IMPL-AUTH-0001.md'
       - 'work-orders/HCT-IMP-0001-S0A.md'
       - '.github/workflows/implementation-authorization-governance.yml'
+      - '.github/workflows/r12-planning-freeze-governance.yml'
   workflow_dispatch:
 
 permissions:
@@ -65,6 +66,16 @@ jobs:
           grep -Fq 'MEXC or any exchange client/adapter' work-orders/HCT-IMP-0001-S0A.md
           grep -Fq 'no credentials of any kind' work-orders/HCT-IMP-0001-S0A.md
 
+      - name: Verify R12 automatic gate is retired after freeze promotion
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'workflow_dispatch:' .github/workflows/r12-planning-freeze-governance.yml
+          if grep -Fq 'pull_request:' .github/workflows/r12-planning-freeze-governance.yml; then
+            echo 'R12 workflow must not auto-run on post-freeze PRs.'
+            exit 1
+          fi
+
       - name: Verify governance-only diff boundary
         shell: bash
         run: |
@@ -72,7 +83,7 @@ jobs:
           git fetch origin "${{ github.base_ref }}" --depth=1
           changed="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")"
           printf '%s\n' "$changed"
-          invalid="$(printf '%s\n' "$changed" | grep -Ev '^(docs/106-implementation-authorization-candidate\.md|work-orders/HCT-IMPL-AUTH-0001\.md|work-orders/HCT-IMP-0001-S0A\.md|\.github/workflows/implementation-authorization-governance\.yml)$' || true)"
+          invalid="$(printf '%s\n' "$changed" | grep -Ev '^(docs/106-implementation-authorization-candidate\.md|work-orders/HCT-IMPL-AUTH-0001\.md|work-orders/HCT-IMP-0001-S0A\.md|\.github/workflows/implementation-authorization-governance\.yml|\.github/workflows/r12-planning-freeze-governance\.yml)$' || true)"
           if [ -n "$invalid" ]; then
             echo 'Authorization PR contains changes outside the approved governance-only boundary:'
             echo "$invalid"
@@ -81,4 +92,4 @@ jobs:
 
       - name: Governance summary
         run: |
-          echo 'Implementation authorization candidate is bounded to HCT-IMP-0001-S0A, remains pre-authorization, and grants no production/live authority.'
+          echo 'Implementation authorization candidate is bounded to HCT-IMP-0001-S0A, remains pre-authorization, grants no production/live authority, and uses the phase-specific governance check.'
