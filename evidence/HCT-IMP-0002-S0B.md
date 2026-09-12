@@ -77,8 +77,8 @@ external-provider path.
 | Context Lock / canonical refs | PASS — main and authorized branch both matched the exact SHA |
 | Contract generation `python scripts/generate_contracts.py --check` | PASS |
 | Canonical/runtime contract parity | PASS — 10 schemas |
-| Backend tests after bounded correction | PASS locally — 34 tests; exact correction CI result is authoritative and will be recorded after the new run |
-| Backend coverage after bounded correction | Pending exact correction CI result; no local percentage is used as final evidence |
+| Backend tests after bounded correction | PASS — exact CI: 34 tests |
+| Backend coverage after bounded correction | PASS — exact CI: TOTAL 433 statements / 31 missed / 93% |
 | Backend Ruff | PASS |
 | Backend strict mypy | PASS |
 | Backend `uv build` | PASS |
@@ -97,7 +97,7 @@ external-provider path.
 | npm audit | PASS — 0 vulnerabilities |
 | Frontend format check | PASS under repository content with explicit Windows CRLF end-of-line; default local check reports the Windows checkout line-ending mismatch, while Linux CI is the authoritative default-format environment |
 | Candidate-aware `git diff --check` | Required again against exact final PR base after commit |
-| Exact raw-head CI | Required after correction push; final run/check and exact coverage belong in PR and Issue handoff |
+| Exact raw-head CI | PASS for the correction validation: 34 tests, TOTAL 433 / 31 / 93%; final head and run/check belong in PR and Issue handoff |
 
 The backend test run emitted only the existing FastAPI/Starlette TestClient
 deprecation warnings. They did not affect the exit status.
