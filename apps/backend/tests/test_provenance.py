@@ -8,6 +8,7 @@ from hct_backend.contracts import Environment, EnvironmentScopedId, IdentityKind
 from hct_backend.provenance import (
     AppendOnlyChain,
     AttributeKey,
+    AuditRecord,
     AuthorityClass,
     ChainReceipt,
     ConfigAttribute,
@@ -226,6 +227,78 @@ def test_direct_correction_linkage_requires_controlled_original_path() -> None:
                 value="unproven-evidence-original",
             ),
         )
+
+
+def test_direct_record_construction_requires_verified_original_proof() -> None:
+    audit_original = audit("direct-bound-audit-original")
+    audit_correction = correct_audit_record(
+        audit_original,
+        event_id=EnvironmentScopedId(
+            kind=IdentityKind.AUDIT, environment=Environment.PAPER, value="direct-bound-audit"
+        ),
+        occurred_at=NOW,
+        attributes=(attr(AttributeKey.RESULT, "PASS"),),
+    )
+    with pytest.raises(IntegrityError, match="validated original proof"):
+        AuditRecord(
+            envelope=audit_correction.envelope,
+            scope=audit_correction.scope,
+            truth=audit_correction.truth,
+            source=audit_correction.source,
+            authority=audit_correction.authority,
+            record_version=audit_correction.record_version,
+            attributes=audit_correction.attributes,
+            correction_of=audit_correction.correction_of,
+            sequence=audit_correction.sequence,
+            predecessor_fingerprint=audit_correction.predecessor_fingerprint,
+        )
+    audit_rebuilt = AuditRecord(
+        envelope=audit_original.envelope,
+        scope=audit_original.scope,
+        truth=audit_original.truth,
+        source=audit_original.source,
+        authority=audit_original.authority,
+        record_version=audit_original.record_version,
+        attributes=audit_original.attributes,
+    )
+    assert audit_rebuilt == audit_original
+
+    evidence_original = evidence("direct-bound-evidence-original")
+    evidence_correction = correct_evidence_record(
+        evidence_original,
+        evidence_id=EnvironmentScopedId(
+            kind=IdentityKind.EVIDENCE,
+            environment=Environment.PAPER,
+            value="direct-bound-evidence",
+        ),
+        recorded_at=NOW,
+        attributes=(attr(AttributeKey.RESULT, "PASS"),),
+    )
+    with pytest.raises(IntegrityError, match="validated original proof"):
+        EvidenceRecord(
+            envelope=evidence_correction.envelope,
+            recorded_at=evidence_correction.recorded_at,
+            scope=evidence_correction.scope,
+            truth=evidence_correction.truth,
+            source=evidence_correction.source,
+            authority=evidence_correction.authority,
+            record_version=evidence_correction.record_version,
+            attributes=evidence_correction.attributes,
+            correction_of=evidence_correction.correction_of,
+            sequence=evidence_correction.sequence,
+            predecessor_fingerprint=evidence_correction.predecessor_fingerprint,
+        )
+    evidence_rebuilt = EvidenceRecord(
+        envelope=evidence_original.envelope,
+        recorded_at=evidence_original.recorded_at,
+        scope=evidence_original.scope,
+        truth=evidence_original.truth,
+        source=evidence_original.source,
+        authority=evidence_original.authority,
+        record_version=evidence_original.record_version,
+        attributes=evidence_original.attributes,
+    )
+    assert evidence_rebuilt == evidence_original
 
 
 def test_correction_rejects_tenant_and_account_scope_changes() -> None:

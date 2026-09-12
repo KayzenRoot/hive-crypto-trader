@@ -11,7 +11,8 @@ import hashlib
 import json
 import re
 from collections.abc import Sequence
-from dataclasses import dataclass, replace
+from dataclasses import InitVar, dataclass, replace
+from dataclasses import field as dataclass_field
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Final
@@ -40,7 +41,7 @@ _SECRET_TEXT_PATTERN: Final = re.compile(
     r"(?i)(?:-----begin|api[_-]?key|private[_-]?key|access[_-]?token|password|"
     r"gh[pousr]_|github_pat_|(?:AKIA|ASIA)[0-9A-Z]{16}|sk[_-][A-Za-z0-9_]{20,})"
 )
-_CORRECTION_CONSTRUCTION_TOKEN: Final = object()
+_CORRECTION_PROOF_CAPABILITY: Final = object()
 _CHAIN_RECEIPT_SCHEMA_VERSION: Final = 1
 
 
@@ -264,6 +265,59 @@ class ProvenanceScope:
             raise ProvenanceBoundaryError("invalid provenance account")
 
 
+@dataclass(frozen=True, slots=True, init=False)
+class _CorrectionProof:
+    """Private proof that a correction was derived from a verified record."""
+
+    original_id: EnvironmentScopedId
+    environment: Environment
+    scope: ProvenanceScope
+    original_fingerprint: str
+    record_kind: str
+    _capability: object
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        raise TypeError("correction proofs are created only from verified records")
+
+    @classmethod
+    def _from_verified_original(cls, original: object, record_kind: str) -> _CorrectionProof:
+        if not isinstance(original, (AuditRecord, EvidenceRecord)):
+            raise IntegrityError("correction requires an original record")
+        original.verify()
+        proof = object.__new__(cls)
+        object.__setattr__(proof, "original_id", original.record_id)
+        object.__setattr__(proof, "environment", original.environment)
+        object.__setattr__(proof, "scope", original.scope)
+        object.__setattr__(proof, "original_fingerprint", original.fingerprint)
+        object.__setattr__(proof, "record_kind", record_kind)
+        object.__setattr__(proof, "_capability", _CORRECTION_PROOF_CAPABILITY)
+        return proof
+
+
+def _validate_correction_proof(
+    proof: object,
+    *,
+    record_kind: str,
+    correction_of: EnvironmentScopedId,
+    environment: Environment,
+    scope: ProvenanceScope,
+) -> None:
+    if not isinstance(proof, _CorrectionProof) or (
+        proof._capability is not _CORRECTION_PROOF_CAPABILITY
+    ):
+        raise IntegrityError(
+            "correction construction requires a controlled validated original proof"
+        )
+    if (
+        proof.record_kind != record_kind
+        or proof.original_id != correction_of
+        or proof.environment is not environment
+        or proof.scope != scope
+    ):
+        raise IntegrityError("correction proof does not match the record scope or identity")
+    _validate_hash(proof.original_fingerprint, "correction original fingerprint")
+
+
 def _attribute_value(value: object, label: str) -> SafeValue:
     if isinstance(value, str):
         return _safe_text(value, label)
@@ -459,8 +513,12 @@ class AuditRecord:
     correction_of: EnvironmentScopedId | None = None
     sequence: int = 0
     predecessor_fingerprint: str | None = None
+    _correction_proof_input: InitVar[_CorrectionProof | None] = None
+    _correction_proof: _CorrectionProof | None = dataclass_field(
+        init=False, repr=False, compare=False, default=None
+    )
 
-    def __post_init__(self) -> None:
+    def __post_init__(self, _correction_proof_input: _CorrectionProof | None) -> None:
         if not isinstance(self.envelope, AuditEnvelope) or not isinstance(
             self.scope, ProvenanceScope
         ):
@@ -488,6 +546,14 @@ class AuditRecord:
                 raise IntegrityError("correction crosses environment")
             if self.correction_of == self.record_id:
                 raise IntegrityError("correction must have a new identity")
+            _validate_correction_proof(
+                _correction_proof_input,
+                record_kind="audit",
+                correction_of=self.correction_of,
+                environment=self.environment,
+                scope=self.scope,
+            )
+        object.__setattr__(self, "_correction_proof", _correction_proof_input)
         self._validate_link_fields()
         self.verify()
 
@@ -506,12 +572,8 @@ class AuditRecord:
         record_version: int = 1,
         attributes: tuple[RecordAttribute, ...] = (),
         correction_of: EnvironmentScopedId | None = None,
-        _correction_token: object | None = None,
+        _correction_proof_input: _CorrectionProof | None = None,
     ) -> AuditRecord:
-        if correction_of is not None and _correction_token is not _CORRECTION_CONSTRUCTION_TOKEN:
-            raise IntegrityError(
-                "correction construction requires the controlled original-record path"
-            )
         _utc(occurred_at, "occurred_at")
         payload_hash = fingerprint(
             _payload_fields(
@@ -544,6 +606,7 @@ class AuditRecord:
             record_version=record_version,
             attributes=attributes,
             correction_of=correction_of,
+            _correction_proof_input=_correction_proof_input,
         )
 
     @property
@@ -606,8 +669,12 @@ class EvidenceRecord:
     correction_of: EnvironmentScopedId | None = None
     sequence: int = 0
     predecessor_fingerprint: str | None = None
+    _correction_proof_input: InitVar[_CorrectionProof | None] = None
+    _correction_proof: _CorrectionProof | None = dataclass_field(
+        init=False, repr=False, compare=False, default=None
+    )
 
-    def __post_init__(self) -> None:
+    def __post_init__(self, _correction_proof_input: _CorrectionProof | None) -> None:
         if not isinstance(self.envelope, EvidenceEnvelope) or not isinstance(
             self.scope, ProvenanceScope
         ):
@@ -636,6 +703,14 @@ class EvidenceRecord:
                 raise IntegrityError("correction crosses environment")
             if self.correction_of == self.record_id:
                 raise IntegrityError("correction must have a new identity")
+            _validate_correction_proof(
+                _correction_proof_input,
+                record_kind="evidence",
+                correction_of=self.correction_of,
+                environment=self.environment,
+                scope=self.scope,
+            )
+        object.__setattr__(self, "_correction_proof", _correction_proof_input)
         self._validate_link_fields()
         self.verify()
 
@@ -654,12 +729,8 @@ class EvidenceRecord:
         record_version: int = 1,
         attributes: tuple[RecordAttribute, ...] = (),
         correction_of: EnvironmentScopedId | None = None,
-        _correction_token: object | None = None,
+        _correction_proof_input: _CorrectionProof | None = None,
     ) -> EvidenceRecord:
-        if correction_of is not None and _correction_token is not _CORRECTION_CONSTRUCTION_TOKEN:
-            raise IntegrityError(
-                "correction construction requires the controlled original-record path"
-            )
         _utc(recorded_at, "recorded_at")
         payload_hash = fingerprint(
             _payload_fields(
@@ -692,6 +763,7 @@ class EvidenceRecord:
             record_version=record_version,
             attributes=attributes,
             correction_of=correction_of,
+            _correction_proof_input=_correction_proof_input,
         )
 
     @property
@@ -753,7 +825,12 @@ def link_record(record: Record, *, sequence: int, predecessor_fingerprint: str |
         _validate_hash(predecessor_fingerprint or "", "predecessor fingerprint")
     if record.sequence != 0 or record.predecessor_fingerprint is not None:
         raise IntegrityError("record is already linked")
-    return replace(record, sequence=sequence, predecessor_fingerprint=predecessor_fingerprint)
+    return replace(
+        record,
+        sequence=sequence,
+        predecessor_fingerprint=predecessor_fingerprint,
+        _correction_proof_input=record._correction_proof,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -883,6 +960,7 @@ def correct_audit_record(
     correction_scope = original.scope if scope is None else scope
     if correction_scope != original.scope:
         raise IntegrityError("correction scope mismatch")
+    correction_proof = _CorrectionProof._from_verified_original(original, "audit")
     corrected = AuditRecord.create(
         event_id=event_id,
         environment=original.environment,
@@ -895,7 +973,7 @@ def correct_audit_record(
         record_version=original.record_version,
         attributes=attributes,
         correction_of=original.record_id,
-        _correction_token=_CORRECTION_CONSTRUCTION_TOKEN,
+        _correction_proof_input=correction_proof,
     )
     _validate_correction(original, corrected)
     return corrected
@@ -917,6 +995,7 @@ def correct_evidence_record(
     correction_scope = original.scope if scope is None else scope
     if correction_scope != original.scope:
         raise IntegrityError("correction scope mismatch")
+    correction_proof = _CorrectionProof._from_verified_original(original, "evidence")
     corrected = EvidenceRecord.create(
         evidence_id=evidence_id,
         environment=original.environment,
@@ -929,7 +1008,7 @@ def correct_evidence_record(
         record_version=original.record_version,
         attributes=attributes,
         correction_of=original.record_id,
-        _correction_token=_CORRECTION_CONSTRUCTION_TOKEN,
+        _correction_proof_input=correction_proof,
     )
     _validate_correction(original, corrected)
     return corrected

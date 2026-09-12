@@ -44,7 +44,8 @@ destructive cleanup, or history rewrite was used.
   the frozen S0A envelopes with typed S0B environment/tenant/account scope;
   closed truth/source/authority classes; bounded canonicalization and SHA-256;
   immutable audit/evidence records; predecessor-linked in-memory chains;
-  immutable corrections through a controlled original-record boundary;
+  immutable corrections admitted by a record-construction invariant and a
+  controlled original-record proof;
   terminal chain receipts for complete-history verification; safe
   configuration snapshots; and exact release/configuration/policy provenance
   checks.
@@ -80,8 +81,9 @@ Gaps, reorder, tampered links, and cross-scope records fail closed. An
 immutable `ChainReceipt` binds record count, terminal sequence/fingerprint,
 and exact scope so receipt-backed verification rejects tail deletion and
 terminal tamper; unanchored structural verification does not claim suffix
-deletion detection. Corrections create a new identity and fingerprint only
-through a controlled helper tied to an actual integrity-verified original;
+  deletion detection. Corrections create a new identity and fingerprint only
+  when the record construction invariant receives helper-generated proof tied
+  to an actual integrity-verified original;
 the original object remains unchanged and environment/tenant/account scope
 changes fail closed.
 
@@ -122,7 +124,7 @@ compatibility-base drift, not a change to S0C authorization or product scope.
 | Context Lock / canonical refs | PASS — exact CP0019 base and branch refs matched |
 | H001 PR-only receipt | PASS — manual dispatch and `github.sha` fallback removed |
 | H002 opaque reference binding | PASS — type-separated digest and identity-difference tests |
-| H003 controlled correction construction | PASS — direct linkage and scope tests |
+| H003 controlled correction construction | PASS — construction-invariant direct linkage and scope tests |
 | H004 terminal chain receipt | PASS — receipt-backed tail truncation/tamper tests |
 | H005 merge compatibility design | PENDING HOSTED — pinned synthetic-merge job required |
 | Contract generation reproducibility | PENDING HOSTED — local `uv` unavailable |
