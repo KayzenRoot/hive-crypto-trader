@@ -1,50 +1,87 @@
-# HCT-IMPL-AUTH-0006 — Authorize S1C Market Universe Registry
+# HCT-IMPL-AUTH-0006 - Implementation Authorization Work Order
 
-Status: `PRE_AUTHORIZATION_REVIEW_REQUIRED`
+Status: `COMPLETED_APPROVED`
 Risk class: `HIGH_ASSURANCE`
-Issue: `#56`
-Canonical base: `main@cbd0208e05cd875582902a692167230b7a0ac20c`
-Current checkpoint: `HCT-CP-0024 / S1B_IMPLEMENTATION_APPROVED_MERGED`
-Proposed implementation slice: `HCT-IMP-0006-S1C`
+Authorization issue: `#56`
+Authorization PR: `#57`
+Implementation issue: `#58`
+Canonical pre-authorization checkpoint: `HCT-CP-0024 / S1B_IMPLEMENTATION_APPROVED_MERGED`
+Canonical authorization checkpoint: `HCT-CP-0025 / IMPLEMENTATION_AUTHORIZED_S1C`
+Authorization base: `main@cbd0208e05cd875582902a692167230b7a0ac20c`
+Approved authorization candidate head: `3b6accd0172eb469ee2ebaa95e6ad31f5e469196`
+Authorization merge: `8a33b3743e2a9c899c7ddf8f5e293f1d11b3f2f3`
+Exact-head authorization run: `34720442629`
+Authorized implementation slice: `HCT-IMP-0006-S1C`
+Authorization ceiling: `NON_TRADING_STAGE_1_MARKET_UNIVERSE_REGISTRY_ONLY`
 
 ## Objective
-Prepare and independently review the bounded authorization package for the next frozen R11 Stage-1 dependency: Market Universe Registry.
+Authorize the smallest bounded dependency after completed S1A/S1B: the provider-neutral Market Universe Registry foundation.
 
 ## Source hierarchy
 Checkpoint/current state -> Decisions Ledger/ADRs -> Scope -> DoD -> Architecture -> frozen requirements -> R11 dependency/classification artifacts -> prior approved implementation/completion evidence -> this Work Order.
 
-## Required source proofs
-- `checkpoints/workstreams/planning/latest.json` is CP0024 and fail closed;
-- `docs/91-r11-integrated-authority-state-dependency-architecture.md` Stage 1 places `universe` after exchange adapter/capability resolver and before quota/WS/realtime ingest;
-- `docs/14-product-module-map.md` Module 3 defines Market Universe Registry as dynamic discovery of futures contracts exposed and eligible through the active exchange adapter;
-- `docs/92-r11-v1-module-classification-and-integration-hardening.md` classifies Module 3 as `V1_CORE` and dynamic eligible-contract truth;
-- `docs/93-r11-integration-requirements-addendum.md` R11-REQ-014 requires implementation to follow the logical dependency DAG;
-- S1B is completed under CP0024.
+## Source proofs
+Independent review confirmed:
+- CP0024 was canonical and fail closed before authorization;
+- R11 Stage 1 places `universe` after exchange adapter/capability resolver and before quota/WS/realtime ingest;
+- Module 3 defines Market Universe Registry as dynamic eligible-contract truth;
+- Module 3 is `V1_CORE`;
+- R11-REQ-014 requires implementation to follow the logical dependency DAG;
+- S1A/S1B completion provenance is valid.
 
-## Authorization package boundary
-Exactly four files may be introduced by this authorization candidate:
-- `docs/121-implementation-authorization-s1c-candidate.md`
-- `work-orders/HCT-IMPL-AUTH-0006.md`
-- `work-orders/HCT-IMP-0006-S1C.md`
-- `.github/workflows/implementation-authorization-s1c-governance.yml`
+## Authorization candidate boundary
+PR #57 introduced exactly four governance files:
+- `docs/121-implementation-authorization-s1c-candidate.md`;
+- `work-orders/HCT-IMPL-AUTH-0006.md`;
+- `work-orders/HCT-IMP-0006-S1C.md`;
+- `.github/workflows/implementation-authorization-s1c-governance.yml`.
 
-No product/runtime/checkpoint/frozen-planning/dependency-lock/frontend mutation is permitted in the authorization PR.
+No product/runtime/checkpoint/frozen-planning/dependency-lock/frontend mutation was part of the authorization PR.
 
-## Proposed authorization
-If independently approved and merged, a separate checkpoint promotion may set:
-- `implementation_authorized=true`
-- `implementation_authorization_scope=["HCT-IMP-0006-S1C"]`
-- `implementation_authorization_ceiling="NON_TRADING_STAGE_1_MARKET_UNIVERSE_REGISTRY_ONLY"`
-- all production credentials/deployment/limited-live/live-trading flags remain false.
+## Independent approval
+Independent HIGH_ASSURANCE / HEDS Delta review:
+- reviewed base: `cbd0208e05cd875582902a692167230b7a0ac20c`;
+- reviewed head: `3b6accd0172eb469ee2ebaa95e6ad31f5e469196`;
+- verdict: `APPROVED`;
+- CRITICAL: `0`;
+- HIGH: `0`;
+- PR evidence comment: `5648895612`;
+- Issue evidence comment: `5648895716`.
+
+Exact-head governance:
+- workflow: `HCT-IMPL-AUTH-0006 S1C Authorization Governance`;
+- run: `34720442629`;
+- job/check: `implementation-authorization-s1c-governance / 103625202092`;
+- conclusion: `success`;
+- all substantive steps: `PASS`.
+
+Governance acceptance:
+- PR #57 comment: `5648917926`;
+- Issue #56 comment: `5648918643`.
+
+## Governed result
+PR #57 was merged with expected-head protection against the independently approved SHA.
+
+Authorization merge:
+`8a33b3743e2a9c899c7ddf8f5e293f1d11b3f2f3`
+
+Checkpoint promotion:
+`HCT-CP-0025 / IMPLEMENTATION_AUTHORIZED_S1C`
+
+Post-promotion authority:
+- `implementation_authorized=true`;
+- `implementation_authorization_scope=["HCT-IMP-0006-S1C"]`;
+- `implementation_authorization_ceiling="NON_TRADING_STAGE_1_MARKET_UNIVERSE_REGISTRY_ONLY"`;
+- `production_credentials_authorized=false`;
+- `production_deployment_authorized=false`;
+- `limited_live_authorized=false`;
+- `live_trading_authorized=false`.
+
+## Authorized implementation boundary
+Only the provider-neutral Market Universe Registry described by `work-orders/HCT-IMP-0006-S1C.md` may now be implemented. It consumes completed S1A/S1B reference/capability truth and produces immutable/versioned universe snapshots with fail-closed `ELIGIBLE / INELIGIBLE / UNKNOWN` semantics and deterministic reason codes/fingerprints.
 
 ## Negative-scope firewall
-The candidate must not authorize new network/provider endpoints, WebSocket, quota/backpressure runtime, realtime market ingest, liquidity/ranking filters, scanner candidate discovery, private/auth/credentials, trading commands, Risk/OMS/Execution, persistence, deployment or live trading.
-
-## Required gate
-The authorization workflow must be pull-request-only, checkout exact PR head, pin canonical base, assert CP0024 fail-closed state, verify R11 dependency/classification source markers, enforce exactly four governance files, validate Work Order/STOP/negative-scope markers and run `git diff --check`.
-
-## Independent review
-APPROVED requires exact base/head/main, governance-only diff, source/dependency order, bounded S1C scope, complete implementation Work Order, exact-head hosted gate and unresolved CRITICAL=0/HIGH=0.
+This authorization does not authorize new network/provider endpoints, WebSocket, quota/backpressure runtime, realtime market ingest, liquidity/ranking filters, Market Scanner candidate discovery, private/auth/credentials, trading commands, Risk/OMS/Execution, persistence, deployment, limited-live or live trading.
 
 ## STOP CONDITION
-Stop with the authorization PR OPEN and UNMERGED after exact-head hosted evidence and independent review. Do not promote CP0025 or begin S1C product code in this Work Order.
+This authorization Work Order is complete. Product execution must now follow `HCT-IMP-0006-S1C` under CP0025 and STOP with the implementation PR OPEN and UNMERGED after exact-head evidence and author-side preflight for a fresh independent HIGH_ASSURANCE review.
