@@ -1,15 +1,18 @@
-# HCT-IMP-0006-S1C — Market Universe Registry Foundation
+# HCT-IMP-0006-S1C - Market Universe Registry Foundation
 
-Status: `NOT_YET_AUTHORIZED`
+Status: `AUTHORIZED`
 Risk class: `HIGH_ASSURANCE`
-Proposed authorization checkpoint: `HCT-CP-0025 / IMPLEMENTATION_AUTHORIZED_S1C`
-Proposed ceiling: `NON_TRADING_STAGE_1_MARKET_UNIVERSE_REGISTRY_ONLY`
+Parent authorization increment: `HCT-IMPL-AUTH-0006 / COMPLETED_APPROVED`
+Planning baseline: `HCT-CP-0014 / PLANNING_FREEZE_APPROVED`
+Required pre-execution checkpoint: `HCT-CP-0025 / IMPLEMENTATION_AUTHORIZED_S1C`
+Authorization ceiling: `NON_TRADING_STAGE_1_MARKET_UNIVERSE_REGISTRY_ONLY`
+Implementation issue: `#58`
 
 ## Objective
 Implement the Stage-1 Market Universe Registry as the HCT-owned provider-neutral owner of dynamic eligible-contract truth, consuming only completed S1A/S1B exchange reference/capability facts and remaining non-trading.
 
 ## Preconditions
-Do not execute product-code mutation until a future canonical checkpoint exactly authorizes `HCT-IMP-0006-S1C`. Before mutation, synchronize safely and fail closed on any base/head/checkpoint drift.
+Do not execute product-code mutation unless the canonical checkpoint proves exactly `HCT-CP-0025 / IMPLEMENTATION_AUTHORIZED_S1C`, authorizes only `HCT-IMP-0006-S1C`, and all production credentials/deployment/limited-live/live-trading flags are false. Before mutation, synchronize safely and fail closed on any base/head/checkpoint drift.
 
 ## Frozen inputs
 - S0A typed contracts/identities/environment foundation;
