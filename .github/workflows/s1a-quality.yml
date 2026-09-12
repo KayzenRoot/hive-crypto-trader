@@ -1,0 +1,140 @@
+name: HCT-IMP-0004-S1A Implementation Governance
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "adr/HCT-ADR-0045-s1a-exchange-reference-foundation.md"
+      - "apps/backend/**"
+      - "packages/contracts/openapi.json"
+      - "apps/frontend/src/generated/contracts.ts"
+      - "scripts/scan_s1a_boundaries.py"
+      - "evidence/HCT-IMP-0004-S1A.md"
+      - ".github/workflows/s1a-quality.yml"
+
+permissions:
+  contents: read
+
+env:
+  AUTHORIZED_BASE_SHA: ad8037a2e662eb2100d7626870f31bc97d824fc6
+
+jobs:
+  s1a-quality:
+    name: s1a-quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact pull request head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Assert pull-request-only exact raw head and authorized base
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ github.event_name }}" = "pull_request"
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          test "${{ github.event.pull_request.base.sha }}" = "$AUTHORIZED_BASE_SHA"
+          test "$(git rev-parse origin/main)" = "$AUTHORIZED_BASE_SHA"
+          git cat-file -e "$AUTHORIZED_BASE_SHA^{commit}"
+          if sed -n '1,12p' .github/workflows/s1a-quality.yml | grep -Eq '^[[:space:]]*workflow_dispatch:'; then
+            echo 'S1A receipt must not expose a manual-dispatch success path.'
+            exit 1
+          fi
+
+      - name: Validate canonical CP0021 context lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq '"checkpoint_id": "HCT-CP-0021"' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"status": "IMPLEMENTATION_AUTHORIZED_S1A"' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"implementation_authorized": true' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"implementation_authorization_scope": [' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"HCT-IMP-0004-S1A"' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"implementation_authorization_ceiling": "NON_TRADING_STAGE_1_EXCHANGE_ABSTRACTION_CAPABILITY_CONTRACT_FOUNDATION_ONLY"' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"production_credentials_authorized": false' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"production_deployment_authorized": false' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"limited_live_authorized": false' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"live_trading_authorized": false' checkpoints/workstreams/planning/latest.json
+          grep -Fq 'HCT-CP-0021' docs/11-checkpoint.md
+
+      - name: Validate candidate changed-file boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only "$AUTHORIZED_BASE_SHA...HEAD")"
+          printf '%s\n' "$changed"
+          invalid="$(printf '%s\n' "$changed" | grep -Ev '^(adr/HCT-ADR-0045-s1a-exchange-reference-foundation\.md|apps/backend/.*|scripts/scan_s1a_boundaries\.py|evidence/HCT-IMP-0004-S1A\.md|\.github/workflows/s1a-quality\.yml|packages/contracts/openapi\.json|apps/frontend/src/generated/contracts\.ts)$' || true)"
+          if [ -n "$invalid" ]; then
+            echo 'S1A changed files leave the authorized implementation boundary:'
+            echo "$invalid"
+            exit 1
+          fi
+          if printf '%s\n' "$changed" | grep -Eq '^(checkpoints/|docs/|work-orders/|apps/backend/uv\.lock$)'; then
+            echo 'Frozen, checkpoint, Work Order or dependency-lock surface changed by S1A.'
+            exit 1
+          fi
+          frontend_invalid="$(printf '%s\n' "$changed" | grep -E '^apps/frontend/' | grep -Ev '^apps/frontend/src/generated/contracts\.ts$' || true)"
+          if [ -n "$frontend_invalid" ]; then
+            echo 'Frontend product surface changed by S1A.'
+            echo "$frontend_invalid"
+            exit 1
+          fi
+          test "$(git merge-base "$AUTHORIZED_BASE_SHA" HEAD)" = "$AUTHORIZED_BASE_SHA"
+          git diff --check "$AUTHORIZED_BASE_SHA...HEAD"
+
+      - name: Install locked backend dependencies
+        run: |
+          python -m pip install --disable-pip-version-check uv==0.12.13
+          uv sync --project apps/backend --locked --all-groups
+
+      - name: Validate canonical contracts, backend, and dependency audit
+        run: |
+          uv run --project apps/backend python scripts/generate_contracts.py --check
+          uv run --project apps/backend python scripts/validate_contract_parity.py
+          cd apps/backend
+          uv run pytest --cov=hct_backend --cov-report=term-missing
+          uv run ruff check src tests
+          uv run mypy src
+          cd ../..
+          uv build --project apps/backend --out-dir /tmp/hct-backend-dist
+          uv run --project apps/backend --with pip-audit==2.10.1 pip-audit --local
+
+      - name: Run S0A/S0B/S0C regressions and S1A boundary gates
+        env:
+          BASE_SHA: ${{ env.AUTHORIZED_BASE_SHA }}
+        run: |
+          uv run --project apps/backend python scripts/validate_s0a.py
+          uv run --project apps/backend python scripts/scan_s0a_secrets.py
+          uv run --project apps/backend python scripts/scan_s1a_boundaries.py
+          uv run --project apps/backend pytest \
+            apps/backend/tests/test_contracts.py \
+            apps/backend/tests/test_security.py \
+            apps/backend/tests/test_provenance.py \
+            apps/backend/tests/test_scan_s0b_boundaries.py \
+            apps/backend/tests/test_scan_s0c_boundaries.py
+
+      - name: Install and validate frontend regression surface
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.18.0"
+          cache: npm
+          cache-dependency-path: apps/frontend/package-lock.json
+
+      - name: Run frontend typecheck, tests, lint, changed-contract format and build
+        working-directory: apps/frontend
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run lint
+          npm exec -- prettier --check src/generated/contracts.ts
+          npm run build
+          npm audit --audit-level=high --omit=optional
+
+      - name: Publish S1A governance summary
+        run: |
+          echo 's1a-quality is a pull_request-only exact raw-head receipt.'
+          echo 'Bounded subject: provider-neutral exchange reference, capability and contract semantics.'
+          echo 'No concrete venue transport, credentials, persistence, deployment or live authority is authorized.'
