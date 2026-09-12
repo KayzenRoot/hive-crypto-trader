@@ -2,12 +2,12 @@
   "schema_version": "1.0",
   "project_code": "HCT",
   "workstream": "planning",
-  "checkpoint_id": "HCT-CP-0012",
-  "checkpoint_path": "checkpoints/history/HCT-CP-0012.json",
-  "status": "PRODUCT_DISCOVERY_ROUND_10_APPROVED",
-  "last_canonical_planning_merge_sha": "60d7ea2bd6df3d21067e99073237afe068b32ce0",
-  "completed_increment": "HCT-PLAN-0001-R10",
-  "next_necessary_action": "Continue HCT-PLAN-0001 with formal HCT-PLAN-0001-R11: integration review, dependency graph, V1/IMPORTANT/FUTURE classification reconciliation and cross-round contradiction audit across R01-R10. Verify that the complete planned system composes safely before the R12 planning-freeze candidate; do not authorize implementation or live trading.",
+  "checkpoint_id": "HCT-CP-0013",
+  "checkpoint_path": "checkpoints/history/HCT-CP-0013.json",
+  "status": "PRODUCT_DISCOVERY_ROUND_11_APPROVED",
+  "last_canonical_planning_merge_sha": "cf1d83874a34ac49e0a1417eba47a9410c29e765",
+  "completed_increment": "HCT-PLAN-0001-R11",
+  "next_necessary_action": "Continue HCT-PLAN-0001 with formal HCT-PLAN-0001-R12: Planning Freeze Candidate. Consolidate the nine canonical requirement inputs losslessly with objective traceability, harden Definition of Done and source hierarchy, perform the final planning contradiction/gap audit, and issue a freeze/no-freeze verdict without automatically authorizing implementation, deployment, credentials or live trading.",
   "functional_planning_started": true,
   "implementation_authorized": false
 }
