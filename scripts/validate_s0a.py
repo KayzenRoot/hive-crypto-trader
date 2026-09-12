@@ -1,4 +1,4 @@
-"""Read-only S0A boundary checks used locally and in CI."""
+"""Read-only S0A compatibility boundary checks used locally and in CI."""
 
 from __future__ import annotations
 
@@ -12,6 +12,11 @@ sys.path.insert(0, str(ROOT / "apps" / "backend" / "src"))
 from hct_backend.main import app
 
 SOURCE_ROOTS = (ROOT / "apps", ROOT / "packages", ROOT / "scripts")
+S0B_BOUNDARY_PATHS = {
+    ROOT / "apps" / "backend" / "src" / "hct_backend" / "security.py",
+    ROOT / "apps" / "backend" / "tests" / "test_security.py",
+    ROOT / "scripts" / "scan_s0b_boundaries.py",
+}
 FORBIDDEN_SOURCE_MARKERS = (
     "mexc",
     "websocket",
@@ -32,6 +37,7 @@ def candidate_files() -> list[Path]:
         for path in root.rglob("*")
         if path.is_file()
         and path.name != "validate_s0a.py"
+        and path not in S0B_BOUNDARY_PATHS
         and path.name not in {"uv.lock", "package-lock.json"}
         and not ignored.intersection(path.parts)
     ]
