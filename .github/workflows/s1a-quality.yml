@@ -65,7 +65,7 @@ jobs:
           set -euo pipefail
           changed="$(git diff --name-only "$AUTHORIZED_BASE_SHA...HEAD")"
           printf '%s\n' "$changed"
-          invalid="$(printf '%s\n' "$changed" | grep -Ev '^(adr/HCT-ADR-0045-s1a-exchange-reference-foundation\.md|apps/backend/|scripts/scan_s1a_boundaries\.py|evidence/HCT-IMP-0004-S1A\.md|\.github/workflows/s1a-quality\.yml|packages/contracts/openapi\.json|apps/frontend/src/generated/contracts\.ts)$' || true)"
+          invalid="$(printf '%s\n' "$changed" | grep -Ev '^(adr/HCT-ADR-0045-s1a-exchange-reference-foundation\.md|apps/backend/.*|scripts/scan_s1a_boundaries\.py|evidence/HCT-IMP-0004-S1A\.md|\.github/workflows/s1a-quality\.yml|packages/contracts/openapi\.json|apps/frontend/src/generated/contracts\.ts)$' || true)"
           if [ -n "$invalid" ]; then
             echo 'S1A changed files leave the authorized implementation boundary:'
             echo "$invalid"
