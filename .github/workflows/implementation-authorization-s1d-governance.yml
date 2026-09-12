@@ -1,0 +1,117 @@
+name: HCT-IMPL-AUTH-0007 S1D Authorization Governance
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/implementation-authorization-s1d-governance.yml'
+      - 'docs/124-implementation-authorization-s1d-candidate.md'
+      - 'work-orders/HCT-IMPL-AUTH-0007.md'
+      - 'work-orders/HCT-IMP-0007-S1D.md'
+
+permissions:
+  contents: read
+
+jobs:
+  implementation-authorization-s1d-governance:
+    runs-on: ubuntu-24.04
+    env:
+      AUTHORIZED_BASE_SHA: c9462c09523779921cc1cea48018d8d38d103275
+    steps:
+      - name: Checkout exact pull request head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Assert pull-request-only exact head and canonical base
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ github.event_name }}" = "pull_request"
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          test "${{ github.event.pull_request.base.sha }}" = "$AUTHORIZED_BASE_SHA"
+          test "$(git rev-parse origin/main)" = "$AUTHORIZED_BASE_SHA"
+          git cat-file -e "$AUTHORIZED_BASE_SHA^{commit}"
+          manual_event="workflow""_dispatch:"
+          if grep -Eq "^[[:space:]]*$manual_event" .github/workflows/implementation-authorization-s1d-governance.yml; then
+            echo 'Authorization receipt must not expose manual dispatch.'
+            exit 1
+          fi
+
+      - name: Validate CP0026 fail-closed authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq '"checkpoint_id": "HCT-CP-0026"' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"status": "S1C_IMPLEMENTATION_APPROVED_MERGED"' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"completed_increment": "HCT-IMP-0006-S1C"' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"implementation_authorized": false' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"implementation_authorization_scope": []' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"implementation_authorization_ceiling": "NONE_PENDING_NEXT_GOVERNED_AUTHORIZATION"' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"production_credentials_authorized": false' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"production_deployment_authorized": false' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"limited_live_authorized": false' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"live_trading_authorized": false' checkpoints/workstreams/planning/latest.json
+          grep -Fq 'HCT-CP-0026' docs/11-checkpoint.md
+          grep -Fq 'HCT-IMP-0006-S1C' docs/123-s1c-implementation-approval-and-checkpoint-promotion.md
+
+      - name: Prove R11 dependency and Module 29 ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'universe -> quota/WS governor -> market ingest/quality/Market-State/cache' docs/121-implementation-authorization-s1c-candidate.md
+          grep -Fq 'API Quota, WebSocket & Backpressure Governor' docs/14-product-module-map.md
+          grep -Fq 'exchange request/subscription budgets, priority scheduling, retries/circuits and deterministic load shedding' docs/14-product-module-map.md
+          grep -Fq 'It does not own market prices or account truth.' docs/14-product-module-map.md
+          grep -Fq 'Assign a local generation identity to each WebSocket connection/reconnection' docs/54-r05-realtime-requirements-addendum.md
+          grep -Fq 'Use bounded queues by priority class.' docs/54-r05-realtime-requirements-addendum.md
+          grep -Fq 'Implement deterministic, observable load shedding.' docs/54-r05-realtime-requirements-addendum.md
+
+      - name: Validate exact governance-only four-file diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only "$AUTHORIZED_BASE_SHA...HEAD")"
+          printf '%s\n' "$changed"
+          expected="$(printf '%s\n' \
+            '.github/workflows/implementation-authorization-s1d-governance.yml' \
+            'docs/124-implementation-authorization-s1d-candidate.md' \
+            'work-orders/HCT-IMPL-AUTH-0007.md' \
+            'work-orders/HCT-IMP-0007-S1D.md' | sort)"
+          actual="$(printf '%s\n' "$changed" | sed '/^$/d' | sort)"
+          test "$actual" = "$expected"
+          test "$(git merge-base "$AUTHORIZED_BASE_SHA" HEAD)" = "$AUTHORIZED_BASE_SHA"
+          git diff --check "$AUTHORIZED_BASE_SHA...HEAD"
+
+      - name: Validate candidate and Work Order invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate=docs/124-implementation-authorization-s1d-candidate.md
+          auth=work-orders/HCT-IMPL-AUTH-0007.md
+          impl=work-orders/HCT-IMP-0007-S1D.md
+          grep -Fq 'HCT-CP-0026 / S1C_IMPLEMENTATION_APPROVED_MERGED' "$candidate"
+          grep -Fq 'HCT-IMP-0007-S1D' "$candidate"
+          grep -Fq 'NON_TRADING_STAGE_1_QUOTA_WS_BACKPRESSURE_GOVERNOR_FOUNDATION_ONLY' "$candidate"
+          grep -Fq 'actual WebSocket/socket/network connection' "$candidate"
+          grep -Fq 'market prices or account truth' "$candidate"
+          grep -Fq 'Unknown or missing quota/capability evidence fails closed' "$candidate"
+          grep -Fq 'STOP CONDITION' "$auth"
+          grep -Fq 'STOP CONDITION' "$impl"
+          grep -Fq 'Retry budget / circuit' "$impl"
+          grep -Fq 'Session generation' "$impl"
+          grep -Fq 'Backpressure / queue state' "$impl"
+          grep -Fq 'Hard negative scope' "$impl"
+          grep -Fq 'Static boundary scanner' "$impl"
+          grep -Fq 'Independent review' "$impl"
+          grep -Fq 'actual WebSocket/socket/network connection' "$candidate"
+          grep -Fq 'production_credentials_authorized=false' "$candidate"
+          grep -Fq 'live_trading_authorized=false' "$candidate"
+
+      - name: Publish authorization governance summary
+        shell: bash
+        run: |
+          echo 'S1D authorization governance: PASS'
+          echo 'Candidate: provider-neutral quota/session/backpressure foundation only.'
+          echo 'No actual network/WebSocket subscription, realtime ingest, credentials, private exchange access, trading, persistence, deployment or live authority is granted.'
