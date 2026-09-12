@@ -1,15 +1,19 @@
 # Work Order — HCT-IMP-0001-S0A
 
-Status: `PENDING_AUTHORIZATION`
+Status: `AUTHORIZED`
 Risk: `HIGH_ASSURANCE`
-Authorization dependency: `HCT-IMPL-AUTH-0001`
+Authorization dependency: `HCT-IMPL-AUTH-0001 / APPROVED`
+Authorization checkpoint: `HCT-CP-0015 / IMPLEMENTATION_AUTHORIZED_S0A`
 Planning baseline: `HCT-CP-0014 / PLANNING_FREEZE_APPROVED`
+Authorization ceiling: `NON_TRADING_STAGE_0_FOUNDATION_ONLY`
 
 ## OBJECTIVE
 Implement the first bounded Stage-0 foundation slice after explicit authorization: runtime/repository skeleton plus canonical contract primitives, with no exchange, credentials, money-state or production/live capability.
 
 ## CONTEXT
 R11 Stage 0 precedes all exchange/realtime/intelligence/risk/execution stages. This slice intentionally establishes only the non-secret, non-trading substrate required by later work.
+
+`HCT-IMPL-AUTH-0001` received independent HIGH_ASSURANCE `APPROVED` for exact candidate head `89f8cfeb312debf1b5722c2b187c296772550fdc`, exact-head governance run `34665231471` succeeded, PR #32 was governed-merged as `e65cbeac0d74380c9a0619ed15e8dbc4d128301c`, and `HCT-CP-0015` promotes this exact Work Order as the only authorized implementation scope.
 
 ## SCOPE
 1. Establish independently buildable frontend and backend application roots inside the canonical monorepo.
@@ -38,6 +42,8 @@ R11 Stage 0 precedes all exchange/realtime/intelligence/risk/execution stages. T
 ## FILES / SOURCES TO READ
 At minimum:
 - `docs/11-checkpoint.md`;
+- `checkpoints/history/HCT-CP-0015.json`;
+- `checkpoints/workstreams/planning/latest.json`;
 - `docs/00-source-hierarchy.md`;
 - `docs/09-definition-of-done.md`;
 - `docs/04-architecture.md`;
@@ -48,10 +54,11 @@ At minimum:
 - `docs/100-r12-requirements-traceability-and-no-loss-proof.md`;
 - `docs/101-r12-freeze-governance-change-control-and-deferred-decisions.md`;
 - `docs/106-implementation-authorization-candidate.md`;
+- `docs/107-implementation-authorization-approval-and-checkpoint-promotion.md`;
 - this Work Order.
 
 ## REQUIREMENTS
-- code begins only if canonical checkpoint explicitly authorizes this exact Work Order;
+- code begins only when the executor validates the canonical checkpoint explicitly authorizes this exact Work Order;
 - every cross-domain identity is typed/stable and environment-aware where stateful;
 - `LIVE`, `PAPER`, `SHADOW`, `REPLAY` are distinct canonical environment values and tests prevent accidental interchange;
 - frontend is non-authoritative and contains no secrets or hard trading logic;
