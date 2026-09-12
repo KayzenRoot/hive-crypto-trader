@@ -253,6 +253,14 @@ def test_entries_and_snapshots_are_immutable_and_identity_is_dedicated() -> None
             item,
             snapshot_id=stable(IdentityKind.REFERENCE_SNAPSHOT, "reference-identity"),
         )
+    with pytest.raises(UniverseInputError):
+        replace(
+            item.entries[0],
+            reason_codes=(
+                UniverseReasonCode.ELIGIBLE_REFERENCE_PROVEN,
+                UniverseReasonCode.ELIGIBLE_REFERENCE_PROVEN,
+            ),
+        )
     with pytest.raises(FrozenInstanceError):
         item.entries = ()  # type: ignore[misc]
     with pytest.raises(FrozenInstanceError):
