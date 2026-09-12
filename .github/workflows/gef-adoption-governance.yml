@@ -1,0 +1,108 @@
+name: UADS GEF V1 Adoption Governance
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "docs/gef/**"
+      - ".github/workflows/gef-adoption-governance.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GEF_BASELINE_SHA: 29dc6636360953941a7e4fb41a0876c5bc46dcd6
+
+jobs:
+  gef-adoption-governance:
+    name: gef-adoption-governance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact pull request head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Assert exact raw head and adoption base
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          test "${{ github.event.pull_request.base.sha }}" = "$GEF_BASELINE_SHA"
+          test "$(git merge-base "$GEF_BASELINE_SHA" HEAD)" = "$GEF_BASELINE_SHA"
+
+      - name: Enforce governance-only adoption diff
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only "$GEF_BASELINE_SHA...HEAD")"
+          printf '%s\n' "$changed"
+          invalid="$(printf '%s\n' "$changed" | grep -Ev '^(docs/gef/|\.github/workflows/gef-adoption-governance\.yml$)' || true)"
+          if [ -n "$invalid" ]; then
+            echo "GEF adoption PR changed non-governance files:"
+            echo "$invalid"
+            exit 1
+          fi
+          git diff --check "$GEF_BASELINE_SHA...HEAD"
+
+      - name: Validate required GEF artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            docs/gef/GEF-ADOPTION.md
+            docs/gef/GEF-POLICY.md
+            docs/gef/GEF-EXECUTION-PROTOCOL.md
+            docs/gef/GEF-REVIEW-PROTOCOL.md
+            docs/gef/GEF-EVIDENCE-SPEC.md
+            docs/gef/GEF-PROJECT-PROFILE.json
+            docs/gef/GEF-CURRENT.json
+            docs/gef/GEF-BASELINE.json
+            docs/gef/GEF-PROOF-MAP.json
+            docs/gef/GEF-TEST-IMPACT.json
+            docs/gef/GEF-KNOWLEDGE-CACHE.json
+          )
+          for f in "${required[@]}"; do
+            test -s "$f"
+          done
+
+      - name: Validate JSON manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          for path in Path("docs/gef").glob("*.json"):
+              with path.open("r", encoding="utf-8") as fh:
+                  json.load(fh)
+              print(f"valid json: {path}")
+          PY
+
+      - name: Validate compatibility and shadow assurance
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'PARTIALLY_GOVERNED' docs/gef/GEF-ADOPTION.md
+          grep -Fq 'READY_WITH_GAPS' docs/gef/GEF-ADOPTION.md
+          grep -Fq 'Shadow Assurance: `ON`' docs/gef/GEF-ADOPTION.md
+          grep -Fq 'PDF-only' docs/gef/GEF-ADOPTION.md
+          grep -Fq '"shadowAssurance": "ON"' docs/gef/GEF-CURRENT.json
+          grep -Fq '"carryForwardAuthoritative": false' docs/gef/GEF-PROOF-MAP.json
+
+      - name: Verify active S0C work was not mixed into adoption
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! git diff --name-only "$GEF_BASELINE_SHA...HEAD" | grep -Eq '^(apps/|packages/|scripts/|adr/|evidence/|checkpoints/|work-orders/)'
+
+      - name: Governance summary
+        run: |
+          echo "GEF V1 adoption package is governance-only and exact-head validated."
+          echo "Shadow Assurance is ON; existing mandatory HCT gates remain authoritative."
+          echo "Active functional PR #42 is intentionally untouched."
