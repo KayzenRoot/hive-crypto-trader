@@ -1,0 +1,37 @@
+[project]
+name = "hct-backend"
+version = "0.1.0"
+description = "Hive Crypto Trader S0A non-trading backend foundation"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "fastapi==0.141.1",
+  "pydantic==2.13.5",
+  "uvicorn==0.52.4",
+]
+
+[dependency-groups]
+dev = [
+  "httpx==0.28.1",
+  "mypy==2.3.1",
+  "pytest==9.1.1",
+  "pytest-cov==7.1.0",
+  "ruff==0.16.7",
+]
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers"
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+mypy_path = "src"
+files = ["src"]

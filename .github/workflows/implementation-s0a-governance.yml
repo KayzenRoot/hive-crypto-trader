@@ -1,0 +1,65 @@
+name: HCT-IMP-0001-S0A Governance
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "adr/HCT-ADR-0042-s0a-toolchain.md"
+      - "apps/**"
+      - "packages/**"
+      - "scripts/**"
+      - "evidence/**"
+      - "README.md"
+      - ".github/workflows/implementation-s0a-governance.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  s0a-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: python -m pip install --disable-pip-version-check uv==0.12.13
+
+      - name: Validate backend lock and checks
+        run: |
+          uv sync --project apps/backend --locked --all-groups
+          python scripts/generate_contracts.py --check
+          cd apps/backend
+          uv run pytest --cov=hct_backend --cov-report=term-missing
+          uv run ruff check src tests
+          uv run mypy src
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.18.0"
+          cache: npm
+          cache-dependency-path: apps/frontend/package-lock.json
+
+      - name: Validate frontend lock and checks
+        working-directory: apps/frontend
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run lint
+          npm run format:check
+          npm run build
+          npm audit --audit-level=high --omit=optional
+
+      - name: Validate S0A boundary
+        run: python scripts/validate_s0a.py
+
+      - name: Validate patch formatting
+        run: git diff --check

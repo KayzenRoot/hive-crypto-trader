@@ -1,0 +1,144 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Hive Crypto Trader S0A Safe Runtime Contract",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "Safe application liveness",
+            "content": {
+              "application/json": {"schema": {"$ref": "#/components/schemas/HealthResponse"}}
+            }
+          }
+        }
+      }
+    },
+    "/ready": {
+      "get": {
+        "operationId": "readiness",
+        "responses": {
+          "200": {
+            "description": "Dependencies implemented by S0A are ready",
+            "content": {
+              "application/json": {"schema": {"$ref": "#/components/schemas/ReadinessResponse"}}
+            }
+          }
+        }
+      }
+    },
+    "/version": {
+      "get": {
+        "operationId": "version",
+        "responses": {
+          "200": {
+            "description": "Safe release and contract metadata",
+            "content": {
+              "application/json": {"schema": {"$ref": "#/components/schemas/VersionResponse"}}
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Environment": {
+        "type": "string",
+        "enum": ["LIVE", "PAPER", "SHADOW", "REPLAY"]
+      },
+      "IdentityKind": {
+        "type": "string",
+        "enum": ["SERVICE", "RELEASE", "CONFIG", "AUDIT", "EVIDENCE"]
+      },
+      "Status": {
+        "type": "string",
+        "enum": ["ok", "ready"]
+      },
+      "StableId": {
+        "type": "object",
+        "required": ["kind", "value"],
+        "properties": {
+          "kind": {"$ref": "#/components/schemas/IdentityKind"},
+          "value": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"}
+        },
+        "additionalProperties": false
+      },
+      "EnvironmentScopedId": {
+        "type": "object",
+        "required": ["kind", "environment", "value"],
+        "properties": {
+          "kind": {"$ref": "#/components/schemas/IdentityKind"},
+          "environment": {"$ref": "#/components/schemas/Environment"},
+          "value": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"}
+        },
+        "additionalProperties": false
+      },
+      "HealthResponse": {
+        "type": "object",
+        "required": ["service", "status"],
+        "properties": {
+          "service": {"type": "string", "const": "hct-backend"},
+          "status": {"type": "string", "const": "ok"}
+        },
+        "additionalProperties": false
+      },
+      "ReadinessResponse": {
+        "type": "object",
+        "required": ["service", "status", "checks"],
+        "properties": {
+          "service": {"type": "string", "const": "hct-backend"},
+          "status": {"type": "string", "const": "ready"},
+          "checks": {"type": "object", "additionalProperties": {"type": "string", "const": "ready"}}
+        },
+        "additionalProperties": false
+      },
+      "VersionResponse": {
+        "type": "object",
+        "required": ["service", "release", "contract_sha256"],
+        "properties": {
+          "service": {"type": "string", "const": "hct-backend"},
+          "release": {"$ref": "#/components/schemas/StableId"},
+          "contract_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        },
+        "additionalProperties": false
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {"type": "string", "enum": ["INVALID_REQUEST", "NOT_READY", "INTERNAL"]},
+          "message": {"type": "string", "maxLength": 256},
+          "request_id": {"type": ["string", "null"], "maxLength": 64}
+        },
+        "additionalProperties": false
+      },
+      "AuditEnvelope": {
+        "type": "object",
+        "required": ["event_id", "environment", "event_type", "payload_hash"],
+        "properties": {
+          "event_id": {"$ref": "#/components/schemas/EnvironmentScopedId"},
+          "environment": {"$ref": "#/components/schemas/Environment"},
+          "event_type": {"type": "string", "pattern": "^[A-Z][A-Z0-9_.-]{1,63}$"},
+          "payload_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        },
+        "additionalProperties": false
+      },
+      "EvidenceEnvelope": {
+        "type": "object",
+        "required": ["evidence_id", "environment", "evidence_type", "payload_hash"],
+        "properties": {
+          "evidence_id": {"$ref": "#/components/schemas/EnvironmentScopedId"},
+          "environment": {"$ref": "#/components/schemas/Environment"},
+          "evidence_type": {"type": "string", "pattern": "^[A-Z][A-Z0-9_.-]{1,63}$"},
+          "payload_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}
