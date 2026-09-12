@@ -6,7 +6,6 @@ on:
     paths:
       - "docs/gef/**"
       - ".github/workflows/gef-adoption-governance.yml"
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -23,19 +22,18 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Assert exact raw head and adoption base
-        if: github.event_name == 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
+          test "${{ github.event_name }}" = "pull_request"
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
           test "${{ github.event.pull_request.base.sha }}" = "$GEF_BASELINE_SHA"
           test "$(git merge-base "$GEF_BASELINE_SHA" HEAD)" = "$GEF_BASELINE_SHA"
 
       - name: Enforce governance-only adoption diff
-        if: github.event_name == 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
@@ -104,5 +102,6 @@ jobs:
       - name: Governance summary
         run: |
           echo "GEF V1 adoption package is governance-only and exact-head validated."
+          echo "This workflow is pull_request-only; manual dispatch cannot produce this governance receipt."
           echo "Shadow Assurance is ON; existing mandatory HCT gates remain authoritative."
           echo "Active functional PR #42 is intentionally untouched."
