@@ -1,0 +1,129 @@
+name: HCT-IMP-0003-S0C Implementation Governance
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "adr/HCT-ADR-0044-s0c-audit-evidence-config-provenance.md"
+      - "apps/backend/**"
+      - "scripts/**"
+      - "evidence/HCT-IMP-0003-S0C.md"
+      - ".github/workflows/implementation-s0c-governance.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  AUTHORIZED_BASE_SHA: 29dc6636360953941a7e4fb41a0876c5bc46dcd6
+
+jobs:
+  s0c-quality:
+    name: s0c-quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact pull request head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Assert exact raw pull request head and authorized base
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          test "${{ github.event.pull_request.base.sha }}" = "$AUTHORIZED_BASE_SHA"
+
+      - name: Validate canonical CP0019 context lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "$AUTHORIZED_BASE_SHA^{commit}"
+          test "$(git rev-parse "$AUTHORIZED_BASE_SHA")" = "$AUTHORIZED_BASE_SHA"
+          grep -Fq '"checkpoint_id": "HCT-CP-0019"' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"status": "IMPLEMENTATION_AUTHORIZED_S0C"' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"implementation_authorized": true' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"HCT-IMP-0003-S0C"' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"implementation_authorization_ceiling": "NON_TRADING_STAGE_0_AUDIT_EVIDENCE_CONFIG_VERSION_FOUNDATION_ONLY"' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"production_credentials_authorized": false' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"production_deployment_authorized": false' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"limited_live_authorized": false' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"live_trading_authorized": false' checkpoints/workstreams/planning/latest.json
+          grep -Fq 'HCT-CP-0019' docs/11-checkpoint.md
+
+      - name: Validate candidate changed-file boundary
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only "$AUTHORIZED_BASE_SHA...HEAD")"
+          printf '%s\n' "$changed"
+          invalid="$(printf '%s\n' "$changed" | grep -Ev '^(adr/HCT-ADR-0044-s0c-audit-evidence-config-provenance\.md|apps/backend/|scripts/|evidence/HCT-IMP-0003-S0C\.md|\.github/workflows/implementation-s0c-governance\.yml)' || true)"
+          if [ -n "$invalid" ]; then
+            echo 'S0C changed files leave the authorized implementation boundary:'
+            echo "$invalid"
+            exit 1
+          fi
+          if printf '%s\n' "$changed" | grep -Eq '^(checkpoints/|docs/|work-orders/|apps/frontend/|packages/contracts/|apps/backend/uv\.lock$)'; then
+            echo 'Frozen, frontend, public-contract, or dependency-lock surface changed by S0C'
+            exit 1
+          fi
+          test "$(git merge-base "$AUTHORIZED_BASE_SHA" HEAD)" = "$AUTHORIZED_BASE_SHA"
+          git diff --check "$AUTHORIZED_BASE_SHA...HEAD"
+
+      - name: Set up Python and locked backend environment
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv and locked dependencies
+        run: |
+          python -m pip install --disable-pip-version-check uv==0.12.13
+          uv sync --project apps/backend --locked --all-groups
+
+      - name: Validate contracts, backend, and dependency audit
+        run: |
+          uv run --project apps/backend python scripts/generate_contracts.py --check
+          uv run --project apps/backend python scripts/validate_contract_parity.py
+          cd apps/backend
+          uv run pytest --cov=hct_backend --cov-report=term-missing
+          uv run ruff check src tests
+          uv run mypy src
+          cd ../..
+          uv build --project apps/backend --out-dir /tmp/hct-backend-dist
+          uv run --project apps/backend --with pip-audit==2.10.1 pip-audit --local
+
+      - name: Run S0A and S0B regressions and S0C boundary gates
+        env:
+          BASE_SHA: ${{ env.AUTHORIZED_BASE_SHA }}
+        run: |
+          uv run --project apps/backend python scripts/validate_s0a.py
+          uv run --project apps/backend python scripts/scan_s0a_secrets.py
+          uv run --project apps/backend pytest apps/backend/tests/test_contracts.py apps/backend/tests/test_security.py apps/backend/tests/test_scan_s0b_boundaries.py
+          uv run --project apps/backend python scripts/scan_s0c_boundaries.py
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.18.0"
+          cache: npm
+          cache-dependency-path: apps/frontend/package-lock.json
+
+      - name: Validate frontend regression surface
+        working-directory: apps/frontend
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run lint
+          npm run format:check
+          npm run build
+          npm audit --audit-level=high --omit=optional
+
+      - name: Publish governance summary
+        run: |
+          echo 'S0C implementation gates passed on the exact raw head.'
+          echo 'Bounded subject: audit/evidence integrity plus configuration/release/policy version semantics.'
+          echo 'No persistence, external provider, exchange, deployment, limited-live or live-trading authority is authorized.'
