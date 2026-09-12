@@ -35,7 +35,7 @@ jobs:
           test "$actual" = "${{ github.event.pull_request.head.sha }}"
           test "${{ github.event.pull_request.base.sha }}" = "$AUTHORIZED_BASE_SHA"
           git cat-file -e "$AUTHORIZED_BASE_SHA^{commit}"
-          if grep -Fq 'workflow_dispatch' .github/workflows/implementation-authorization-s1a-governance.yml; then
+          if sed -n '1,15p' .github/workflows/implementation-authorization-s1a-governance.yml | grep -Eq '^[[:space:]]*workflow_dispatch:'; then
             echo 'Authorization receipt must not expose a manual-dispatch success path.'
             exit 1
           fi
