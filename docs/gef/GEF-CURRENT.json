@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "GEF_CURRENT_V1",
+  "gefVersion": "UADS-GEF-V1",
+  "migrationState": "ADOPTION_PR_PENDING_REVIEW",
+  "baselineHead": "29dc6636360953941a7e4fb41a0876c5bc46dcd6",
+  "adoptionIssue": 43,
+  "adoptionBranch": "governance/UADS-GEF-V1-adoption",
+  "currentPromptMode": "GEF_V1",
+  "currentReviewMode": "HEDS_DELTA",
+  "shadowAssurance": "ON",
+  "lastIndependentlyApprovedImplementation": {
+    "workOrder": "HCT-IMP-0002-S0B",
+    "head": "38d697419e9ad1cabda293b6b9c090314e94f862",
+    "checkpoint": "HCT-CP-0018"
+  },
+  "activeWork": {
+    "workOrder": "HCT-IMP-0003-S0C",
+    "issue": 41,
+    "pullRequest": 42,
+    "baseSha": "29dc6636360953941a7e4fb41a0876c5bc46dcd6",
+    "headSha": "f41262a53a59295fecbe3506e774a9b8592ad0cb",
+    "status": "OPEN_UNMERGED",
+    "authorEvidence": {
+      "s0cQualityRun": 34699046327,
+      "s0aRegressionRun": 34699046325
+    },
+    "independentReview": "PENDING"
+  },
+  "openFindings": [
+    {
+      "id": "GEF-GAP-001",
+      "severity": "MEDIUM",
+      "subject": "Historical slice workflows may trigger on later backend changes and fail stale base assertions",
+      "action": "Address in separate CI-governance increment; do not modify active PR #42 from adoption PR"
+    },
+    {
+      "id": "GEF-GAP-002",
+      "severity": "LOW",
+      "subject": "Historical token/search/files-opened/executor-seconds telemetry unavailable",
+      "action": "Start collection from next GEF Work Order"
+    }
+  ],
+  "caches": {
+    "failureFingerprintCache": "docs/gef/GEF-KNOWLEDGE-CACHE.json",
+    "negativeCapabilityCache": "docs/gef/GEF-KNOWLEDGE-CACHE.json",
+    "architectureQuestionCache": "docs/gef/GEF-KNOWLEDGE-CACHE.json"
+  },
+  "nextAction": "Independently review and merge the governance-only GEF adoption PR; keep PR #42 on its existing HCT review path."
+}
