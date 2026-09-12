@@ -1,5 +1,8 @@
 import {
-  ENVIRONMENTS,
+  parseEnvironment as parseCanonicalEnvironment,
+  parseHealthResponse,
+  parseReadinessResponse,
+  parseVersionResponse,
   type Environment,
   type HealthResponse,
   type ReadinessResponse,
@@ -13,13 +16,11 @@ export interface SafeBackendStatus {
 }
 
 export function parseEnvironment(value: unknown): Environment {
-  if (
-    typeof value !== "string" ||
-    !ENVIRONMENTS.includes(value as Environment)
-  ) {
+  try {
+    return parseCanonicalEnvironment(value);
+  } catch {
     throw new Error("unknown environment");
   }
-  return value as Environment;
 }
 
 export async function fetchSafeBackendStatus(): Promise<SafeBackendStatus> {
@@ -29,8 +30,8 @@ export async function fetchSafeBackendStatus(): Promise<SafeBackendStatus> {
     throw new Error("backend status unavailable");
   }
   return {
-    health: (await healthResponse.json()) as HealthResponse,
-    readiness: (await readinessResponse.json()) as ReadinessResponse,
-    version: (await versionResponse.json()) as VersionResponse,
+    health: parseHealthResponse(await healthResponse.json()),
+    readiness: parseReadinessResponse(await readinessResponse.json()),
+    version: parseVersionResponse(await versionResponse.json()),
   };
 }

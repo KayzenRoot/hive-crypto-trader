@@ -100,3 +100,19 @@ def test_safe_endpoints_are_deterministic() -> None:
     assert version.status_code == 200
     assert version.json()["service"] == "hct-backend"
     assert len(version.json()["contract_sha256"]) == 64
+
+
+def test_runtime_routes_are_exactly_the_safe_allowlist() -> None:
+    routes = {
+        (route.path, tuple(sorted(route.methods or set())))
+        for route in app.routes
+        if hasattr(route, "methods")
+    }
+    assert routes == {
+        ("/health", ("GET",)),
+        ("/ready", ("GET",)),
+        ("/version", ("GET",)),
+    }
+    client = TestClient(app)
+    for path in ("/openapi.json", "/docs", "/redoc"):
+        assert client.get(path).status_code == 404

@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
-from generate_contracts import ROOT, load_source, generate
+from generate_contracts import ROOT, generate, load_source
 
+sys.path.insert(0, str(ROOT / "apps" / "backend" / "src"))
+from hct_backend.main import app
 
 SOURCE_ROOTS = (ROOT / "apps", ROOT / "packages", ROOT / "scripts")
 FORBIDDEN_SOURCE_MARKERS = (
@@ -21,13 +24,6 @@ FORBIDDEN_SOURCE_MARKERS = (
     "balances",
     "leverage",
 )
-SECRET_PATTERNS = (
-    re.compile(r"-----BEGIN [A-Z ]+ PRIVATE KEY-----"),
-    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
-    re.compile(r"\bsk-[A-Za-z0-9]{20,}\b"),
-)
-
-
 def candidate_files() -> list[Path]:
     ignored = {"node_modules", ".venv", ".tooling", "dist", "__pycache__", ".mypy_cache", ".pytest_cache"}
     return [
@@ -64,15 +60,24 @@ def main() -> int:
     if sorted(document["paths"]) != ["/health", "/ready", "/version"]:
         failures.append("unsafe endpoint added to canonical contract")
 
+    runtime_routes = {
+        (route.path, tuple(sorted(route.methods or set())))
+        for route in app.routes
+        if hasattr(route, "methods")
+    }
+    if runtime_routes != {
+        ("/health", ("GET",)),
+        ("/ready", ("GET",)),
+        ("/version", ("GET",)),
+    }:
+        failures.append(f"runtime route allowlist drift: {sorted(runtime_routes)!r}")
+
     for path in candidate_files():
         text = path.read_text(encoding="utf-8", errors="replace")
         lowered = text.lower()
         for marker in FORBIDDEN_SOURCE_MARKERS:
             if marker in lowered:
                 failures.append(f"unauthorized marker {marker!r}: {path.relative_to(ROOT)}")
-        for pattern in SECRET_PATTERNS:
-            if pattern.search(text):
-                failures.append(f"secret pattern {pattern.pattern!r}: {path.relative_to(ROOT)}")
         if re.search(r"https?://", text, re.IGNORECASE):
             failures.append(f"external URL in implementation source: {path.relative_to(ROOT)}")
 

@@ -35,12 +35,14 @@ changes. Lockfiles remain the install authority.
 
 ## Contract and drift strategy
 
-`packages/contracts/openapi.yaml` is the only normative API/domain contract
+`packages/contracts/openapi.json` is the only normative API/domain contract
 source for S0A. `scripts/generate_contracts.py` parses it with standard-library
-code and emits deterministic, sorted Python and TypeScript representations.
-The generator is intentionally narrow and has no network or exchange behavior.
-The contract test regenerates into a temporary directory and compares byte-for-
-byte output with committed generated artifacts.
+code and emits deterministic Python and TypeScript projections, including the
+canonical schema table and fail-closed TypeScript runtime parsers. The
+generator is intentionally narrow and has no network or exchange behavior.
+`scripts/validate_contract_parity.py` compares canonical schema fingerprints
+with the Pydantic runtime models, while `generate_contracts.py --check`
+provides byte-for-byte reproducibility against the committed projections.
 
 ## Boundary and safety rationale
 

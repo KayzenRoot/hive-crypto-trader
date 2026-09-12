@@ -40,7 +40,12 @@ performed only in a fresh isolated clone.
   cross-environment rejection, error/version/audit/evidence envelopes.
 - `packages/contracts/openapi.json`: canonical OpenAPI 3.1 S0A contract source.
 - `scripts/generate_contracts.py`: deterministic Python/TypeScript contract
-  projection generator.
+  projection generator with canonical schema table and frontend runtime
+  parsers.
+- `scripts/validate_contract_parity.py`: canonical OpenAPI/Pydantic parity
+  gate for all ten runtime schema surfaces.
+- `scripts/scan_s0a_secrets.py`: changed-text-file secret scan independent of
+  the implementation capability boundary scan.
 - `apps/frontend/`: independently buildable React/TypeScript/Vite read-only
   status shell consuming only `/health`, `/ready` and `/version`.
 - `.github/workflows/implementation-s0a-governance.yml`: locked CI quality,
@@ -57,7 +62,7 @@ money-state, production deployment or live-capable control was added.
 |---|---|
 | Contract generation `python scripts/generate_contracts.py --check` | PASS |
 | Backend dependency lock `uv lock --check` / `uv sync --locked --all-groups` | PASS |
-| Backend unit/endpoint/contract tests | PASS — 6 passed; 90% total coverage |
+| Backend unit/endpoint/contract tests | PASS — correction result recorded in final author-side evidence |
 | Independent backend package build `uv build` | PASS |
 | Backend Ruff | PASS |
 | Backend mypy strict | PASS |
@@ -67,7 +72,9 @@ money-state, production deployment or live-capable control was added.
 | Frontend ESLint | PASS |
 | Frontend Prettier check | PASS |
 | Independent frontend Vite build | PASS |
-| Static boundary/secret scan `python scripts/validate_s0a.py` | PASS |
+| Canonical/runtime contract parity | PASS — 10 schema surfaces |
+| Runtime route allowlist and boundary scan | PASS — `/health`, `/ready`, `/version` only; docs/OpenAPI disabled |
+| Changed-text-file secret scan | PASS — correction result recorded in final author-side evidence |
 | Frontend dependency audit `npm audit --audit-level=high --omit=optional` | PASS — 0 vulnerabilities |
 | Backend dependency audit `pip-audit 2.10.1` against locked environment | PASS — no known vulnerabilities |
 | `git diff --check` | PASS (final staged candidate) |
@@ -89,9 +96,11 @@ the exit status and are recorded rather than hidden.
 
 ## Candidate identity and authorization firewall
 
-- Exact implementation candidate head validated by CI: `93241fa9c15e5bb470ca80328f9ee8cd80bd2ac7`
-- Evidence finalization commit: `27ed4364edc0b8c630f67696414840f4ee08a88b`
-- Exact-head CI run/check: `34667495315 / s0a-quality = success`
+The prior candidate SHA and run evidence are historical and are not evidence
+for this correction. The correction final SHA, raw-head CI run/check, and
+post-push results are intentionally published only in the author-side PR #34
+and Issue #33 comments, so this tracked file does not self-reference its final
+commit SHA.
 - Independent HIGH_ASSURANCE review: required before merge.
 - Credentials, production deployment, limited-live and real-money trading:
   explicitly unauthorized.

@@ -64,7 +64,7 @@
         "required": ["kind", "value"],
         "properties": {
           "kind": {"$ref": "#/components/schemas/IdentityKind"},
-          "value": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"}
+          "value": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"}
         },
         "additionalProperties": false
       },
@@ -74,7 +74,7 @@
         "properties": {
           "kind": {"$ref": "#/components/schemas/IdentityKind"},
           "environment": {"$ref": "#/components/schemas/Environment"},
-          "value": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"}
+          "value": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"}
         },
         "additionalProperties": false
       },
@@ -112,19 +112,20 @@
         "required": ["code", "message"],
         "properties": {
           "code": {"type": "string", "enum": ["INVALID_REQUEST", "NOT_READY", "INTERNAL"]},
-          "message": {"type": "string", "maxLength": 256},
-          "request_id": {"type": ["string", "null"], "maxLength": 64}
+          "message": {"type": "string", "minLength": 1, "maxLength": 256},
+          "request_id": {"anyOf": [{"type": "string", "maxLength": 64}, {"type": "null"}]}
         },
         "additionalProperties": false
       },
       "AuditEnvelope": {
         "type": "object",
-        "required": ["event_id", "environment", "event_type", "payload_hash"],
+        "required": ["event_id", "environment", "event_type", "payload_hash", "occurred_at"],
         "properties": {
           "event_id": {"$ref": "#/components/schemas/EnvironmentScopedId"},
           "environment": {"$ref": "#/components/schemas/Environment"},
-          "event_type": {"type": "string", "pattern": "^[A-Z][A-Z0-9_.-]{1,63}$"},
-          "payload_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          "event_type": {"type": "string", "minLength": 2, "maxLength": 64, "pattern": "^[A-Z][A-Z0-9_.-]{1,63}$"},
+          "payload_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "occurred_at": {"type": "string", "format": "date-time"}
         },
         "additionalProperties": false
       },
@@ -134,7 +135,7 @@
         "properties": {
           "evidence_id": {"$ref": "#/components/schemas/EnvironmentScopedId"},
           "environment": {"$ref": "#/components/schemas/Environment"},
-          "evidence_type": {"type": "string", "pattern": "^[A-Z][A-Z0-9_.-]{1,63}$"},
+          "evidence_type": {"type": "string", "minLength": 2, "maxLength": 64, "pattern": "^[A-Z][A-Z0-9_.-]{1,63}$"},
           "payload_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
         },
         "additionalProperties": false

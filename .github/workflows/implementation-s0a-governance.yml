@@ -22,6 +22,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Assert raw pull request head
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "${{ github.event.pull_request.head.sha }}"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -35,10 +45,14 @@ jobs:
         run: |
           uv sync --project apps/backend --locked --all-groups
           python scripts/generate_contracts.py --check
+          uv run --project apps/backend python scripts/validate_contract_parity.py
           cd apps/backend
           uv run pytest --cov=hct_backend --cov-report=term-missing
           uv run ruff check src tests
           uv run mypy src
+          cd ../..
+          uv build --project apps/backend --out-dir /tmp/hct-backend-dist
+          uv run --project apps/backend --with pip-audit==2.10.1 pip-audit --local
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -59,7 +73,9 @@ jobs:
           npm audit --audit-level=high --omit=optional
 
       - name: Validate S0A boundary
-        run: python scripts/validate_s0a.py
+        run: |
+          uv run --project apps/backend python scripts/validate_s0a.py
+          python scripts/scan_s0a_secrets.py
 
       - name: Validate patch formatting
         run: git diff --check

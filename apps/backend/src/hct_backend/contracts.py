@@ -10,7 +10,6 @@ from typing import Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from hct_backend.generated_contracts import (
-    CONTRACT_SHA256,
     ENVIRONMENTS,
     EVENT_TYPE_PATTERN,
     HASH_PATTERN,
@@ -111,24 +110,24 @@ class ErrorEnvelope(BaseModel):
 class HealthResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    service: Literal["hct-backend"] = "hct-backend"
-    status: Literal["ok"] = "ok"
+    service: Literal["hct-backend"]
+    status: Literal["ok"]
 
 
 class ReadinessResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    service: Literal["hct-backend"] = "hct-backend"
-    status: Literal["ready"] = "ready"
-    checks: dict[str, Literal["ready"]] = {"application": "ready"}
+    service: Literal["hct-backend"]
+    status: Literal["ready"]
+    checks: dict[str, Literal["ready"]]
 
 
 class VersionResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    service: Literal["hct-backend"] = "hct-backend"
-    release: StableId = StableId(kind=IdentityKind.RELEASE, value="s0a-foundation")
-    contract_sha256: str = Field(default=CONTRACT_SHA256, pattern=HASH_PATTERN)
+    service: Literal["hct-backend"]
+    release: StableId
+    contract_sha256: str = Field(pattern=HASH_PATTERN)
 
 
 class AuditEnvelope(BaseModel):
