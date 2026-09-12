@@ -88,9 +88,9 @@ the exit status and are recorded rather than hidden.
 
 ## Candidate identity and authorization firewall
 
-- Exact implementation candidate head: `775d7ef3015087b04cf8b6c0a290473dacf7cdab`
+- Exact implementation candidate head validated by CI: `93241fa9c15e5bb470ca80328f9ee8cd80bd2ac7`
 - Evidence finalization commit: `27ed4364edc0b8c630f67696414840f4ee08a88b`
-- Exact-head CI run/check: `PENDING_PUSH_AND_CI`
+- Exact-head CI run/check: `34667495315 / s0a-quality = success`
 - Independent HIGH_ASSURANCE review: required before merge.
 - Credentials, production deployment, limited-live and real-money trading:
   explicitly unauthorized.
