@@ -88,7 +88,7 @@ the exit status and are recorded rather than hidden.
 
 ## Candidate identity and authorization firewall
 
-- Exact final candidate head: `PENDING_COMMIT`
+- Exact final candidate head: `775d7ef3015087b04cf8b6c0a290473dacf7cdab`
 - Exact-head CI run/check: `PENDING_PUSH_AND_CI`
 - Independent HIGH_ASSURANCE review: required before merge.
 - Credentials, production deployment, limited-live and real-money trading:
