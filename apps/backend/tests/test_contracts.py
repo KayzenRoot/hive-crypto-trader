@@ -72,6 +72,44 @@ def test_envelopes_bind_environment_and_hashes() -> None:
             payload_hash="a" * 64,
             occurred_at=timestamp,
         )
+
+
+def test_audit_and_evidence_cross_environment_invariants_are_enforced() -> None:
+    timestamp = datetime(2026, 9, 12, tzinfo=UTC)
+    audit_id = scoped(IdentityKind.AUDIT, Environment.PAPER, "event-2")
+    evidence_id = scoped(IdentityKind.EVIDENCE, Environment.PAPER, "evidence-2")
+
+    audit = AuditEnvelope(
+        event_id=audit_id,
+        environment=Environment.PAPER,
+        event_type="FOUNDATION_CHECK",
+        payload_hash="b" * 64,
+        occurred_at=timestamp,
+    )
+    evidence = EvidenceEnvelope(
+        evidence_id=evidence_id,
+        environment=Environment.PAPER,
+        evidence_type="FOUNDATION_CHECK",
+        payload_hash="b" * 64,
+    )
+    assert audit.environment is Environment.PAPER
+    assert evidence.environment is Environment.PAPER
+
+    with pytest.raises(ValidationError, match="cross-environment"):
+        AuditEnvelope(
+            event_id=audit_id,
+            environment=Environment.REPLAY,
+            event_type="FOUNDATION_CHECK",
+            payload_hash="b" * 64,
+            occurred_at=timestamp,
+        )
+    with pytest.raises(ValidationError, match="cross-environment"):
+        EvidenceEnvelope(
+            evidence_id=evidence_id,
+            environment=Environment.REPLAY,
+            evidence_type="FOUNDATION_CHECK",
+            payload_hash="b" * 64,
+        )
     with pytest.raises(ValidationError):
         EvidenceEnvelope(
             evidence_id=scoped(IdentityKind.EVIDENCE, Environment.REPLAY, "evidence-1"),

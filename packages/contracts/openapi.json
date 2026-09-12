@@ -55,10 +55,6 @@
         "type": "string",
         "enum": ["SERVICE", "RELEASE", "CONFIG", "AUDIT", "EVIDENCE"]
       },
-      "Status": {
-        "type": "string",
-        "enum": ["ok", "ready"]
-      },
       "StableId": {
         "type": "object",
         "required": ["kind", "value"],

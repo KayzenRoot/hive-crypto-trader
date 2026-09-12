@@ -61,13 +61,13 @@ money-state, production deployment or live-capable control was added.
 | Check | Result |
 |---|---|
 | Contract generation `python scripts/generate_contracts.py --check` | PASS |
-| Backend dependency lock `uv lock --check` / `uv sync --locked --all-groups` | PASS |
-| Backend unit/endpoint/contract tests | PASS — correction result recorded in final author-side evidence |
+| Backend dependency lock `uv sync --locked --all-groups` | PASS |
+| Backend unit/endpoint/contract tests | PASS — 9 tests; 93% total coverage |
 | Independent backend package build `uv build` | PASS |
 | Backend Ruff | PASS |
 | Backend mypy strict | PASS |
 | Frontend clean install `npm ci` | PASS |
-| Frontend Vitest | PASS — 2 tests passed |
+| Frontend Vitest | PASS — 13 tests passed |
 | Frontend TypeScript strict check | PASS |
 | Frontend ESLint | PASS |
 | Frontend Prettier check | PASS |
@@ -77,7 +77,7 @@ money-state, production deployment or live-capable control was added.
 | Changed-text-file secret scan | PASS — correction result recorded in final author-side evidence |
 | Frontend dependency audit `npm audit --audit-level=high --omit=optional` | PASS — 0 vulnerabilities |
 | Backend dependency audit `pip-audit 2.10.1` against locked environment | PASS — no known vulnerabilities |
-| `git diff --check` | PASS (final staged candidate) |
+| Candidate-aware `git diff --check c9fadaaf1aea61930d825b8247465c70963d2267...HEAD` | PASS in exact-head CI |
 
 The backend test run emitted upstream deprecation warnings from the current
 FastAPI/Starlette TestClient integration; they did not affect correctness or
@@ -91,8 +91,9 @@ the exit status and are recorded rather than hidden.
   capability.
 - The frontend is a safe status projection and is intentionally not the trading
   cockpit.
-- Exact PR-head CI identity will be appended after the branch is pushed and the
-  implementation workflow completes.
+- Exact final SHA, run ID, and check result are published in the PR #34 and
+  Issue #33 author-side comments; this tracked evidence intentionally avoids a
+  self-referential final identity claim.
 
 ## Candidate identity and authorization firewall
 

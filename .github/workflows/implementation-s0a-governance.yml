@@ -78,4 +78,10 @@ jobs:
           python scripts/scan_s0a_secrets.py
 
       - name: Validate patch formatting
-        run: git diff --check
+        env:
+          BASE_SHA: c9fadaaf1aea61930d825b8247465c70963d2267
+        run: |
+          head="$(git rev-parse HEAD)"
+          test "$(git rev-parse "$BASE_SHA")" = "$BASE_SHA"
+          echo "candidate diff check: $BASE_SHA...$head"
+          git diff --check "$BASE_SHA...$head"

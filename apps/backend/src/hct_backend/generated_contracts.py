@@ -1,7 +1,7 @@
 """Generated from packages/contracts/openapi.json; do not edit."""
 # ruff: noqa: E501
 
-CONTRACT_SHA256 = "51a2aec74bd7e8f83fc95759ee0381cfa7112f8f1fa52b64876edd0224274cdd"
+CONTRACT_SHA256 = "0626f902ed3fff1eb687774f4b7a2adc19cbe39d7a7ecf93d3e8d3c7205eac39"
 SCHEMAS = {'AuditEnvelope': {'additionalProperties': False,
                    'properties': {'environment': {'$ref': '#/components/schemas/Environment'},
                                   'event_id': {'$ref': '#/components/schemas/EnvironmentScopedId'},
@@ -88,7 +88,6 @@ SCHEMAS = {'AuditEnvelope': {'additionalProperties': False,
                                        'type': 'string'}},
               'required': ['kind', 'value'],
               'type': 'object'},
- 'Status': {'enum': ['ok', 'ready'], 'type': 'string'},
  'VersionResponse': {'additionalProperties': False,
                      'properties': {'contract_sha256': {'pattern': '^[0-9a-f]{64}$',
                                                         'type': 'string'},
