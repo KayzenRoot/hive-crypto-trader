@@ -109,7 +109,7 @@ jobs:
           grep -Fq 'limited_live_authorized=false' "$candidate"
           grep -Fq 'live_trading_authorized=false' "$candidate"
           grep -Fq 'WebSocket' "$candidate"
-          grep -Fq 'realtime market data' "$candidate"
+          grep -Fq 'ticker/trade/candle/order-book/funding/open-interest realtime ingest' "$candidate"
           grep -Fq 'Market Scanner' "$candidate"
           grep -Fq 'persistence/database/RLS' "$candidate"
 
