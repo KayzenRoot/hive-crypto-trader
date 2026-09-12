@@ -1,0 +1,76 @@
+name: HCT Chat Delivery Policy Governance
+
+on:
+  pull_request:
+    paths:
+      - 'docs/104-chat-delivery-and-prompt-artifact-policy.md'
+      - '.github/workflows/chat-delivery-policy-governance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  chat-delivery-policy-governance:
+    runs-on: ubuntu-latest
+    env:
+      AUTHORIZED_BASE_SHA: cf1dcab2f87e48f7460af8424a0f7af925e68485
+    steps:
+      - name: Checkout exact pull request head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Assert pull-request-only exact raw head and canonical base
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ github.event_name }}" = "pull_request"
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          test "${{ github.event.pull_request.base.sha }}" = "$AUTHORIZED_BASE_SHA"
+          test "$(git rev-parse origin/main)" = "$AUTHORIZED_BASE_SHA"
+          test "$(git merge-base "$AUTHORIZED_BASE_SHA" HEAD)" = "$AUTHORIZED_BASE_SHA"
+          if grep -Eq '^[[:space:]]*workflow_dispatch:' .github/workflows/chat-delivery-policy-governance.yml; then
+            echo 'Policy governance receipt must not expose workflow_dispatch.'
+            exit 1
+          fi
+
+      - name: Validate governance-only changed-file boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only "$AUTHORIZED_BASE_SHA...HEAD")"
+          printf '%s\n' "$changed"
+          invalid="$(printf '%s\n' "$changed" | grep -Ev '^(docs/104-chat-delivery-and-prompt-artifact-policy\.md|\.github/workflows/chat-delivery-policy-governance\.yml)$' || true)"
+          if [ -n "$invalid" ]; then
+            echo 'Unexpected file outside process-governance boundary:'
+            echo "$invalid"
+            exit 1
+          fi
+          test "$(printf '%s\n' "$changed" | sed '/^$/d' | wc -l)" -eq 2
+          git diff --check "$AUTHORIZED_BASE_SHA...HEAD"
+
+      - name: Validate continuous auto-progression policy invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          policy='docs/104-chat-delivery-and-prompt-artifact-policy.md'
+          grep -Fq '## Continuous auto-progression and next-prompt handoff rule' "$policy"
+          grep -Fq 'include the next complete executable prompt PDF in that SAME response' "$policy"
+          grep -Fq 'The user SHALL NOT be required to send `continue`' "$policy"
+          grep -Fq 'Automatic progression MUST stop and fail closed' "$policy"
+          grep -Fq 'It NEVER widens implementation scope' "$policy"
+          grep -Fq 'No complete executor prompt is considered delivered until its PDF artifact has been generated' "$policy"
+
+      - name: Confirm no authority widening
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff "$AUTHORIZED_BASE_SHA...HEAD" -- docs/104-chat-delivery-and-prompt-artifact-policy.md | grep -Fq 'production credentials'
+          git diff "$AUTHORIZED_BASE_SHA...HEAD" -- docs/104-chat-delivery-and-prompt-artifact-policy.md | grep -Fq 'live-trading authority'
+          echo 'Process policy changes cadence only; product/live authority remains governed elsewhere.'
+
+      - name: Publish governance summary
+        run: |
+          echo 'chat-delivery-policy-governance is a pull_request-only exact-head receipt.'
+          echo 'Scope: docs/104 continuous auto-progression and same-response next-prompt policy only.'
