@@ -66,5 +66,18 @@ R12 must:
 
 Planning freeze must not automatically authorize implementation, production deployment, production credentials, limited-live activation or real-money trading.
 
+## Global chat and prompt delivery policy
+All HCT chats and executor handoffs SHALL follow `docs/104-chat-delivery-and-prompt-artifact-policy.md`.
+
+Mandatory rule: every complete executable prompt for Codex, Cursor or another executor/reviewer MUST be generated as a downloadable PDF artifact and MUST NOT be reproduced as a complete prompt inside a writing block, code block, copyable box or long inline chat message.
+
+The chat itself should contain only a concise artifact summary, execution boundary and PDF download link. If PDF generation fails, fail closed and regenerate the PDF rather than dumping the full prompt into chat.
+
+For the first executor prompt of a repository/session, the PDF must include safe repository synchronization and exact-state Context Lock before execution or review.
+
+This policy persists across chat changes and review cycles unless the user explicitly changes the project policy.
+
 ## Resume rule
-A new chat must recover from the machine-readable planning checkpoint and repository source hierarchy, validate Git state, and resume only from `next_necessary_action`.
+A new chat must recover from the machine-readable planning checkpoint and repository source hierarchy, validate Git state, read `docs/104-chat-delivery-and-prompt-artifact-policy.md`, and resume only from `next_necessary_action`.
+
+Before producing any executor prompt, a new chat MUST enforce the PDF-only prompt delivery rule from `docs/104-chat-delivery-and-prompt-artifact-policy.md`.
