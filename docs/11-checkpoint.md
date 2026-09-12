@@ -1,14 +1,15 @@
 # Checkpoint
 
-Checkpoint ID: `HCT-CP-0015`
-Status: `IMPLEMENTATION_AUTHORIZED_S0A`
+Checkpoint ID: `HCT-CP-0016`
+Status: `S0A_IMPLEMENTATION_APPROVED_MERGED`
 Canonical branch: `main`
 Risk class: `HIGH_ASSURANCE`
 Functional product planning: `FROZEN`
 Planning Freeze checkpoint: `HCT-CP-0014 / PLANNING_FREEZE_APPROVED`
-Implementation authorization: `GRANTED_BOUNDED`
-Implementation authorization scope: `HCT-IMP-0001-S0A`
-Implementation authorization ceiling: `NON_TRADING_STAGE_0_FOUNDATION_ONLY`
+Completed implementation slice: `HCT-IMP-0001-S0A`
+Implementation authorization: `CLOSED_FAIL_CLOSED_AFTER_CONSUMED_SLICE`
+Implementation authorization scope: `[]`
+Implementation authorization ceiling: `NONE_PENDING_NEXT_GOVERNED_AUTHORIZATION`
 
 ## Current canonical authority
 R12 Planning Freeze remains approved and authoritative. The frozen composite requirements baseline remains governed by:
@@ -17,69 +18,73 @@ R12 Planning Freeze remains approved and authoritative. The frozen composite req
 - the exact nine requirement source blobs recorded by that baseline;
 - `docs/101-r12-freeze-governance-change-control-and-deferred-decisions.md`.
 
-`HCT-IMPL-AUTH-0001` has now completed the separate HIGH_ASSURANCE implementation-authorization gate for exactly one bounded slice:
-
-`HCT-IMP-0001-S0A — Runtime, Repository & Canonical Contract Foundation`
+`HCT-IMP-0001-S0A — Runtime, Repository & Canonical Contract Foundation` has completed its bounded HIGH_ASSURANCE implementation cycle, independent review and governed merge.
 
 No later Stage-0 slice and no Stage-1+ capability is implied or authorized.
 
-## HCT-IMPL-AUTH-0001 approval evidence
-Independent HIGH_ASSURANCE review was performed against exact PR #32 head:
-`89f8cfeb312debf1b5722c2b187c296772550fdc`
+## S0A approval evidence
+Independent HIGH_ASSURANCE review was performed against exact PR #34 head:
+`a61aa61e70694cb7727b7f4342482f7d7e026aa4`
 
 Verdict: `APPROVED`
 
 Objective evidence:
-- Planning Freeze integrity: `PASS`;
-- Stage-0 ordering: `PASS`;
-- authorization ceiling: `PASS`;
-- negative scope: `PASS`;
-- implementation Work Order quality: `PASS`;
-- R12 workflow retirement safety: `PASS`;
 - unresolved CRITICAL findings: `0`;
 - unresolved HIGH findings: `0`;
-- exact-head GitHub Actions run `34665231471`: `implementation-authorization-governance = success`;
-- PR #32 governed merge commit: `e65cbeac0d74380c9a0619ed15e8dbc4d128301c`;
-- approval/promotion record: `docs/107-implementation-authorization-approval-and-checkpoint-promotion.md`.
+- canonical OpenAPI/runtime parity: `10/10 PASS`;
+- backend tests: `9 PASS`, `93%` coverage;
+- frontend tests: `13 PASS`;
+- frontend fail-closed runtime validation: `PASS`;
+- Audit/Evidence cross-environment invariants in Python and TypeScript: `PASS`;
+- runtime route allowlist: `PASS`;
+- backend build / Ruff / strict mypy: `PASS`;
+- Python dependency audit: `PASS`;
+- frontend typecheck / ESLint / Prettier / Vite build / npm audit: `PASS`;
+- secret/capability boundary: `PASS`;
+- candidate-aware committed diff check: `PASS`;
+- exact raw-head GitHub Actions run `34685795578`, check `s0a-quality`: `success`;
+- independent PR review ID: `5186132816`;
+- independent Issue #33 evidence comment ID: `5645290386`;
+- PR #34 governed merge commit: `679aef7a1db7d3cfd2bd97cc2071a1a9a735e527`;
+- approval/promotion record: `docs/108-s0a-implementation-approval-and-checkpoint-promotion.md`.
 
-## Authorized implementation scope
-`implementation_authorized=true` only for `HCT-IMP-0001-S0A`.
+## Completed S0A scope
+The merged S0A slice includes only the approved non-trading Stage-0 foundation:
+- professional repository/runtime skeleton;
+- independently buildable frontend and backend roots;
+- canonical language-neutral OpenAPI contract plus deterministic Python/TypeScript projections;
+- typed domain/environment identity primitives;
+- explicit `LIVE`, `PAPER`, `SHADOW`, `REPLAY` namespace semantics;
+- fail-closed runtime parsing/validation;
+- canonical error/version/release/audit/evidence primitives;
+- safe backend `/health`, `/ready`, `/version` routes only;
+- non-authoritative frontend status projection;
+- deterministic lint/type/test/build/dependency/secret/boundary CI foundations.
 
-The authorized slice is limited to the non-trading Stage-0 foundation defined in `work-orders/HCT-IMP-0001-S0A.md`, including:
-- canonical repository/runtime skeleton;
-- independently buildable frontend and backend application roots;
-- canonical language-neutral/shared contract source or deterministic generation path;
-- typed cross-domain identity primitives;
-- explicit `LIVE`, `PAPER`, `SHADOW`, `REPLAY` environment namespace primitives;
-- canonical error/version/release/audit-envelope primitives;
-- backend health/readiness/version endpoints;
-- non-authoritative frontend status shell;
-- lint/type/static/unit/contract/build/lockfile foundation;
-- technology/toolchain ADR before substantive implementation.
+S0A does not contain exchange connectivity, production credentials, signing, market ingest, money-state, trading, production persistence, deployment, limited-live or real-money trading capability.
 
-## Explicit authorization ceiling
-Current authoritative flags and scope:
-- `implementation_authorized=true`
-- `implementation_authorization_scope=["HCT-IMP-0001-S0A"]`
-- `implementation_authorization_ceiling="NON_TRADING_STAGE_0_FOUNDATION_ONLY"`
+## Authorization reset after completion
+`HCT-CP-0015` granted single-slice authority for exactly `HCT-IMP-0001-S0A`. That authority was consumed by the approved merge and is now reset fail closed.
+
+Current authoritative flags:
+- `implementation_authorized=false`
+- `implementation_authorization_scope=[]`
+- `implementation_authorization_ceiling="NONE_PENDING_NEXT_GOVERNED_AUTHORIZATION"`
 - `production_credentials_authorized=false`
 - `production_deployment_authorized=false`
 - `limited_live_authorized=false`
 - `live_trading_authorized=false`
 
-The following remain prohibited:
-- MEXC or any exchange API/client connectivity;
-- API keys, secrets, signing or production SecretStore behavior;
-- market-data ingest;
-- orders/cancel/replace;
-- fills, positions, balances or money-state behavior;
-- Safety/Session/Risk/OMS/Execution/Reconciliation/Protection implementation;
-- production/user/exchange state persistence;
-- production deployment;
-- limited-live activation;
-- real-money trading.
-
 Unknown or ambiguous authorization state fails closed.
+
+## Remaining Stage-0 foundation
+R11 Stage 0 still includes security/governance foundations not implemented by S0A, notably:
+- server-derived immutable `SecurityContext`;
+- tenant/membership/account binding and authorization semantics;
+- `SecretStore` abstraction with opaque credential references;
+- continued security/audit/configuration governance maturation.
+
+The expected next candidate may combine `SecurityContext/tenant/account binding` with a credential-opaque `SecretStore` abstraction only if the separate authorization review proves no production credential material, exchange connectivity, signing, money-state, deployment or live capability is introduced.
 
 ## Planning Freeze provenance
 `HCT-PLAN-0001-R12` remains `FREEZE_APPROVED` through `HCT-CP-0014`.
@@ -110,24 +115,25 @@ Historical candidate/review artifacts remain provenance. They do not override th
 - `HCT-PLAN-0001-R11`
 - `HCT-PLAN-0001-R12`
 - `HCT-IMPL-AUTH-0001`
+- `HCT-IMP-0001-S0A`
 
 ## Current blockers
-No blocker remains for beginning `HCT-IMP-0001-S0A` within its exact bounded scope.
+There is no blocker to preparing the next bounded implementation-authorization candidate.
 
-Every later implementation slice remains unauthorized until separately governed. Production credentials, production deployment, limited-live and real-money trading remain blocked by future independent gates.
+There IS an intentional authorization blocker on further product-code mutation: no next implementation slice is authorized yet.
+
+Production credentials, production deployment, limited-live and real-money trading remain blocked by future independent gates.
 
 ## Next necessary action
-Execute `HCT-IMP-0001-S0A` through the governed implementation flow.
+Prepare a separate HIGH_ASSURANCE implementation-authorization increment for the next bounded Stage-0 security-foundation slice.
 
-Before mutation the executor SHALL:
-- synchronize the repository safely;
-- validate exact canonical `main` and this checkpoint;
-- read the frozen baseline and authorization artifacts;
-- verify that `HCT-IMP-0001-S0A` is the only authorized implementation scope;
-- create/use its governed implementation branch;
-- record the technology/toolchain ADR before substantive code.
-
-Execution SHALL satisfy the Work Order tests/evidence and STOP with the implementation PR open/unmerged for independent HIGH_ASSURANCE review.
+Before any new product-code mutation the next authorization increment SHALL:
+- recover this exact checkpoint and current `main`;
+- define the exact scope and negative scope;
+- map frozen requirements/decisions/architecture to the proposed slice;
+- define acceptance criteria, tests, evidence and STOP CONDITION;
+- prove the slice does not create production credential, exchange, money-state, deployment or live authority;
+- receive independent HIGH_ASSURANCE approval before implementation authority is promoted.
 
 ## Global chat and prompt delivery policy
 All HCT chats and executor handoffs SHALL follow `docs/104-chat-delivery-and-prompt-artifact-policy.md`.
