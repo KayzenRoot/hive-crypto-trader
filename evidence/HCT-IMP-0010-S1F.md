@@ -115,7 +115,7 @@ The micro profile produced/admitted/consumed `512/512/512` with `0` drops and ma
 - `IMP-H004`: REST klines use the official `success/code/data` wrapper and `{time,open,close,high,low,vol,amount}` shape; synthetic shapes are rejected and close proof binds request/window/source/generation context.
 - `IMP-H005`: official `depth_commits` has a dedicated decoder, explicit absent provider event time, typed recovery/resync evidence and contiguous delta enforcement.
 - `IMP-H006`: DecimalValue is content-bound; OrderedLineage recomputes its manifest; CandleCloseProof is typed and admissible only as `NEXT_WINDOW` or `REST_CONFIRMATION`.
-- `IMP-H006R`: `CLOSED_AUTHOR_SIDE_ONLY`; accepted CandleCloseProof instances carry a private evaluator attestation, direct construction and public hash factories are removed, NEXT_WINDOW requires actual compatible next CandleBar evidence, and REST_CONFIRMATION is issued only by the validated official MEXC decoder path.
+- `IMP-H006R`: `CLOSED_AUTHOR_SIDE_ONLY`; `IMP-H006R=CLOSED_AUTHOR_SIDE_ONLY`; accepted CandleCloseProof instances carry a private evaluator attestation, direct construction and public hash factories are removed, NEXT_WINDOW requires actual compatible next CandleBar evidence, and REST_CONFIRMATION is issued only by the validated official MEXC decoder path.
 - `IMP-H007`: benchmark publication is separated from normalization, uses deterministic producer/consumer behavior, measured queue age and explicit producer/consumer/admitted/dropped counters; nominal has no drops and stress records bounded shedding.
 
 The correction is author-side only: `criticalAuthorFindings=0`, `highAuthorFindings=0`; no independent verdict is claimed.
