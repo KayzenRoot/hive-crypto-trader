@@ -19,6 +19,7 @@ from hct_backend.s1f_numeric import (
     require_quantity,
 )
 from hct_backend.s1f_values import (
+    _REST_DECODER_ATTESTATION,
     BookLevel,
     CandleBar,
     CandleCloseProof,
@@ -434,6 +435,7 @@ class MexcPublicDecoder:
             evidence_fingerprint=payload_fp,
             knowledge_time=_utc(context.knowledge_time),
             admissibility_time=_utc(context.wall_receive_time),
+            _attestation=_REST_DECODER_ATTESTATION,
         )
 
     @staticmethod

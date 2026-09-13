@@ -58,6 +58,7 @@ class ReferencePriceKind(StrEnum):
 
 T = TypeVar("T")
 _CANDLE_PROOF_ATTESTATION: object = object()
+_REST_DECODER_ATTESTATION: object = object()
 
 
 def _hash(material: object) -> str:
@@ -607,7 +608,10 @@ class CandleCloseProof:
         evidence_fingerprint: str,
         knowledge_time: datetime,
         admissibility_time: datetime,
+        _attestation: object,
     ) -> CandleCloseProof:
+        if _attestation is not _REST_DECODER_ATTESTATION:
+            raise ValuePlaneConsistencyError("REST proof requires decoder attestation")
         return cls._from_evaluator(
             kind=CandleProofKind.REST_CONFIRMATION,
             source_id=source_id,
