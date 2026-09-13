@@ -3,7 +3,9 @@
 Status: `AUTHOR_PREFLIGHT`
 Risk: `HIGH_ASSURANCE`
 
-Functional correction heads: `d0fc7a43a7ca1e94bae3efca0b2007b84b8a0270`, followed by CI-lint correction `ae3949514e1bd6163b5abbe9ba0e0e32177dac94`.
+Prior correction heads: `d0fc7a43a7ca1e94bae3efca0b2007b84b8a0270`, `ae3949514e1bd6163b5abbe9ba0e0e32177dac94`, `a511dfbd0717f6fef5c4cd7a1c21971de6f44458`; final H006R functional correction head: `5227918c644a463a9e28dcf3139f382bdb1e40b7`.
+
+Previous reviewed head for this correction: `07230415a5dc0efff4aa5f4069a19e7d0a97e949`.
 
 This bundle records the author-side correction handoff for IMP-H001 through IMP-H007. Independent review remains required; this status is not approval.
 
@@ -93,8 +95,8 @@ Package license evidence from the locked environment: `httpx 0.28.1 BSD-3-Clause
 
 ## Deterministic validation and benchmark evidence
 
-- backend: `300 passed`, global coverage `90.15%` with `--cov-fail-under=90`;
-- focused S1F: included in the full suite; all S1F tests PASS;
+- backend: `301 passed`, global coverage `90.14%` with `--cov-fail-under=90`;
+- focused H006R/S1F: `27 passed`; all focused S1F tests PASS;
 - Ruff check and format check: PASS for all backend source/tests and S1F scripts;
 - mypy strict: PASS for 15 backend source files;
 - backend package build: PASS for sdist and wheel (the pre-existing package warning about a missing README does not fail the build);
@@ -113,6 +115,7 @@ The micro profile produced/admitted/consumed `512/512/512` with `0` drops and ma
 - `IMP-H004`: REST klines use the official `success/code/data` wrapper and `{time,open,close,high,low,vol,amount}` shape; synthetic shapes are rejected and close proof binds request/window/source/generation context.
 - `IMP-H005`: official `depth_commits` has a dedicated decoder, explicit absent provider event time, typed recovery/resync evidence and contiguous delta enforcement.
 - `IMP-H006`: DecimalValue is content-bound; OrderedLineage recomputes its manifest; CandleCloseProof is typed and admissible only as `NEXT_WINDOW` or `REST_CONFIRMATION`.
+- `IMP-H006R`: `CLOSED_AUTHOR_SIDE_ONLY`; accepted CandleCloseProof instances carry a private evaluator attestation, direct construction and public hash factories are removed, NEXT_WINDOW requires actual compatible next CandleBar evidence, and REST_CONFIRMATION is issued only by the validated official MEXC decoder path.
 - `IMP-H007`: benchmark publication is separated from normalization, uses deterministic producer/consumer behavior, measured queue age and explicit producer/consumer/admitted/dropped counters; nominal has no drops and stress records bounded shedding.
 
 The correction is author-side only: `criticalAuthorFindings=0`, `highAuthorFindings=0`; no independent verdict is claimed.
