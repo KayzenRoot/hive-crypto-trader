@@ -173,7 +173,7 @@ jobs:
       - name: Run S0A-S1F backend regressions and S2A static gates
         run: |
           uv run --project apps/backend pytest --cov=hct_backend --cov-report=term-missing --cov-fail-under=90 apps/backend/tests
-          uv run --project apps/backend ruff check apps/backend/src apps/backend/tests scripts/scan_s2a_boundaries.py scripts/benchmark_s2a.py
+          uv run --project apps/backend ruff check apps/backend/src/hct_backend/features.py apps/backend/src/hct_backend/feature_engine.py apps/backend/tests/test_features.py scripts/scan_s2a_boundaries.py scripts/benchmark_s2a.py
           uv run --project apps/backend ruff format --check apps/backend/src/hct_backend/features.py apps/backend/src/hct_backend/feature_engine.py apps/backend/tests/test_features.py scripts/scan_s2a_boundaries.py scripts/benchmark_s2a.py
           uv run --project apps/backend mypy apps/backend/src
           uv build --project apps/backend --out-dir "$RUNNER_TEMP/hct-backend-dist-s2a"

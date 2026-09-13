@@ -16,7 +16,7 @@ trading.
 - final implementation head: recorded by the exact-head pull request CI and PR metadata
 - source context lock: `evidence/HCT-IMP-0009-S2A-CONTEXT-LOCK.md`
 - frozen source identities: 9/9 PASS
-- prior-stage regression suite: `319 passed`
+- prior-stage regression suite: `325 passed`
 
 The execution base is the post-CP0033 `main` commit. No governance, checkpoint,
 work-order, frozen-source, dependency-lock, S1E or S1F source was changed by
@@ -99,8 +99,8 @@ STRESS exercised complete valid 15m alignment, missing post-close constituent
 
 ## Local validation receipt
 
-- `python -m pytest -q apps/backend`: `319 passed`
-- S2A feature tests: `18 passed`
+- `python -m pytest -q apps/backend`: `325 passed`
+- S2A feature tests: `24 passed`
 - ruff check on changed S2A source/tests/scripts: PASS
 - ruff format check on changed S2A source/tests/scripts: PASS
 - mypy on backend source: `Success: no issues found in 17 source files`

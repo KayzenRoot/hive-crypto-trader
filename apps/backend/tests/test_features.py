@@ -1,23 +1,31 @@
+import json
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 import pytest
 
+import hct_backend.features as feature_module
 from hct_backend.contracts import Environment, IdentityKind, StableId
 from hct_backend.features import (
+    AlignedWindowEvidence,
     FeatureDefinition,
+    FeatureError,
+    FeatureEvaluationError,
     FeatureRegistry,
     FeatureRegistryError,
     FeatureSample,
+    FeatureSnapshot,
     FeatureValidity,
     FeatureVersion,
+    RecursiveAccumulatorState,
     align_closed_1m_candles,
     evaluate_feature,
     evaluate_feature_series,
     evaluate_snapshot,
 )
 from hct_backend.market_truth import GenerationRef
-from hct_backend.s1f_numeric import DecimalValue
+from hct_backend.s1f_numeric import DecimalValue, NumericPolicyError
 from hct_backend.s1f_values import (
     CandleBar,
     CandleCloseProof,
@@ -375,3 +383,248 @@ def test_po_f09_derived_alignment_is_non_authoritative_and_not_an_action_surface
     assert aligned.provenance == "DERIVED_ANALYTICAL_V1"
     assert not hasattr(aligned, "order")
     assert not hasattr(aligned, "position")
+
+
+def test_po_f02_definition_and_numeric_contract_guards_are_fail_closed() -> None:
+    definition = FeatureDefinition.standard("F-SMA-001", parameter_n=3)
+    invalid_definition_factories = (
+        lambda: replace(definition, version=0),
+        lambda: replace(definition, parameter_n=1, window=1),
+        lambda: replace(definition, algorithm_version="UNKNOWN"),
+        lambda: replace(definition, decimal_policy_version="UNKNOWN"),
+        lambda: replace(definition, rounding_mode="ROUND_DOWN"),
+        lambda: replace(FeatureDefinition.standard("F-RET-001"), window=2),
+    )
+    for factory in invalid_definition_factories:
+        with pytest.raises(FeatureError):
+            factory()
+    with pytest.raises(FeatureError):
+        FeatureVersion("not-a-definition")  # type: ignore[arg-type]
+    with pytest.raises(FeatureRegistryError):
+        FeatureRegistry().register("not-a-feature")  # type: ignore[arg-type]
+    with pytest.raises(FeatureRegistryError):
+        FeatureRegistry().resolve("F-SMA-001")
+    with pytest.raises(NumericPolicyError):
+        feature_module._canonical(Decimal("NaN"))
+    assert feature_module._safe_canonical(Decimal("NaN")) is None
+    with pytest.raises(FeatureEvaluationError):
+        feature_module._mean([])
+
+
+def test_po_f03_sample_identity_and_temporal_guards_are_fail_closed() -> None:
+    base = samples(["1", "2"])[0]
+    invalid_sample_factories = (
+        lambda: replace(base, fingerprint="bad"),
+        lambda: replace(
+            base,
+            source_id=StableId(kind=IdentityKind.INSTRUMENT, value="wrong-source"),
+        ),
+        lambda: replace(
+            base,
+            contract_id=StableId(kind=IdentityKind.EXCHANGE, value="wrong-contract"),
+        ),
+        lambda: replace(base, environment="REPLAY"),  # type: ignore[arg-type]
+        lambda: replace(base, timeframe="Min1"),  # type: ignore[arg-type]
+        lambda: replace(base, closed=1),  # type: ignore[arg-type]
+        lambda: replace(base, knowledge_time=NOW + timedelta(minutes=2)),
+        lambda: replace(base, interval_start=NOW + timedelta(minutes=2), interval_end=NOW),
+        lambda: replace(base, high="1"),  # type: ignore[arg-type]
+        lambda: replace(base, quantity="1"),  # type: ignore[arg-type]
+        lambda: replace(base, market_state_trust="BAD"),
+        lambda: replace(base, upstream_fidelity="BAD"),
+    )
+    for factory in invalid_sample_factories:
+        with pytest.raises((FeatureError, NumericPolicyError)):
+            factory()
+
+
+def test_po_f08_state_output_and_snapshot_integrity_guards() -> None:
+    feature = FeatureVersion.standard("F-EMA-001", parameter_n=3)
+    result = evaluate_feature(feature, samples(["1", "2", "3", "4"]))
+    state = result.recursive_state
+    assert state is not None
+    invalid_state_factories = (
+        lambda: replace(state, algorithm_version="UNKNOWN"),
+        lambda: replace(state, parameter_n=1),
+        lambda: replace(state, components=(DecimalValue.parse("1"),)),
+        lambda: replace(state, previous_input=DecimalValue.parse("1")),
+        lambda: replace(state, processed_samples=0),
+        lambda: replace(state, lineage=("bad",)),
+        lambda: replace(state, lineage=(state.lineage[0], state.lineage[0])),
+        lambda: replace(state, market_state_lineage=("bad",)),
+        lambda: replace(state, environment="REPLAY"),  # type: ignore[arg-type]
+        lambda: replace(state, knowledge_time=NOW + timedelta(days=1)),
+    )
+    for factory in invalid_state_factories:
+        with pytest.raises(FeatureError):
+            factory()
+    payload = json.loads(state.serialize())
+    payload["state_fingerprint"] = "0" * 64
+    with pytest.raises(FeatureError):
+        RecursiveAccumulatorState.deserialize(payload)
+    with pytest.raises(FeatureError):
+        replace(result, value=None)
+    with pytest.raises(FeatureError):
+        replace(result, source_id=CONTRACT)
+    with pytest.raises(FeatureError):
+        replace(result, sample_count=True)
+    with pytest.raises(FeatureError):
+        FeatureSnapshot(
+            values=(result, result),
+            source_market_state_fingerprint=result.source_market_state_fingerprint,
+            source_generation_fingerprint=result.source_generation_fingerprint,
+            environment=result.environment,
+            evaluation_time=NOW,
+        )
+
+
+def test_po_f07_mtf_structural_provenance_and_boundary_guards() -> None:
+    opened = tuple(_candle(index, str(10 + index)) for index in range(6))
+    candles = _closed_candles()
+    with pytest.raises(FeatureEvaluationError):
+        align_closed_1m_candles(candles, 10)
+    with pytest.raises(FeatureEvaluationError):
+        align_closed_1m_candles(candles, 5, upstream_fidelity="BAD")
+    assert align_closed_1m_candles((opened[0],), 5).validity is FeatureValidity.INVALID
+    future_context = replace(
+        candles[0].context,
+        knowledge_time=NOW + timedelta(days=1),
+        wall_receive_time=NOW + timedelta(days=1),
+    )
+    future = replace(candles[0], context=future_context)
+    assert (
+        align_closed_1m_candles((future, *candles[1:]), 5, evaluation_time=NOW).validity
+        is FeatureValidity.INVALID
+    )
+    outside = align_closed_1m_candles((candles[0], _closed_candles(6)[5]), 5)
+    assert outside.validity is FeatureValidity.INVALID
+    mixed_provenance = replace(
+        candles[0], context=replace(candles[0].context, provenance_fingerprint="b" * 64)
+    )
+    assert (
+        align_closed_1m_candles((mixed_provenance, *candles[1:]), 5).validity
+        is FeatureValidity.INVALID
+    )
+    mixed_quantity = replace(
+        candles[0],
+        volume=replace(candles[0].volume, source_contract_identity_version="OTHER"),
+    )
+    assert (
+        align_closed_1m_candles((mixed_quantity, *candles[1:]), 5).validity
+        is FeatureValidity.INVALID
+    )
+    with pytest.raises(FeatureError):
+        AlignedWindowEvidence(
+            target_minutes=5,
+            start=NOW,
+            end=NOW + timedelta(minutes=4),
+            constituents=(),
+            validity=FeatureValidity.VALID,
+            reason="bad",
+            source_id=None,
+            contract_id=None,
+            environment=None,
+            generation_fingerprint=None,
+            open=None,
+            high=None,
+            low=None,
+            close=None,
+            volume=None,
+            event_time=None,
+            knowledge_time=None,
+            wall_receive_time=None,
+            lineage=(),
+        )
+
+
+def test_po_f02_remaining_contract_branches_and_candle_coercion() -> None:
+    definition = FeatureDefinition.standard("F-SMA-001", parameter_n=3)
+    for change in (
+        {"canonical_id": "UNKNOWN"},
+        {"timeframe": "Min1"},
+        {"semantic_family": ""},
+    ):
+        with pytest.raises(FeatureError):
+            replace(definition, **change)
+    assert len(FeatureVersion.standard("F-RET-001").fingerprint) == 64
+    registry = FeatureRegistry().register(FeatureVersion.standard("F-RET-001"))
+    registry = registry.register(FeatureVersion.standard("F-SMA-001", parameter_n=3))
+    with pytest.raises(FeatureRegistryError):
+        registry.resolve("F-RET-001", version=2)
+    with pytest.raises(FeatureError):
+        replace(samples(["1"])[0], value="1")
+    with pytest.raises(FeatureError):
+        replace(samples(["1"])[0], event_time=datetime(2026, 1, 1))
+    with pytest.raises(FeatureError):
+        replace(samples(["1"])[0], interval_start=NOW + timedelta(minutes=2), interval_end=NOW)
+    opened = _candle(0, "10")
+    candle_sample = FeatureSample.from_candle(opened)
+    assert (
+        evaluate_feature(FeatureVersion.standard("F-TR-001"), [candle_sample]).validity
+        is FeatureValidity.WARMUP
+    )
+    assert feature_module._context_status((), None)[0] is FeatureValidity.WARMUP
+    assert (
+        evaluate_feature(
+            FeatureVersion.standard("F-TR-001"),
+            [replace(samples(["1"])[0], high=None, low=None, close=None)],
+        ).validity
+        is FeatureValidity.INVALID
+    )
+    assert (
+        evaluate_feature(
+            FeatureVersion.standard("F-TR-001"),
+            [replace(samples(["1"])[0], high=DecimalValue.parse("2"), low=None)],
+        ).validity
+        is FeatureValidity.INVALID
+    )
+    assert (
+        evaluate_feature(
+            FeatureVersion.standard("F-VSMA-001", parameter_n=2), samples(["1", "2"])
+        ).validity
+        is FeatureValidity.INVALID
+    )
+    quantities = volume_samples(["1", "2"])
+    mismatched_quantity = replace(
+        quantities[-1],
+        quantity=replace(quantities[-1].quantity, source_contract_identity_version="OTHER"),
+    )
+    assert (
+        evaluate_feature(
+            FeatureVersion.standard("F-VSMA-001", parameter_n=2),
+            [quantities[0], mismatched_quantity],
+        ).validity
+        is FeatureValidity.INVALID
+    )
+    reversed_result = evaluate_feature(
+        FeatureVersion.standard("F-RET-001"), list(reversed(samples(["1", "2"])))
+    )
+    assert reversed_result.validity is FeatureValidity.INVALID
+
+
+def test_po_f08_feature_output_restrictive_metadata_guards() -> None:
+    result = evaluate_feature(FeatureVersion.standard("F-RET-001"), samples(["1", "2"]))
+    invalid_factories = (
+        lambda: replace(result, reason=""),
+        lambda: replace(result, sample_count=-1),
+        lambda: replace(result, validity=FeatureValidity.UNKNOWN),
+        lambda: replace(result, timeframe="Min1"),  # type: ignore[arg-type]
+        lambda: replace(result, window_start=NOW + timedelta(days=1)),
+        lambda: replace(result, lineage=()),
+        lambda: replace(result, upstream_fidelity="BAD"),
+    )
+    for factory in invalid_factories:
+        with pytest.raises(FeatureError):
+            factory()
+    other = evaluate_feature(
+        FeatureVersion.standard("F-RET-001"),
+        tuple(replace(item, generation_fingerprint="b" * 64) for item in samples(["1", "2"])),
+    )
+    with pytest.raises(FeatureError):
+        FeatureSnapshot(
+            values=(result, other),
+            source_market_state_fingerprint=result.source_market_state_fingerprint,
+            source_generation_fingerprint=result.source_generation_fingerprint,
+            environment=result.environment,
+            evaluation_time=NOW,
+        )
