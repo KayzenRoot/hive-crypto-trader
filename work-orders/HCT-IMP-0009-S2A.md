@@ -44,6 +44,35 @@ The nine frozen requirements remain those recorded by the R12 baseline: `docs/02
 - display names/descriptions/UI labels are non-authoritative;
 - implement exactly the eight frozen public/standard V1_CORE families: `F-RET-001`, `F-SMA-001`, `F-EMA-001`, `F-ROC-001`, `F-RSI-001`, `F-TR-001`, `F-ATR-001`, `F-VSMA-001`.
 
+### H008 deterministic feature algorithm contract
+
+`S2A_FEATURE_ALGORITHM_VERSION=S2A_STANDARD_FEATURES_V1`
+
+`S2A_PARAMETER_N_MIN=2`
+
+Every N-based feature uses integer `N >= 2`; source field, timeframe/version, N, seed rule, Decimal policy version and rounding mode are material definition/version and output-fingerprint identity. A canonical feature ID without matching parameter/version material must not alias another configuration.
+
+- `F-RET-001`: `close_t / close_t-1 - 1`; two admissible CLOSED closes are required, otherwise `WARMUP`.
+- `F-SMA-001`: arithmetic mean over the ordered window; output starts at exactly N admissible CLOSED samples, otherwise `WARMUP`.
+- `F-EMA-001`: `alpha=2/(N+1)`; seed sample N with `SMA(N)`; earlier `WARMUP`; thereafter `EMA_t = alpha*x_t + (1-alpha)*EMA_t-1`.
+- `F-ROC-001`: `(close_t-close_t-N)/close_t-N`; pre-lookback `WARMUP`; zero denominator `INVALID`.
+- `F-RSI-001`: gain/loss are `max(delta,0)`/`max(-delta,0)`; initial averages are arithmetic means of the first N deltas; Wilder recurrence is `((prev_avg*(N-1))+current)/N`; both zero => 50, loss zero/gain positive => 100, gain zero/loss positive => 0, otherwise `RS=avg_gain/avg_loss` and `RSI=100-(100/(1+RS))`; earlier than N deltas `WARMUP`.
+- `F-TR-001`: first admissible CLOSED bar without prior close is `high-low`; thereafter `max(high-low,abs(high-prev_close),abs(low-prev_close))`.
+- `F-ATR-001`: seed the Nth TR with the arithmetic mean of the first N TR values; earlier `WARMUP`; thereafter `ATR_t=((ATR_t-1*(N-1))+TR_t)/N`.
+- `F-VSMA-001`: arithmetic mean over N `CONTRACTS_PROVIDER_NATIVE_V1` quantities with identical unit and source-contract identity/version.
+
+`S2A_RSI_WILDER_SEED=MEAN_FIRST_N_DELTAS`
+
+`S2A_RSI_ZERO_ZERO=50`
+
+`S2A_ATR_WILDER_SEED=MEAN_FIRST_N_TR`
+
+`S2A_TR_FIRST_BAR=HIGH_MINUS_LOW`
+
+`S2A_EMA_SEED=SMA_N`
+
+Golden vectors must cover flat RSI=50, monotonic-up RSI=100, monotonic-down RSI=0, ATR/EMA seed boundaries, exact warmup transition and parameter/fingerprint mutation. `FEATURE_DECIMAL_V1` is Decimal-only, internal precision 76, final canonical maximum precision 38/scale 18, `ROUND_HALF_EVEN` only for required final non-terminating quantization; binary float, non-finite values, clipping, saturation and fallback zero are forbidden.
+
 ### Point-in-time evidence
 
 - immutable `FeatureValue` and `FeatureSnapshot` bound to source Market-State fingerprint, generation, contract, environment, DataAuthority/freshness evidence, definition/version, event time, knowledge time and replay provenance;
@@ -61,6 +90,26 @@ The nine frozen requirements remain those recorded by the R12 baseline: `docs/02
 - deterministic multi-timeframe alignment uses CLOSED 1m constituent windows, explicit event/knowledge-time boundaries and source/generation compatibility;
 - windows are UTC half-open `[start,end)`, start-inclusive/end-exclusive, and Unix-epoch aligned;
 - fixture/replay inputs are immutable, carry source/generation/completeness/fidelity identity and reproduce the same canonical feature sequence for identical inputs and definitions.
+
+### H009 deterministic 5m/15m analytical alignment contract
+
+S2A may derive `AlignedWindowEvidence` (or a semantically equivalent name) only from S1F CLOSED 1m `CandleBar` inputs. This is non-authoritative analytical evidence only and never S1F Market-State truth or Module 4/5 ownership.
+
+`S2A_MTF_SOURCE=COMPLETE_CLOSED_1M_CONSTITUENTS`
+
+`S2A_MTF_5M_COUNT=5`
+
+`S2A_MTF_15M_COUNT=15`
+
+`S2A_MTF_OHLCV=FIRST_OPEN_MAX_HIGH_MIN_LOW_LAST_CLOSE_SUM_NATIVE_Q`
+
+`S2A_MTF_KNOWLEDGE_TIME=MAX_CONSTITUENT_KNOWLEDGE_TIME`
+
+`S2A_MTF_LINEAGE=ORDERED_CONSTITUENT_CANDLE_FINGERPRINTS`
+
+`S2A_MTF_MARKET_TRUTH_AUTHORITY=NONE_DERIVED_ANALYTICAL_EVIDENCE_ONLY`
+
+5m windows require exactly 5 contiguous CLOSED 1m constituents and 15m exactly 15, using UTC Unix-epoch aligned half-open `[start,end)` boundaries. Missing, duplicate, open, overlapping, out-of-order or non-contiguous constituents fail closed. Constituents must match source_id, contract_id, environment, generation, timeframe version, provenance compatibility and quantity unit/source-contract identity; mismatches are typed `INVALID`/`UNKNOWN`, never partial aggregation. OHLCV is first open, max high, min low, last close and native-q sum only for matching unit/version; no base-asset normalization. The exact ordered tuple of constituent CandleBar fingerprints is lineage, so correction/revision, insert/delete/reorder, generation or value changes produce a new aligned fingerprint. Derived knowledge_time is the maximum constituent knowledge_time and every constituent must satisfy the evaluation boundary; derived event evidence cannot precede the latest constituent event evidence and the window end remains the close boundary. Incomplete windows stay `WARMUP` or `UNKNOWN`, never zero-filled or forward-filled. STRESS must exercise valid complete and missing/corrected/mixed-generation windows.
 
 ## OUT OF SCOPE
 

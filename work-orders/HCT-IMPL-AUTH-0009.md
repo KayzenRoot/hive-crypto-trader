@@ -65,6 +65,55 @@ The nine frozen requirements remain bound to the identities in `docs/99-r12-froz
 
 `S2A_EXACT_V1_CORE_FEATURE_SET=F-RET-001,F-SMA-001,F-EMA-001,F-ROC-001,F-RSI-001,F-TR-001,F-ATR-001,F-VSMA-001`
 
+## H008 DETERMINISTIC FEATURE ALGORITHM CONTRACT
+
+`S2A_FEATURE_ALGORITHM_VERSION=S2A_STANDARD_FEATURES_V1`
+
+`S2A_PARAMETER_N_MIN=2`
+
+Every N-based feature requires integer `N >= 2`. Source field, timeframe/version, `N`, seed rule, Decimal policy version and rounding mode are material `FeatureDefinition`/`FeatureVersion` identity and must be included in definition and output fingerprints; a canonical feature ID without matching parameter/version material must not alias another configuration.
+
+- `F-RET-001`: `close_t / close_t-1 - 1` from two admissible CLOSED closes; before the prior close, `WARMUP`.
+- `F-SMA-001`: arithmetic mean over ordered admissible CLOSED samples; output begins at exactly `N` samples; earlier `WARMUP`.
+- `F-EMA-001`: `alpha=2/(N+1)`; `WARMUP` before `N` samples; seed at sample `N` with `SMA(N)`; thereafter `EMA_t = alpha*x_t + (1-alpha)*EMA_t-1`.
+- `F-ROC-001`: `N >= 2`; `(close_t-close_t-N)/close_t-N`; pre-lookback `WARMUP`; zero denominator `INVALID`.
+- `F-RSI-001`: `N >= 2`; `gain=max(delta,0)`, `loss=max(-delta,0)`; initial averages are arithmetic means of the first `N` deltas; Wilder recurrence is `((prev_avg*(N-1))+current)/N`; both averages zero => `50`, loss zero/gain positive => `100`, gain zero/loss positive => `0`, otherwise `RS=avg_gain/avg_loss` and `RSI=100-(100/(1+RS))`; earlier than `N` deltas `WARMUP`.
+- `F-TR-001`: first admissible CLOSED bar without prior close uses `high-low`; thereafter `max(high-low,abs(high-prev_close),abs(low-prev_close))`.
+- `F-ATR-001`: `N >= 2`, using `F-TR-001`; seed at the `N`th TR with the arithmetic mean of the first `N` TR values; earlier `WARMUP`; thereafter `ATR_t=((ATR_t-1*(N-1))+TR_t)/N`.
+- `F-VSMA-001`: arithmetic mean over `N` `CONTRACTS_PROVIDER_NATIVE_V1` quantities only; all samples share quantity unit and source-contract identity/version.
+
+`S2A_RSI_WILDER_SEED=MEAN_FIRST_N_DELTAS`
+
+`S2A_RSI_ZERO_ZERO=50`
+
+`S2A_ATR_WILDER_SEED=MEAN_FIRST_N_TR`
+
+`S2A_TR_FIRST_BAR=HIGH_MINUS_LOW`
+
+`S2A_EMA_SEED=SMA_N`
+
+Golden vectors are mandatory for flat RSI `50`, monotonic-up RSI `100`, monotonic-down RSI `0`, ATR seed boundary, EMA seed boundary, exact warmup transitions and parameter/fingerprint mutation. `FEATURE_DECIMAL_V1` remains Decimal-only with internal precision 76, canonical maximum precision 38/scale 18 and `ROUND_HALF_EVEN` only for required final non-terminating quantization; binary float, NaN, Infinity, silent clipping, saturation and fallback zero are forbidden.
+
+## H009 DETERMINISTIC 5m/15m ANALYTICAL ALIGNMENT CONTRACT
+
+S2A may derive `AlignedWindowEvidence` (or a semantically equivalent name) only from S1F CLOSED 1m `CandleBar` inputs. It is derived analytical evidence only, never S1F Market-State truth and never a replacement for Module 4/5 ownership.
+
+`S2A_MTF_SOURCE=COMPLETE_CLOSED_1M_CONSTITUENTS`
+
+`S2A_MTF_5M_COUNT=5`
+
+`S2A_MTF_15M_COUNT=15`
+
+`S2A_MTF_OHLCV=FIRST_OPEN_MAX_HIGH_MIN_LOW_LAST_CLOSE_SUM_NATIVE_Q`
+
+`S2A_MTF_KNOWLEDGE_TIME=MAX_CONSTITUENT_KNOWLEDGE_TIME`
+
+`S2A_MTF_LINEAGE=ORDERED_CONSTITUENT_CANDLE_FINGERPRINTS`
+
+`S2A_MTF_MARKET_TRUTH_AUTHORITY=NONE_DERIVED_ANALYTICAL_EVIDENCE_ONLY`
+
+5m requires exactly 5 and 15m exactly 15 contiguous CLOSED 1m constituents in UTC Unix-epoch aligned half-open `[start,end)` windows. Missing, duplicate, open, overlapping, out-of-order or non-contiguous input fails closed. All constituents must match source, contract, environment, generation, timeframe version, provenance compatibility and quantity unit/source-contract identity; mismatch is typed `INVALID`/`UNKNOWN`, never partial aggregation. Derived OHLCV is first open, maximum high, minimum low, last close and native-quantity sum only for matching unit/version, with no base-asset normalization. The ordered tuple of constituent candle fingerprints is the lineage; any correction, revision, insertion, deletion, reorder, generation change or value change changes the aligned-window fingerprint. Derived `knowledge_time` is the maximum constituent value and every constituent must be known by the evaluation boundary; derived event evidence cannot precede the latest constituent event evidence and the window end remains the close boundary. Incomplete windows are `WARMUP` or `UNKNOWN`, never zero-filled or forward-filled. STRESS must exercise valid complete and missing/corrected/mixed-generation windows.
+
 `FEATURE_DECIMAL_POLICY_VERSION=FEATURE_DECIMAL_V1`
 
 `FEATURE_DECIMAL_INTERNAL_PRECISION=76`

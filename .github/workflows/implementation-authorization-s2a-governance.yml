@@ -148,6 +148,25 @@ jobs:
           )
           for marker in required:
               assert marker in combined, marker
+          required_new_contract = (
+              "S2A_FEATURE_ALGORITHM_VERSION=S2A_STANDARD_FEATURES_V1",
+              "S2A_PARAMETER_N_MIN=2",
+              "S2A_RSI_WILDER_SEED=MEAN_FIRST_N_DELTAS",
+              "S2A_RSI_ZERO_ZERO=50",
+              "S2A_ATR_WILDER_SEED=MEAN_FIRST_N_TR",
+              "S2A_TR_FIRST_BAR=HIGH_MINUS_LOW",
+              "S2A_EMA_SEED=SMA_N",
+              "S2A_MTF_SOURCE=COMPLETE_CLOSED_1M_CONSTITUENTS",
+              "S2A_MTF_5M_COUNT=5",
+              "S2A_MTF_15M_COUNT=15",
+              "S2A_MTF_OHLCV=FIRST_OPEN_MAX_HIGH_MIN_LOW_LAST_CLOSE_SUM_NATIVE_Q",
+              "S2A_MTF_KNOWLEDGE_TIME=MAX_CONSTITUENT_KNOWLEDGE_TIME",
+              "S2A_MTF_LINEAGE=ORDERED_CONSTITUENT_CANDLE_FINGERPRINTS",
+              "S2A_MTF_MARKET_TRUTH_AUTHORITY=NONE_DERIVED_ANALYTICAL_EVIDENCE_ONLY",
+          )
+          for document in (candidate, authorization, implementation):
+              for marker in required_new_contract:
+                  assert marker in document, marker
           for feature_id in ("F-RET-001", "F-SMA-001", "F-EMA-001", "F-ROC-001", "F-RSI-001", "F-TR-001", "F-ATR-001", "F-VSMA-001"):
               assert combined.count(feature_id) >= 2, feature_id
           assert "BLOCKED_BY_PREREQUISITE" in candidate + authorization
@@ -173,6 +192,9 @@ jobs:
           echo "h004NumericPolicy=PASS"
           echo "h005OrderedLineage=PASS"
           echo "h006AxisSeparation=PASS"
+          echo "h007GovernanceState=PASS_PENDING_METADATA_HANDOFF"
+          echo "h008FeatureAlgorithmContract=PASS"
+          echo "h009MultiTimeframeContract=PASS"
           echo "implementationAuthorized=false"
           echo "productionCredentials=false"
           echo "productionDeployment=false"
