@@ -5,7 +5,7 @@ Risk: `HIGH_ASSURANCE`
 Work Order: `HCT-IMP-0008-S1E`
 Implementation Issue: `#66`
 Implementation PR: `#67`
-Correction source: `HCT-CORRECTION-DELTA-S1E-H007-H010-MACRO-PACK`
+Correction source: `HCT-CORRECTION-DELTA-S1E-H011-H012-FINAL-HARDENING`
 
 ## Context lock and exact identity
 
@@ -16,9 +16,9 @@ Correction source: `HCT-CORRECTION-DELTA-S1E-H007-H010-MACRO-PACK`
   of the PR context base;
 - governance delta proof: `PASS`; exactly one governance-only commit changes
   only the four CP0029 promotion files;
-- previous reviewed head: `32db8c69908845a2a7cb7291ffe9c628488ccbd3`;
-- functional correction head: `96c59696c3a0513135d675bdfa5624185fcdf8a4`;
-- functional exact-head CI: run `34751469402`, job `103708636360`, event
+- previous reviewed head: `4dc73b9bab9beea6e73b0c16b915af3eefc16ff1`;
+- functional correction head: `2418302e0ec99d0d1e7c4ad22927932f16f42907`;
+- functional exact-head CI: run `34753150111`, job `103712966722`, event
   `pull_request`, conclusion `completed / success`;
 - PR remained OPEN and UNMERGED during execution: `PASS`.
 
@@ -43,11 +43,11 @@ The complete PR surface remains exactly seven files:
 No checkpoint, frozen requirement, Work Order, dependency lock, frontend
 source or generated shared contract changed.
 
-## H001-H006 preservation
+## H001-H010 preservation
 
-H001-H006 remain closed and unchanged by this delta. The prior exact-head
+H001-H010 remain closed and unchanged by this delta. The prior exact-head
 evidence remains bound to reviewed head
-`32db8c69908845a2a7cb7291ffe9c628488ccbd3` and its successful receipt.
+`4dc73b9bab9beea6e73b0c16b915af3eefc16ff1` and its successful receipt.
 
 ## H007-H010 closure evidence
 
@@ -83,13 +83,31 @@ evidence remains bound to reviewed head
   workflow remains pull-request-only with the seven-file allowlist and the
   checkpoint/context-base distinction intact.
 
+## H011-H012 final hardening evidence
+
+- H011 synchronized evaluation attestation: `PASS`. `SequenceEvaluation` is
+  evaluator-issued for every result, and synchronized results require an
+  evaluator attestation plus valid synchronized continuity. Direct
+  `ACCEPT + synchronized=True`, explicit `None` continuity and synchronized
+  `DUPLICATE` construction are rejected. `QualityAssessment` and
+  `derive_data_authority` defensively repeat the fence, so no supported public
+  path can produce `ALLOW_NEW_EXPOSURE` without evaluator evidence.
+- H012 proof contract and lineage binding: `PASS`. `SynchronizationProof`
+  materializes contract, channel, schema and visibility from the capability,
+  requires contract scope for trusted contract-scoped use, and binds the exact
+  synchronization anchor separately from the latest accepted event.
+  `MarketStateSnapshot` requires matching context and both proof fingerprints
+  in its event lineage. Cross-contract, cross-channel, schema/visibility,
+  retired-generation and missing-latest-event cases fail closed. Snapshot ->
+  delta 11 -> delta 12 preserves the original anchor and latest event.
+
 ## Exact measured results
 
-- focused H007-H010 tests: `16 passed, 40 deselected`;
-- full backend suite: `238 passed`;
-- backend coverage: `90.06%` (required `>=90%`);
+- focused H007-H012 tests: `20 passed, 40 deselected`;
+- full backend suite: `242 passed`;
+- backend coverage: `90.03%` (required `>=90%`);
 - prior-stage regression selection S0A/S0B/S0C/S1A/S1B/S1C/S1D + S1E:
-  `231 passed`;
+  `235 passed`;
 - frontend tests: `13 passed`;
 - contract generation/parity: `PASS (10 schemas)`;
 - Ruff lint: `PASS`;
@@ -105,11 +123,11 @@ evidence remains bound to reviewed head
 ## Exact-head hosted receipt
 
 - workflow: `HCT-IMP-0008-S1E Market Truth Foundation`;
-- functional correction check/job: `s1e-quality / 103708636360`;
-- functional correction run: `34751469402`;
+- functional correction check/job: `s1e-quality / 103712966722`;
+- functional correction run: `34753150111`;
 - event: `pull_request`;
 - exact base: `2662f81dafb848724bfba0d2f445b03f0c96b959`;
-- exact functional head: `96c59696c3a0513135d675bdfa5624185fcdf8a4`;
+- exact functional head: `2418302e0ec99d0d1e7c4ad22927932f16f42907`;
 - conclusion: `completed / success`;
 - final evidence head/run/job: bound in the post-publication PR/Issue
   handoff because of commit-SHA/receipt self-reference.
