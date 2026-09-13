@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Any, TypeVar
@@ -57,6 +57,7 @@ class ReferencePriceKind(StrEnum):
 
 
 T = TypeVar("T")
+_CANDLE_PROOF_ATTESTATION: object = object()
 
 
 def _hash(material: object) -> str:
@@ -485,7 +486,7 @@ class Timeframe:
         )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class CandleCloseProof:
     kind: CandleProofKind
     source_id: StableId
@@ -500,8 +501,132 @@ class CandleCloseProof:
     admissibility_time: datetime
     next_window_start: datetime | None = None
     origin: str = ""
+    _attestation: object = field(default=None, repr=False, compare=False)
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        raise ValuePlaneConsistencyError("CandleCloseProof must be issued by an evaluator")
+
+    @classmethod
+    def _from_evaluator(
+        cls,
+        *,
+        kind: CandleProofKind,
+        source_id: StableId,
+        contract_id: StableId,
+        environment: Environment,
+        generation: GenerationRef,
+        timeframe_fingerprint: str,
+        expected_start: datetime,
+        expected_end: datetime,
+        evidence_fingerprint: str,
+        knowledge_time: datetime,
+        admissibility_time: datetime,
+        next_window_start: datetime | None,
+        origin: str,
+    ) -> CandleCloseProof:
+        instance = object.__new__(cls)
+        object.__setattr__(instance, "kind", kind)
+        object.__setattr__(instance, "source_id", source_id)
+        object.__setattr__(instance, "contract_id", contract_id)
+        object.__setattr__(instance, "environment", environment)
+        object.__setattr__(instance, "generation", generation)
+        object.__setattr__(instance, "timeframe_fingerprint", timeframe_fingerprint)
+        object.__setattr__(instance, "expected_start", expected_start)
+        object.__setattr__(instance, "expected_end", expected_end)
+        object.__setattr__(instance, "evidence_fingerprint", evidence_fingerprint)
+        object.__setattr__(instance, "knowledge_time", knowledge_time)
+        object.__setattr__(instance, "admissibility_time", admissibility_time)
+        object.__setattr__(instance, "next_window_start", next_window_start)
+        object.__setattr__(instance, "origin", origin)
+        object.__setattr__(instance, "_attestation", _CANDLE_PROOF_ATTESTATION)
+        instance.__post_init__()
+        return instance
+
+    @classmethod
+    def _from_next_window_evidence(
+        cls,
+        *,
+        current_candle: CandleBar,
+        next_window: CandleBar,
+    ) -> CandleCloseProof:
+        if not isinstance(current_candle, CandleBar) or not isinstance(next_window, CandleBar):
+            raise ValuePlaneError("typed current and next-window candles are required")
+        if current_candle.finality is not Finality.OPEN:
+            raise ValuePlaneConsistencyError("next-window proof requires an open current candle")
+        current_context = current_candle.context
+        next_context = next_window.context
+        if current_context.generation.retired or next_context.generation.retired:
+            raise ValuePlaneConsistencyError("retired generation cannot attest candle close")
+        if (
+            next_context.source_id != current_context.source_id
+            or next_context.contract_id != current_context.contract_id
+            or next_context.environment is not current_context.environment
+            or next_context.generation != current_context.generation
+            or next_window.timeframe.fingerprint != current_candle.timeframe.fingerprint
+        ):
+            raise ValuePlaneConsistencyError("next-window evidence identity does not match")
+        if next_window.start != current_candle.end:
+            raise ValuePlaneConsistencyError(
+                "next-window evidence must start at current candle end"
+            )
+        if next_context.knowledge_time < current_context.knowledge_time:
+            raise ValuePlaneConsistencyError(
+                "next-window evidence knowledge time predates current candle evidence"
+            )
+        if next_context.wall_receive_time < next_context.knowledge_time:
+            raise ValuePlaneConsistencyError(
+                "next-window evidence admissibility time predates its knowledge time"
+            )
+        return cls._from_evaluator(
+            kind=CandleProofKind.NEXT_WINDOW,
+            source_id=current_context.source_id,
+            contract_id=current_context.contract_id,
+            environment=current_context.environment,
+            generation=current_context.generation,
+            timeframe_fingerprint=current_candle.timeframe.fingerprint,
+            expected_start=current_candle.start,
+            expected_end=current_candle.end,
+            evidence_fingerprint=next_window.fingerprint,
+            knowledge_time=next_context.knowledge_time,
+            admissibility_time=next_context.wall_receive_time,
+            next_window_start=next_window.start,
+            origin="NEXT_WINDOW_CONTINUITY_V1",
+        )
+
+    @classmethod
+    def _from_decoder(
+        cls,
+        *,
+        source_id: StableId,
+        contract_id: StableId,
+        environment: Environment,
+        generation: GenerationRef,
+        timeframe: Timeframe,
+        start: datetime,
+        end: datetime,
+        evidence_fingerprint: str,
+        knowledge_time: datetime,
+        admissibility_time: datetime,
+    ) -> CandleCloseProof:
+        return cls._from_evaluator(
+            kind=CandleProofKind.REST_CONFIRMATION,
+            source_id=source_id,
+            contract_id=contract_id,
+            environment=environment,
+            generation=generation,
+            timeframe_fingerprint=timeframe.fingerprint,
+            expected_start=start,
+            expected_end=end,
+            evidence_fingerprint=evidence_fingerprint,
+            knowledge_time=knowledge_time,
+            admissibility_time=admissibility_time,
+            next_window_start=None,
+            origin="MEXC_REST_KLINE_V1",
+        )
 
     def __post_init__(self) -> None:
+        if self._attestation is not _CANDLE_PROOF_ATTESTATION:
+            raise ValuePlaneConsistencyError("candle close proof is not evaluator-issued")
         _stable(self.source_id, IdentityKind.EXCHANGE, "proof source")
         _stable(self.contract_id, IdentityKind.INSTRUMENT, "proof contract")
         if not isinstance(self.environment, Environment):
@@ -542,61 +667,6 @@ class CandleCloseProof:
         else:
             raise ValuePlaneError("unknown candle proof kind")
 
-    @classmethod
-    def next_window(
-        cls,
-        *,
-        context: ValueContext,
-        timeframe: Timeframe,
-        start: datetime,
-        end: datetime,
-        evidence_fingerprint: str,
-        knowledge_time: datetime,
-        admissibility_time: datetime,
-    ) -> CandleCloseProof:
-        return cls(
-            CandleProofKind.NEXT_WINDOW,
-            context.source_id,
-            context.contract_id,
-            context.environment,
-            context.generation,
-            timeframe.fingerprint,
-            start,
-            end,
-            evidence_fingerprint,
-            knowledge_time,
-            admissibility_time,
-            next_window_start=end,
-            origin="NEXT_WINDOW_CONTINUITY_V1",
-        )
-
-    @classmethod
-    def rest_confirmation(
-        cls,
-        *,
-        context: ValueContext,
-        timeframe: Timeframe,
-        start: datetime,
-        end: datetime,
-        evidence_fingerprint: str,
-        knowledge_time: datetime,
-        admissibility_time: datetime,
-    ) -> CandleCloseProof:
-        return cls(
-            CandleProofKind.REST_CONFIRMATION,
-            context.source_id,
-            context.contract_id,
-            context.environment,
-            context.generation,
-            timeframe.fingerprint,
-            start,
-            end,
-            evidence_fingerprint,
-            knowledge_time,
-            admissibility_time,
-            origin="MEXC_REST_KLINE_V1",
-        )
-
     @property
     def fingerprint(self) -> str:
         return _hash(
@@ -621,7 +691,9 @@ class CandleCloseProof:
 
     def matches_candle(self, candle: CandleBar) -> bool:
         return (
-            candle.context.source_id == self.source_id
+            self._attestation is _CANDLE_PROOF_ATTESTATION
+            and not self.generation.retired
+            and candle.context.source_id == self.source_id
             and candle.context.contract_id == self.contract_id
             and candle.context.environment is self.environment
             and candle.context.generation == self.generation

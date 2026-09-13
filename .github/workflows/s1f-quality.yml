@@ -234,7 +234,9 @@ jobs:
               "IMP-H004",
               "IMP-H005",
               "IMP-H006",
+              "IMP-H006R",
               "IMP-H007",
+              "IMP-H006R=CLOSED_AUTHOR_SIDE_ONLY",
               "Independent review remains required",
           )
           for marker in required:

@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -15,8 +16,10 @@ from hct_backend.s1f_mexc import (
 )
 from hct_backend.s1f_values import (
     CandleBar,
+    CandleCloseProof,
     CandleProofKind,
     DepthRecoveryEvidence,
+    Finality,
     OrderBookDelta,
     OrderBookSnapshot,
     TickerState,
@@ -79,6 +82,11 @@ def test_depth_snapshot_and_exact_kline_close_proof_are_bounded() -> None:
     )
     assert proof.kind is CandleProofKind.REST_CONFIRMATION
     assert len(proof.fingerprint) == 64
+    assert not hasattr(CandleCloseProof, "rest_confirmation")
+    decoded_candle = decoder.decode(json.dumps(FIXTURES["kline"]), context()).value
+    assert isinstance(decoded_candle, CandleBar)
+    closed = replace(decoded_candle, finality=Finality.CLOSED, close_proof=proof)
+    assert closed.close_proof is proof
 
 
 def test_depth_commits_recovery_requires_contiguous_follow_up() -> None:

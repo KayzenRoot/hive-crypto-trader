@@ -22,7 +22,6 @@ from hct_backend.s1f_values import (
     BookLevel,
     CandleBar,
     CandleCloseProof,
-    CandleProofKind,
     CapabilityState,
     CapabilityValue,
     DepthRecoveryEvidence,
@@ -424,19 +423,17 @@ class MexcPublicDecoder:
             raise MexcQuarantineError("KLINE_ARRAY_VALUE_INVALID", payload_fp) from exc
         if expected_start >= expected_end:
             raise MexcQuarantineError("KLINE_INTERVAL_INVALID", payload_fp)
-        return CandleCloseProof(
-            kind=CandleProofKind.REST_CONFIRMATION,
+        return CandleCloseProof._from_decoder(
             source_id=context.source_id,
             contract_id=context.contract_id,
             environment=context.environment,
             generation=context.generation,
-            timeframe_fingerprint=timeframe.fingerprint,
-            expected_start=expected_start,
-            expected_end=expected_end,
+            timeframe=timeframe,
+            start=expected_start,
+            end=expected_end,
             evidence_fingerprint=payload_fp,
             knowledge_time=_utc(context.knowledge_time),
             admissibility_time=_utc(context.wall_receive_time),
-            origin="MEXC_REST_KLINE_V1",
         )
 
     @staticmethod

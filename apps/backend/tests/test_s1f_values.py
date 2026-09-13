@@ -110,15 +110,20 @@ def test_candle_interval_lineage_and_closed_proof_are_explicit() -> None:
     with pytest.raises(ValuePlaneConsistencyError):
         CandleBar(**kwargs, finality=Finality.CLOSED, close_proof="anything")  # type: ignore[arg-type]
     bar = CandleBar(**kwargs, finality=Finality.OPEN)
-    proof = CandleCloseProof.next_window(
-        context=bar.context,
-        timeframe=frame,
-        start=bar.start,
-        end=bar.end,
-        evidence_fingerprint="c" * 64,
-        knowledge_time=NOW,
-        admissibility_time=NOW,
+    next_window = CandleBar(
+        **{
+            **kwargs,
+            "start": bar.end,
+            "end": bar.end + timedelta(seconds=60),
+            "open": DecimalValue.parse("11"),
+            "high": DecimalValue.parse("13"),
+            "low": DecimalValue.parse("10"),
+            "close": DecimalValue.parse("12"),
+            "lineage": line.append("d" * 64, NOW),
+        },
+        finality=Finality.OPEN,
     )
+    proof = CandleCloseProof._from_next_window_evidence(current_candle=bar, next_window=next_window)
     closed = CandleBar(**kwargs, finality=Finality.CLOSED, close_proof=proof)
     assert closed.close_proof is proof
     corrected = CandleBar(
@@ -269,6 +274,8 @@ def test_depth_recovery_is_typed_and_requires_matching_continuity() -> None:
 
 def test_candle_proof_rejects_unbound_material() -> None:
     frame = Timeframe("Min1", 60)
+    assert not hasattr(CandleCloseProof, "next_window")
+    assert not hasattr(CandleCloseProof, "rest_confirmation")
     with pytest.raises(ValuePlaneConsistencyError):
         CandleCloseProof(
             CandleProofKind.NEXT_WINDOW,
@@ -284,4 +291,115 @@ def test_candle_proof_rejects_unbound_material() -> None:
             NOW,
             next_window_start=NOW,
             origin="NEXT_WINDOW_CONTINUITY_V1",
+        )
+
+
+def test_next_window_proof_requires_compatible_real_evidence() -> None:
+    frame = Timeframe("Min1", 60)
+    line = OrderedLineage.from_event("b" * 64, NOW)
+    current = CandleBar(
+        context(),
+        frame,
+        NOW,
+        NOW + timedelta(seconds=60),
+        DecimalValue.parse("10"),
+        DecimalValue.parse("12"),
+        DecimalValue.parse("9"),
+        DecimalValue.parse("11"),
+        quantity("2"),
+        ProviderTransactionAmount(DecimalValue.parse("22"), "contract"),
+        Finality.OPEN,
+        line,
+    )
+    next_window = CandleBar(
+        context(),
+        frame,
+        current.end,
+        current.end + timedelta(seconds=60),
+        DecimalValue.parse("11"),
+        DecimalValue.parse("13"),
+        DecimalValue.parse("10"),
+        DecimalValue.parse("12"),
+        quantity("3"),
+        ProviderTransactionAmount(DecimalValue.parse("36"), "contract"),
+        Finality.OPEN,
+        line.append("d" * 64, NOW),
+    )
+    proof = CandleCloseProof._from_next_window_evidence(
+        current_candle=current, next_window=next_window
+    )
+    assert proof.evidence_fingerprint == next_window.fingerprint
+    assert proof.matches_candle(current)
+    other_source = StableId(kind=IdentityKind.EXCHANGE, value="other")
+    incompatible = (
+        replace(
+            next_window,
+            context=replace(
+                next_window.context,
+                source_id=other_source,
+                generation=GenerationRef(other_source, Environment.REPLAY, 1),
+            ),
+        ),
+        replace(
+            next_window,
+            context=replace(
+                next_window.context,
+                contract_id=StableId(kind=IdentityKind.INSTRUMENT, value="eth-usdt"),
+            ),
+        ),
+        replace(
+            next_window,
+            context=replace(
+                next_window.context,
+                environment=Environment.PAPER,
+                generation=GenerationRef(SOURCE, Environment.PAPER, 1),
+            ),
+        ),
+        replace(
+            next_window,
+            context=replace(
+                next_window.context,
+                generation=GenerationRef(SOURCE, Environment.REPLAY, 2),
+            ),
+        ),
+        replace(
+            next_window,
+            timeframe=Timeframe("Min1", 60, version=2),
+        ),
+    )
+    for candidate in incompatible:
+        with pytest.raises(ValuePlaneConsistencyError):
+            CandleCloseProof._from_next_window_evidence(
+                current_candle=current, next_window=candidate
+            )
+    with pytest.raises(ValuePlaneConsistencyError):
+        CandleCloseProof._from_next_window_evidence(
+            current_candle=current,
+            next_window=replace(
+                next_window,
+                context=replace(
+                    next_window.context,
+                    knowledge_time=NOW - timedelta(seconds=1),
+                ),
+            ),
+        )
+    with pytest.raises(ValuePlaneConsistencyError):
+        CandleCloseProof._from_next_window_evidence(
+            current_candle=current,
+            next_window=replace(
+                next_window,
+                start=current.end + timedelta(seconds=60),
+                end=current.end + timedelta(seconds=120),
+            ),
+        )
+    with pytest.raises(ValuePlaneConsistencyError):
+        CandleCloseProof._from_next_window_evidence(
+            current_candle=current,
+            next_window=replace(
+                next_window,
+                context=replace(
+                    next_window.context,
+                    generation=next_window.context.generation.retire(),
+                ),
+            ),
         )
