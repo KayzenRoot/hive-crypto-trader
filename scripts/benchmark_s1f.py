@@ -16,9 +16,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "apps" / "backend" / "src"))
 
-from hct_backend.contracts import Environment, IdentityKind, StableId  # noqa: E402
-from hct_backend.market_truth import GenerationRef  # noqa: E402
-from hct_backend.s1f_mexc import MexcDecodeContext, MexcPublicDecoder  # noqa: E402
+from hct_backend.contracts import (  # noqa: E402, RUF100
+    Environment,
+    IdentityKind,
+    StableId,
+)
+from hct_backend.market_truth import GenerationRef  # noqa: E402, RUF100
+from hct_backend.s1f_mexc import (  # noqa: E402, RUF100
+    MexcDecodeContext,
+    MexcPublicDecoder,
+)
 
 PROFILES = {
     "S1F-CONTRACT-MICRO-V1": {
@@ -215,9 +222,7 @@ def run(profile_name: str) -> dict[str, object]:
             time.perf_counter_ns() - normalization_started
         )
         publication_started = time.perf_counter_ns()
-        published_fingerprints = tuple(
-            getattr(value, "fingerprint") for value in decoded.values
-        )
+        published_fingerprints = tuple(value.fingerprint for value in decoded.values)
         if not published_fingerprints:
             raise AssertionError("canonical publication produced no value")
         publication_latencies_ns.append(time.perf_counter_ns() - publication_started)
@@ -308,8 +313,10 @@ def run(profile_name: str) -> dict[str, object]:
             "synthetic pinned multichannel fixture stream",
             "no product latency SLO asserted",
             "no live network",
-            "stress profile intentionally sheds under a deterministic bounded consumer "
-            "rate",
+            (
+                "stress profile intentionally sheds under a deterministic bounded consumer "
+                "rate"
+            ),
         ],
     }
 

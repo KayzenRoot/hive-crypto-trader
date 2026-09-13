@@ -6,16 +6,16 @@
       "bounded_completion": true,
       "consumed_count": 512,
       "consumer_model": "deterministic_one_frame_per_produced_frame",
-      "consumer_rate_per_second": 505.6152424026235,
+      "consumer_rate_per_second": 455.97689978274457,
       "correctness": "PASS",
       "dropped_count": 0,
-      "elapsed_seconds": 1.012627700001758,
+      "elapsed_seconds": 1.122863900000084,
       "immutable_value_publication_latency_distribution": {
-        "max": 1614800,
-        "min": 205100,
-        "p50": 420100,
-        "p95": 1231300,
-        "p99": 1411800,
+        "max": 2690700,
+        "min": 207000,
+        "p50": 447600,
+        "p95": 1410000,
+        "p99": 1668200,
         "unit": "nanoseconds"
       },
       "limitations": [
@@ -27,14 +27,14 @@
       "messages_decoded": 512,
       "messages_produced": 512,
       "normalization_latency_distribution": {
-        "max": 3380900,
-        "min": 423600,
-        "p50": 745600,
-        "p95": 2637200,
-        "p99": 2929200,
+        "max": 4820300,
+        "min": 439600,
+        "p50": 1013200,
+        "p95": 3095800,
+        "p99": 3584000,
         "unit": "nanoseconds"
       },
-      "normalization_throughput_per_second": 505.6152424026235,
+      "normalization_throughput_per_second": 455.97689978274457,
       "parameters": {
         "deal": 256,
         "depth": 128,
@@ -46,19 +46,19 @@
         "ticker": 64,
         "total": 512
       },
-      "peak_memory_bytes": 162682,
+      "peak_memory_bytes": 153599,
       "producer_model": "deterministic_one_frame_per_iteration",
-      "producer_rate_per_second": 505.6152424026235,
+      "producer_rate_per_second": 455.97689978274457,
       "profile": "S1F-CONTRACT-MICRO-V1",
-      "queue_age_ms_max": 0.029,
+      "queue_age_ms_max": 0.117,
       "queue_age_samples": 512,
       "queue_capacity": 4096,
       "queue_depth_max": 1,
       "queue_dropped": 0,
       "raw_artifact_hash": "f5994233c3d5e4e772a08888bb2a58826ddc38d58e3ba3a0576b6d42b3b8dee7",
-      "replay_throughput_per_second": 505.6152424026235,
+      "replay_throughput_per_second": 455.97689978274457,
       "seed": 0,
-      "steady_memory_bytes": 156256
+      "steady_memory_bytes": 147197
     }
   ]
 }
