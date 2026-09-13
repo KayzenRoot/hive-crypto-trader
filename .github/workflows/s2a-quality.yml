@@ -58,7 +58,7 @@ jobs:
           checkpoint = json.loads(Path("checkpoints/history/HCT-CP-0033.json").read_text())
           latest = json.loads(Path("checkpoints/workstreams/planning/latest.json").read_text())
           keys = (
-              "checkpoint_id", "status", "authorization_increment", "authorized_implementation_slice",
+              "checkpoint_id", "status", "authorization_id", "authorized_increment",
               "implementation_authorized", "implementation_authorization_scope",
               "implementation_authorization_ceiling", "production_credentials_authorized",
               "production_deployment_authorized", "limited_live_authorized", "live_trading_authorized",
@@ -67,8 +67,8 @@ jobs:
               assert checkpoint[key] == latest[key], key
           assert checkpoint["checkpoint_id"] == "HCT-CP-0033"
           assert checkpoint["status"] == "IMPLEMENTATION_AUTHORIZED_S2A"
-          assert checkpoint["authorization_increment"] == "HCT-IMPL-AUTH-0009"
-          assert checkpoint["authorized_implementation_slice"] == "HCT-IMP-0009-S2A"
+          assert checkpoint["authorization_id"] == "HCT-IMPL-AUTH-0009"
+          assert checkpoint["authorized_increment"] == "HCT-IMP-0009-S2A"
           assert checkpoint["implementation_authorized"] is True
           assert checkpoint["implementation_authorization_scope"] == ["HCT-IMP-0009-S2A"]
           assert checkpoint["implementation_authorization_ceiling"] == "NON_TRADING_STAGE_2_DETERMINISTIC_FEATURE_INDICATOR_FOUNDATION_ONLY"
