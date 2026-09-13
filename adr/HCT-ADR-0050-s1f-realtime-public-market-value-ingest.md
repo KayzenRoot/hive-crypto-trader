@@ -52,3 +52,17 @@ HCT owns bounded retry/backoff/circuit state, generation retirement, staged idem
 `S1F_RUNTIME_QUEUE_POLICY=explicit_bounded_inbound_queue;Module29_backpressure;no_unbounded_receive_queue`
 
 `S1F_QUANTITY_UNIT_KIND=QuantityUnit:CONTRACTS_PROVIDER_NATIVE_V1`; `CandleBar.a` remains `ProviderTransactionAmount`; no implicit base-asset conversion or mixed-unit upgrade exists.
+
+## IMP-H001-H007 runtime truth correction
+
+The bounded correction delta keeps the original S1F scope and closes the following runtime contracts:
+
+- a WebSocket generation is published only after the physical socket opens, remains paired with its receive loop and bounded inbound queue, and is retired in the same `finally` path on close, cancellation or transport failure;
+- the authoritative provider heartbeat is an application-level `{"method":"ping"}` scheduled every 15 seconds, with the 60-second no-ping provider limit retained as evidence; protocol ping frames remain disabled and pong observations are liveness evidence only;
+- Module 29 admission is consumed immediately before each HTTP attempt, physical WebSocket connection attempt and staged subscription send; denied outcomes prevent that specific external attempt;
+- REST candle closure accepts only the official `success/code/data` kline wrapper and binds the request context, exact window, source fingerprint and generation into a typed `CandleCloseProof`;
+- `depth_commits` is decoded through a dedicated typed recovery path with explicit absence of provider event time, ordered versions and a contiguous follow-up delta required before trusted state resumes;
+- `DecimalValue`, `OrderedLineage` and closed `CandleBar` construction recompute and verify their content-bound material; arbitrary close-proof strings cannot create finality;
+- benchmark evidence separates normalization from immutable value publication, measures enqueue-to-dequeue queue age and derives correctness from producer, admission, consumption, shedding and boundedness invariants.
+
+These corrections remain non-trading public market-value ingest only. They do not create credentials, private API, persistence, deployment, limited-live, live-trading or implementation-completion authority.

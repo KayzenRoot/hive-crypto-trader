@@ -15,6 +15,8 @@ from hct_backend.s1f_mexc import (
 )
 from hct_backend.s1f_values import (
     CandleBar,
+    CandleProofKind,
+    DepthRecoveryEvidence,
     OrderBookDelta,
     OrderBookSnapshot,
     TickerState,
@@ -69,13 +71,72 @@ def test_depth_snapshot_and_exact_kline_close_proof_are_bounded() -> None:
     snapshot = decoder.decode_rest_depth(json.dumps(FIXTURES["depth_snapshot"]), context())
     assert snapshot.version == 1
     proof = decoder.decode_rest_kline_close_proof(
-        json.dumps({"symbol": "BTC_USDT", "interval": "Min1", "time": ["1700000040"]}),
+        json.dumps(FIXTURES["kline_rest_official"]),
         context(),
         expected_interval="Min1",
         expected_start=datetime.fromtimestamp(1700000040, UTC),
         expected_end=datetime.fromtimestamp(1700000100, UTC),
     )
-    assert len(proof) == 64
+    assert proof.kind is CandleProofKind.REST_CONFIRMATION
+    assert len(proof.fingerprint) == 64
+
+
+def test_depth_commits_recovery_requires_contiguous_follow_up() -> None:
+    decoder = MexcPublicDecoder()
+    recovery = decoder.decode_rest_depth_commits(
+        json.dumps(FIXTURES["depth_commits_official"]), context(previous_depth_version=1)
+    )
+    assert isinstance(recovery, DepthRecoveryEvidence)
+    assert recovery.anchor.version == 4
+    assert recovery.anchor.provider_event_time is None
+    delta_payload = {
+        "channel": "push.depth",
+        "symbol": "BTC_USDT",
+        "ts": "1700000001000",
+        "data": {"version": "5", "bids": [["411.8", "12", "1"]], "asks": []},
+    }
+    delta = decoder.decode(json.dumps(delta_payload), context(previous_depth_version=4)).value
+    assert recovery.resume_with_contiguous_delta(delta).version == 5  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        FIXTURES["kline_rest_failure"],
+        {"success": True, "code": 0, "data": {"time": ["1700000040"]}},
+        {
+            "success": True,
+            "code": 0,
+            "data": {
+                "time": ["1700000100"],
+                "open": ["1"],
+                "close": ["1"],
+                "high": ["1"],
+                "low": ["1"],
+                "vol": ["1"],
+                "amount": ["1"],
+            },
+        },
+        {"success": True, "code": 0, "data": [{"asks": [], "bids": [], "version": 1}]},
+    ],
+)
+def test_rest_recovery_and_close_proofs_reject_non_official_or_mismatched_shapes(
+    payload: object,
+) -> None:
+    decoder = MexcPublicDecoder()
+    with pytest.raises(MexcQuarantineError):
+        if isinstance(payload, dict) and isinstance(payload.get("data"), list):
+            decoder.decode_rest_depth_commits(
+                json.dumps(payload), context(previous_depth_version=1)
+            )
+        else:
+            decoder.decode_rest_kline_close_proof(
+                json.dumps(payload),
+                context(),
+                expected_interval="Min1",
+                expected_start=datetime.fromtimestamp(1700000040, UTC),
+                expected_end=datetime.fromtimestamp(1700000100, UTC),
+            )
 
 
 def test_bulk_ticker_full_depth_reference_and_funding_paths() -> None:
@@ -144,9 +205,9 @@ def test_decoder_rejects_identity_depth_and_close_proof_contradictions() -> None
         )
     with pytest.raises(MexcQuarantineError):
         decoder.decode_rest_kline_close_proof(
-            json.dumps({"symbol": "BTC_USDT", "interval": "Min5", "time": ["1700000040"]}),
+            json.dumps(FIXTURES["kline_rest_official"]),
             context(),
-            expected_interval="Min1",
+            expected_interval="Min5",
             expected_start=datetime.fromtimestamp(1700000040, UTC),
             expected_end=datetime.fromtimestamp(1700000100, UTC),
         )

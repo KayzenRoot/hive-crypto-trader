@@ -47,6 +47,38 @@ def _fingerprint(material: object) -> str:
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
+def _canonical_material(value: Decimal) -> tuple[str, int]:
+    """Return the canonical text and the scale carried by the Decimal input."""
+
+    if not value.is_finite():
+        raise NumericPolicyError(NumericFailureReason.NON_FINITE, "finite Decimal required")
+    exponent = value.as_tuple().exponent
+    if not isinstance(exponent, int):
+        raise NumericPolicyError(
+            NumericFailureReason.NON_FINITE, "non-finite Decimal exponent is forbidden"
+        )
+    material_scale = max(-exponent, 0)
+    canonical = format(value, "f")
+    if "." in canonical:
+        canonical = canonical.rstrip("0").rstrip(".")
+    if canonical in {"", "-0"} or canonical == "-0.0":
+        canonical = "0"
+    if canonical.startswith("-") and Decimal(canonical) == 0:
+        canonical = "0"
+    integer_part = canonical.partition(".")[0].lstrip("-").lstrip("0")
+    integer_digits = len(integer_part)
+    precision = max(len(value.as_tuple().digits), integer_digits + material_scale)
+    if precision > NumericPolicy.MAX_PRECISION:
+        raise NumericPolicyError(NumericFailureReason.PRECISION_OVERFLOW, "precision exceeds 38")
+    if material_scale > NumericPolicy.MAX_SCALE:
+        raise NumericPolicyError(NumericFailureReason.SCALE_OVERFLOW, "scale exceeds 18")
+    if integer_digits > NumericPolicy.MAX_INTEGER_DIGITS:
+        raise NumericPolicyError(
+            NumericFailureReason.INTEGER_DIGITS_OVERFLOW, "integer digits exceed 20"
+        )
+    return canonical, material_scale
+
+
 @dataclass(frozen=True, slots=True)
 class DecimalValue:
     """Exact Decimal plus its material input scale and canonical text."""
@@ -58,13 +90,17 @@ class DecimalValue:
     def __post_init__(self) -> None:
         if not isinstance(self.value, Decimal) or not self.value.is_finite():
             raise NumericPolicyError(NumericFailureReason.NON_FINITE, "finite Decimal required")
-        if not _DECIMAL_TEXT.fullmatch(self.canonical_text):
+        if not isinstance(self.canonical_text, str) or not _DECIMAL_TEXT.fullmatch(
+            self.canonical_text
+        ):
             raise NumericPolicyError(NumericFailureReason.MALFORMED, "canonical text is invalid")
         if isinstance(self.material_scale, bool) or not isinstance(self.material_scale, int):
             raise NumericPolicyError(NumericFailureReason.MALFORMED, "material scale is invalid")
-        if self.material_scale < 0 or self.material_scale > NumericPolicy.MAX_SCALE:
+        canonical, material_scale = _canonical_material(self.value)
+        if self.canonical_text != canonical or self.material_scale != material_scale:
             raise NumericPolicyError(
-                NumericFailureReason.SCALE_OVERFLOW, "material scale is out of bounds"
+                NumericFailureReason.MALFORMED,
+                "canonical text and material scale do not match Decimal material",
             )
 
     @classmethod
@@ -95,32 +131,7 @@ class DecimalValue:
             raise NumericPolicyError(
                 NumericFailureReason.NON_FINITE, "NaN and Infinity are forbidden"
             )
-        exponent = value.as_tuple().exponent
-        if not isinstance(exponent, int):
-            raise NumericPolicyError(
-                NumericFailureReason.NON_FINITE, "non-finite Decimal exponent is forbidden"
-            )
-        material_scale = max(-exponent, 0)
-        digits = len(value.as_tuple().digits)
-        integer_digits = max(digits + min(exponent, 0), 0)
-        precision = max(digits, integer_digits + material_scale)
-        if precision > NumericPolicy.MAX_PRECISION:
-            raise NumericPolicyError(
-                NumericFailureReason.PRECISION_OVERFLOW, "precision exceeds 38"
-            )
-        if material_scale > NumericPolicy.MAX_SCALE:
-            raise NumericPolicyError(NumericFailureReason.SCALE_OVERFLOW, "scale exceeds 18")
-        if integer_digits > NumericPolicy.MAX_INTEGER_DIGITS:
-            raise NumericPolicyError(
-                NumericFailureReason.INTEGER_DIGITS_OVERFLOW, "integer digits exceed 20"
-            )
-        canonical = format(value, "f")
-        if "." in canonical:
-            canonical = canonical.rstrip("0").rstrip(".")
-        if canonical in {"", "-0"} or canonical == "-0.0":
-            canonical = "0"
-        if canonical.startswith("-") and Decimal(canonical) == 0:
-            canonical = "0"
+        canonical, material_scale = _canonical_material(value)
         return cls(value=value, canonical_text=canonical, material_scale=material_scale)
 
     @classmethod

@@ -7,7 +7,7 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
-from typing import Any, TypeVar, cast
+from typing import Any, TypeVar
 
 from hct_backend.contracts import Environment, IdentityKind, StableId
 from hct_backend.market_truth import GenerationRef, NormalizedMarketEvent
@@ -43,6 +43,11 @@ class Finality(StrEnum):
     OPEN = "OPEN"
     CLOSED = "CLOSED"
     UNKNOWN = "UNKNOWN"
+
+
+class CandleProofKind(StrEnum):
+    NEXT_WINDOW = "NEXT_WINDOW"
+    REST_CONFIRMATION = "REST_CONFIRMATION"
 
 
 class ReferencePriceKind(StrEnum):
@@ -292,15 +297,18 @@ class OrderedLineage:
     knowledge_time: datetime
 
     def __post_init__(self) -> None:
-        if not self.fingerprints or any(
-            not isinstance(item, str) or len(item) != 64 for item in self.fingerprints
-        ):
+        if not isinstance(self.fingerprints, tuple) or not self.fingerprints:
             raise ValuePlaneError("ordered lineage requires fingerprints")
+        for item in self.fingerprints:
+            _fingerprint(item, "lineage entry")
         if len(set(self.fingerprints)) != len(self.fingerprints):
             raise ValuePlaneConsistencyError(
                 "ordered lineage cannot contain duplicate fingerprints"
             )
         _fingerprint(self.manifest_fingerprint, "lineage manifest")
+        expected_manifest = _hash({"ordered": self.fingerprints})
+        if self.manifest_fingerprint != expected_manifest:
+            raise ValuePlaneConsistencyError("lineage manifest does not match ordered entries")
         object.__setattr__(
             self, "knowledge_time", _utc(self.knowledge_time, "lineage knowledge time")
         )
@@ -403,16 +411,14 @@ class TickerState:
             self.index_price,
             self.fair_price,
         ):
-            decimal_value = cast(CapabilityValue[DecimalValue], value)
-            if decimal_value.value is not None and decimal_value.value.value <= 0:
+            if value.value is not None and value.value.value <= 0:
                 raise NumericPolicyError(
                     NumericFailureReason.NON_POSITIVE_PRICE, "ticker price must be positive"
                 )
         for quantity_capability in (self.volume24, self.hold_vol):
-            quantity_value = cast(CapabilityValue[Quantity], quantity_capability)
             if (
-                quantity_value.value is not None
-                and quantity_value.value.unit is not QuantityUnit.CONTRACTS_PROVIDER_NATIVE_V1
+                quantity_capability.value is not None
+                and quantity_capability.value.unit is not QuantityUnit.CONTRACTS_PROVIDER_NATIVE_V1
             ):
                 raise ValuePlaneConsistencyError("ticker quantity must use provider-native units")
 
@@ -480,6 +486,156 @@ class Timeframe:
 
 
 @dataclass(frozen=True, slots=True)
+class CandleCloseProof:
+    kind: CandleProofKind
+    source_id: StableId
+    contract_id: StableId
+    environment: Environment
+    generation: GenerationRef
+    timeframe_fingerprint: str
+    expected_start: datetime
+    expected_end: datetime
+    evidence_fingerprint: str
+    knowledge_time: datetime
+    admissibility_time: datetime
+    next_window_start: datetime | None = None
+    origin: str = ""
+
+    def __post_init__(self) -> None:
+        _stable(self.source_id, IdentityKind.EXCHANGE, "proof source")
+        _stable(self.contract_id, IdentityKind.INSTRUMENT, "proof contract")
+        if not isinstance(self.environment, Environment):
+            raise ValuePlaneError("proof environment is invalid")
+        if (
+            self.generation.source_id != self.source_id
+            or self.generation.environment is not self.environment
+            or self.generation.retired
+        ):
+            raise ValuePlaneConsistencyError("proof generation identity differs")
+        _fingerprint(self.timeframe_fingerprint, "proof timeframe")
+        _fingerprint(self.evidence_fingerprint, "proof evidence")
+        start = _utc(self.expected_start, "proof expected start")
+        end = _utc(self.expected_end, "proof expected end")
+        if end <= start:
+            raise ValuePlaneConsistencyError("proof window must be half-open and positive")
+        object.__setattr__(self, "expected_start", start)
+        object.__setattr__(self, "expected_end", end)
+        object.__setattr__(
+            self, "knowledge_time", _utc(self.knowledge_time, "proof knowledge time")
+        )
+        object.__setattr__(
+            self, "admissibility_time", _utc(self.admissibility_time, "proof admissibility time")
+        )
+        if self.knowledge_time > self.admissibility_time:
+            raise ValuePlaneConsistencyError("proof knowledge time cannot be after admissibility")
+        if self.kind is CandleProofKind.NEXT_WINDOW:
+            if self.origin != "NEXT_WINDOW_CONTINUITY_V1" or self.next_window_start is None:
+                raise ValuePlaneConsistencyError("next-window proof material is incomplete")
+            if _utc(self.next_window_start, "proof next window") != end:
+                raise ValuePlaneConsistencyError("next-window proof does not start at candle end")
+            object.__setattr__(
+                self, "next_window_start", _utc(self.next_window_start, "proof next window")
+            )
+        elif self.kind is CandleProofKind.REST_CONFIRMATION:
+            if self.origin != "MEXC_REST_KLINE_V1" or self.next_window_start is not None:
+                raise ValuePlaneConsistencyError("REST proof material is invalid")
+        else:
+            raise ValuePlaneError("unknown candle proof kind")
+
+    @classmethod
+    def next_window(
+        cls,
+        *,
+        context: ValueContext,
+        timeframe: Timeframe,
+        start: datetime,
+        end: datetime,
+        evidence_fingerprint: str,
+        knowledge_time: datetime,
+        admissibility_time: datetime,
+    ) -> CandleCloseProof:
+        return cls(
+            CandleProofKind.NEXT_WINDOW,
+            context.source_id,
+            context.contract_id,
+            context.environment,
+            context.generation,
+            timeframe.fingerprint,
+            start,
+            end,
+            evidence_fingerprint,
+            knowledge_time,
+            admissibility_time,
+            next_window_start=end,
+            origin="NEXT_WINDOW_CONTINUITY_V1",
+        )
+
+    @classmethod
+    def rest_confirmation(
+        cls,
+        *,
+        context: ValueContext,
+        timeframe: Timeframe,
+        start: datetime,
+        end: datetime,
+        evidence_fingerprint: str,
+        knowledge_time: datetime,
+        admissibility_time: datetime,
+    ) -> CandleCloseProof:
+        return cls(
+            CandleProofKind.REST_CONFIRMATION,
+            context.source_id,
+            context.contract_id,
+            context.environment,
+            context.generation,
+            timeframe.fingerprint,
+            start,
+            end,
+            evidence_fingerprint,
+            knowledge_time,
+            admissibility_time,
+            origin="MEXC_REST_KLINE_V1",
+        )
+
+    @property
+    def fingerprint(self) -> str:
+        return _hash(
+            {
+                "kind": self.kind.value,
+                "source": self.source_id.as_text(),
+                "contract": self.contract_id.as_text(),
+                "environment": self.environment.value,
+                "generation": self.generation.fingerprint,
+                "timeframe": self.timeframe_fingerprint,
+                "start": self.expected_start.isoformat(),
+                "end": self.expected_end.isoformat(),
+                "evidence": self.evidence_fingerprint,
+                "knowledge": self.knowledge_time.isoformat(),
+                "admissibility": self.admissibility_time.isoformat(),
+                "next_window_start": self.next_window_start.isoformat()
+                if self.next_window_start
+                else None,
+                "origin": self.origin,
+            }
+        )
+
+    def matches_candle(self, candle: CandleBar) -> bool:
+        return (
+            candle.context.source_id == self.source_id
+            and candle.context.contract_id == self.contract_id
+            and candle.context.environment is self.environment
+            and candle.context.generation == self.generation
+            and candle.timeframe.fingerprint == self.timeframe_fingerprint
+            and candle.start == self.expected_start
+            and candle.end == self.expected_end
+            and (
+                self.kind is CandleProofKind.REST_CONFIRMATION
+                or self.next_window_start == candle.end
+            )
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class CandleBar:
     context: ValueContext
     timeframe: Timeframe
@@ -495,7 +651,7 @@ class CandleBar:
     lineage: OrderedLineage
     revision: int = 0
     predecessor_fingerprint: str | None = None
-    close_proof: str | None = None
+    close_proof: CandleCloseProof | None = None
 
     def __post_init__(self) -> None:
         start = _utc(self.start, "candle start")
@@ -521,8 +677,12 @@ class CandleBar:
             raise ValuePlaneError("candle revision is invalid")
         if self.revision > 0 and not self.predecessor_fingerprint:
             raise ValuePlaneConsistencyError("correction requires predecessor lineage")
-        if self.finality is Finality.CLOSED and not self.close_proof:
-            raise ValuePlaneConsistencyError("closed candle requires exact source/finality proof")
+        if self.close_proof is not None and not isinstance(self.close_proof, CandleCloseProof):
+            raise ValuePlaneConsistencyError("candle close proof must be typed")
+        if self.finality is Finality.CLOSED and (
+            self.close_proof is None or not self.close_proof.matches_candle(self)
+        ):
+            raise ValuePlaneConsistencyError("closed candle requires matching typed finality proof")
 
     @property
     def fingerprint(self) -> str:
@@ -543,7 +703,7 @@ class CandleBar:
                 "lineage": self.lineage.manifest_fingerprint,
                 "revision": self.revision,
                 "predecessor": self.predecessor_fingerprint,
-                "close_proof": self.close_proof,
+                "close_proof": self.close_proof.fingerprint if self.close_proof else None,
             }
         )
 
@@ -622,6 +782,138 @@ class OrderBookSnapshot:
                 "subscription_context": self.subscription_context,
             }
         )
+
+
+@dataclass(frozen=True, slots=True)
+class DepthRecoverySnapshot:
+    source_id: StableId
+    contract_id: StableId
+    environment: Environment
+    generation: GenerationRef
+    subscription_context: str
+    bids: tuple[BookLevel, ...]
+    asks: tuple[BookLevel, ...]
+    version: int
+    provider_event_time: datetime | None
+    knowledge_time: datetime
+    wall_receive_time: datetime
+
+    def __post_init__(self) -> None:
+        _stable(self.source_id, IdentityKind.EXCHANGE, "recovery source")
+        _stable(self.contract_id, IdentityKind.INSTRUMENT, "recovery contract")
+        if not isinstance(self.environment, Environment):
+            raise ValuePlaneError("recovery environment is invalid")
+        if (
+            self.generation.source_id != self.source_id
+            or self.generation.environment is not self.environment
+            or self.generation.retired
+        ):
+            raise ValuePlaneConsistencyError("recovery generation identity differs")
+        if not self.subscription_context:
+            raise ValuePlaneConsistencyError("recovery subscription context is required")
+        if any(not isinstance(level, BookLevel) for level in (*self.bids, *self.asks)):
+            raise ValuePlaneError("recovery levels must be typed")
+        _validate_levels(self.bids, bids=True)
+        _validate_levels(self.asks, bids=False)
+        if isinstance(self.version, bool) or not isinstance(self.version, int) or self.version < 0:
+            raise ValuePlaneError("recovery version is invalid")
+        if self.provider_event_time is not None:
+            object.__setattr__(
+                self, "provider_event_time", _utc(self.provider_event_time, "provider event time")
+            )
+        object.__setattr__(
+            self, "knowledge_time", _utc(self.knowledge_time, "recovery knowledge time")
+        )
+        object.__setattr__(
+            self, "wall_receive_time", _utc(self.wall_receive_time, "recovery receive time")
+        )
+        if self.knowledge_time > self.wall_receive_time:
+            raise ValuePlaneConsistencyError("recovery knowledge time cannot be after receive time")
+
+    @property
+    def fingerprint(self) -> str:
+        return _hash(
+            {
+                "source": self.source_id.as_text(),
+                "contract": self.contract_id.as_text(),
+                "environment": self.environment.value,
+                "generation": self.generation.fingerprint,
+                "subscription": self.subscription_context,
+                "bids": [level.fingerprint for level in self.bids],
+                "asks": [level.fingerprint for level in self.asks],
+                "version": self.version,
+                "provider_event_time": self.provider_event_time.isoformat()
+                if self.provider_event_time
+                else None,
+                "knowledge": self.knowledge_time.isoformat(),
+                "receive": self.wall_receive_time.isoformat(),
+            }
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class DepthRecoveryEvidence:
+    snapshots: tuple[DepthRecoverySnapshot, ...]
+    previous_version: int | None
+
+    def __post_init__(self) -> None:
+        if not self.snapshots:
+            raise ValuePlaneConsistencyError("depth recovery evidence requires snapshots")
+        if any(not isinstance(item, DepthRecoverySnapshot) for item in self.snapshots):
+            raise ValuePlaneError("depth recovery snapshots must be typed")
+        versions = tuple(item.version for item in self.snapshots)
+        if versions != tuple(sorted(set(versions))):
+            raise ValuePlaneConsistencyError("depth recovery versions must be strictly increasing")
+        if self.previous_version is not None and (
+            isinstance(self.previous_version, bool)
+            or not isinstance(self.previous_version, int)
+            or self.previous_version < 0
+            or self.snapshots[-1].version <= self.previous_version
+        ):
+            raise ValuePlaneConsistencyError("depth recovery does not advance the current book")
+        first = self.snapshots[0]
+        if any(
+            item.source_id != first.source_id
+            or item.contract_id != first.contract_id
+            or item.environment is not first.environment
+            or item.generation != first.generation
+            or item.subscription_context != first.subscription_context
+            for item in self.snapshots[1:]
+        ):
+            raise ValuePlaneConsistencyError("depth recovery identity is inconsistent")
+
+    @property
+    def anchor(self) -> DepthRecoverySnapshot:
+        return self.snapshots[-1]
+
+    @property
+    def fingerprint(self) -> str:
+        return _hash(
+            {
+                "previous_version": self.previous_version,
+                "snapshots": [snapshot.fingerprint for snapshot in self.snapshots],
+            }
+        )
+
+    def resume_with_contiguous_delta(self, delta: OrderBookDelta) -> OrderBookSnapshot:
+        anchor = self.anchor
+        if (
+            delta.context.source_id != anchor.source_id
+            or delta.context.contract_id != anchor.contract_id
+            or delta.context.environment is not anchor.environment
+            or delta.context.generation != anchor.generation
+            or delta.subscription_context != anchor.subscription_context
+            or delta.previous_version != anchor.version
+        ):
+            raise ValuePlaneConsistencyError("delta does not continue the recovery anchor")
+        snapshot = OrderBookSnapshot(
+            delta.context,
+            anchor.bids,
+            anchor.asks,
+            anchor.version,
+            anchor.subscription_context,
+        )
+        return delta.apply(snapshot)
 
 
 @dataclass(frozen=True, slots=True)

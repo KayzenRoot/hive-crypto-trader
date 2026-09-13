@@ -9,8 +9,12 @@ from hct_backend.s1f_numeric import DecimalValue
 from hct_backend.s1f_values import (
     BookLevel,
     CandleBar,
+    CandleCloseProof,
+    CandleProofKind,
     CapabilityState,
     CapabilityValue,
+    DepthRecoveryEvidence,
+    DepthRecoverySnapshot,
     Finality,
     FundingEvidence,
     OrderBookDelta,
@@ -104,8 +108,19 @@ def test_candle_interval_lineage_and_closed_proof_are_explicit() -> None:
         lineage=line,
     )
     with pytest.raises(ValuePlaneConsistencyError):
-        CandleBar(**kwargs, finality=Finality.CLOSED)
+        CandleBar(**kwargs, finality=Finality.CLOSED, close_proof="anything")  # type: ignore[arg-type]
     bar = CandleBar(**kwargs, finality=Finality.OPEN)
+    proof = CandleCloseProof.next_window(
+        context=bar.context,
+        timeframe=frame,
+        start=bar.start,
+        end=bar.end,
+        evidence_fingerprint="c" * 64,
+        knowledge_time=NOW,
+        admissibility_time=NOW,
+    )
+    closed = CandleBar(**kwargs, finality=Finality.CLOSED, close_proof=proof)
+    assert closed.close_proof is proof
     corrected = CandleBar(
         **{**kwargs, "close": DecimalValue.parse("11.1"), "lineage": line.append("c" * 64, NOW)},
         finality=Finality.OPEN,
@@ -159,6 +174,8 @@ def test_context_lineage_trade_and_timeframe_guards() -> None:
         OrderedLineage.from_fingerprints(("a" * 64, "a" * 64), NOW)
     with pytest.raises(ValuePlaneError):
         OrderedLineage.from_fingerprints(("bad",), NOW)
+    with pytest.raises(ValuePlaneConsistencyError):
+        OrderedLineage(("a" * 64,), "f" * 64, NOW)
     trade = TradeTick(context("sub.deal"), DecimalValue.parse("10"), quantity("1"), "BUY")
     assert len(trade.fingerprint) == 64
     with pytest.raises(ValuePlaneError):
@@ -221,3 +238,50 @@ def test_order_book_and_candle_reject_inconsistent_revisions() -> None:
     assert CandleBar(**candle_args, finality=Finality.UNKNOWN).fingerprint
     with pytest.raises(ValuePlaneConsistencyError):
         validate_series_units(())
+
+
+def test_depth_recovery_is_typed_and_requires_matching_continuity() -> None:
+    anchor = DepthRecoverySnapshot(
+        SOURCE,
+        CONTRACT,
+        Environment.REPLAY,
+        GenerationRef(SOURCE, Environment.REPLAY, 1),
+        "depth",
+        (level("411.8", "10"),),
+        (level("412", "5"),),
+        4,
+        NOW,
+        NOW,
+        NOW,
+    )
+    evidence = DepthRecoveryEvidence((anchor,), 1)
+    delta = OrderBookDelta(context("sub.depth"), (level("411.8", "12"),), (), 4, 5, "depth")
+    assert evidence.resume_with_contiguous_delta(delta).version == 5
+    with pytest.raises(ValuePlaneConsistencyError):
+        evidence.resume_with_contiguous_delta(
+            OrderBookDelta(context("sub.depth"), (), (), 3, 4, "depth")
+        )
+    with pytest.raises(ValuePlaneConsistencyError):
+        DepthRecoveryEvidence((), None)
+    with pytest.raises(ValuePlaneConsistencyError):
+        DepthRecoveryEvidence((anchor, replace(anchor, version=3)), None)
+
+
+def test_candle_proof_rejects_unbound_material() -> None:
+    frame = Timeframe("Min1", 60)
+    with pytest.raises(ValuePlaneConsistencyError):
+        CandleCloseProof(
+            CandleProofKind.NEXT_WINDOW,
+            SOURCE,
+            CONTRACT,
+            Environment.REPLAY,
+            GenerationRef(SOURCE, Environment.REPLAY, 1),
+            frame.fingerprint,
+            NOW,
+            NOW + timedelta(seconds=60),
+            "c" * 64,
+            NOW,
+            NOW,
+            next_window_start=NOW,
+            origin="NEXT_WINDOW_CONTINUITY_V1",
+        )

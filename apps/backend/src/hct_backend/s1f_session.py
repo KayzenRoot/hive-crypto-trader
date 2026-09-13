@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import json
 import random
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from hct_backend.contracts import Environment, StableId
 from hct_backend.market_truth import GenerationRef
@@ -32,8 +34,35 @@ class CircuitState(StrEnum):
     HALF_OPEN = "HALF_OPEN"
 
 
+class SessionRunOutcome(StrEnum):
+    ACTIVE = "ACTIVE"
+    COMPLETED = "COMPLETED"
+    CLOSED = "CLOSED"
+    CANCELLED = "CANCELLED"
+    FAILED = "FAILED"
+    ADMISSION_DENIED = "ADMISSION_DENIED"
+
+
+S1F_MEXC_APP_PING_INTERVAL_SECONDS = 15
+S1F_MEXC_NO_PING_MAX_SECONDS = 60
+
+
 class AdmissionPort(Protocol):
     def admit(self, *, priority: str, cost: int) -> AdmissionDecision: ...
+
+
+@dataclass(frozen=True, slots=True)
+class SessionRunResult:
+    generation: GenerationRef | None
+    outcome: SessionRunOutcome
+    received_frames: int = 0
+    published_frames: int = 0
+    dropped_frames: int = 0
+    pong_count: int = 0
+
+    @property
+    def healthy_live_session(self) -> bool:
+        return self.outcome is SessionRunOutcome.ACTIVE and self.generation is not None
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,7 +87,7 @@ class RetryPolicy:
             raise SessionError("retry attempt is outside the bounded budget")
         rng = random.Random(self.seed + attempt)
         exponential = min(self.max_delay_ms, self.base_delay_ms * (2 ** (attempt - 1)))
-        return min(self.max_delay_ms, exponential + rng.randint(0, self.jitter_ms))
+        return int(min(self.max_delay_ms, exponential + rng.randint(0, self.jitter_ms)))
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,14 +128,22 @@ class GenerationManager:
     environment: Environment
     current: GenerationRef | None = None
 
+    def retire_current(self) -> GenerationRef | None:
+        current = self.current
+        if current is None or current.retired:
+            return current
+        retired = current.retire()
+        object.__setattr__(self, "current", retired)
+        return retired
+
     def publish_new(self) -> tuple[GenerationRef, GenerationRef | None]:
-        previous = self.current
+        previous = self.retire_current()
         if previous is None:
             current = GenerationRef(self.source_id, self.environment, 1)
         else:
             current = GenerationRef(self.source_id, self.environment, previous.number + 1)
         object.__setattr__(self, "current", current)
-        return current, previous.retire() if previous is not None else None
+        return current, previous
 
     def accepts(self, generation: GenerationRef) -> bool:
         return self.current is not None and self.current.accepts(generation)
@@ -157,6 +194,7 @@ class MexcPublicSession:
         retry_policy: RetryPolicy | None = None,
         queue_capacity: int = 4096,
         admission: AdmissionPort | None = None,
+        sleeper: Callable[[float], Awaitable[None]] | None = None,
     ) -> None:
         self.generations = generation_manager
         self.retry_policy = retry_policy or RetryPolicy()
@@ -165,6 +203,9 @@ class MexcPublicSession:
         self.circuit = CircuitState.CLOSED
         self._failure_count = 0
         self._seen_intents: set[str] = set()
+        self._sleep: Callable[[float], Awaitable[None]] = sleeper or asyncio.sleep
+        self._last_result: SessionRunResult | None = None
+        self._pong_count = 0
 
     def staged_subscriptions(
         self, intents: tuple[SubscriptionIntent, ...]
@@ -184,6 +225,20 @@ class MexcPublicSession:
         generation, _ = self.generations.publish_new()
         return generation
 
+    def _admit_external_attempt(self) -> None:
+        if self.admission is None:
+            return
+        decision = self.admission.admit(priority="PUBLIC_MARKET_DATA", cost=1)
+        if decision.outcome is not AdmissionOutcome.ADMIT:
+            raise SessionError("public external attempt denied by Module 29 admission")
+
+    def _retire_generation(self, generation: GenerationRef | None) -> None:
+        if generation is None:
+            return
+        current = self.generations.current
+        if current is not None and current.number == generation.number:
+            self.generations.retire_current()
+
     def record_failure(self) -> CircuitState:
         self._failure_count += 1
         if self._failure_count >= self.retry_policy.max_attempts:
@@ -196,9 +251,21 @@ class MexcPublicSession:
         self._failure_count = 0
         self.circuit = CircuitState.CLOSED
 
-    def accept_message(self, generation: GenerationRef, message: str) -> bool:
+    def accept_message(self, generation: GenerationRef, message: str | bytes) -> bool:
         if not self.generations.accepts(generation):
             return False
+        if isinstance(message, bytes):
+            try:
+                message = message.decode("utf-8")
+            except UnicodeDecodeError:
+                return False
+        try:
+            decoded = json.loads(message)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            decoded = None
+        if isinstance(decoded, dict) and decoded.get("channel") == "pong":
+            self._pong_count += 1
+            return True
         decision = (
             self.admission.admit(priority="PUBLIC_MARKET_DATA", cost=1) if self.admission else None
         )
@@ -207,46 +274,122 @@ class MexcPublicSession:
     async def receive_once(self, websocket: Any) -> str:
         """Receive one frame; callers own the bounded loop and retry budget."""
 
-        return await websocket.recv()
+        return cast(str, await websocket.recv())
 
     async def send_application_ping(self, websocket: Any) -> None:
         await websocket.send(json.dumps({"method": "ping"}, separators=(",", ":")))
 
-    async def connect_once(self, intents: tuple[SubscriptionIntent, ...]) -> GenerationRef:
+    async def _heartbeat(self, websocket: Any, generation: GenerationRef) -> None:
+        while self.generations.accepts(generation):
+            await self._sleep(S1F_MEXC_APP_PING_INTERVAL_SECONDS)
+            if self.generations.accepts(generation):
+                await self.send_application_ping(websocket)
+
+    async def connect_once(
+        self,
+        intents: tuple[SubscriptionIntent, ...],
+        *,
+        max_frames: int | None = None,
+    ) -> SessionRunResult:
         try:
             from websockets.asyncio.client import connect
         except ImportError as exc:  # pragma: no cover - dependency gate owns this path
             raise SessionError("websockets.asyncio.client is required") from exc
         if self.circuit is CircuitState.OPEN:
             raise SessionError("circuit is open")
+        if max_frames is not None and (isinstance(max_frames, bool) or max_frames < 1):
+            raise SessionError("max_frames must be positive when provided")
         self._seen_intents.clear()
         staged = self.staged_subscriptions(intents)
-        async with connect(
-            MEXC_WS_URL,
-            proxy=None,
-            ping_interval=None,
-            max_queue=self.inbound.capacity,
-            open_timeout=5,
-            close_timeout=5,
-        ) as websocket:
-            for payload in staged:
-                await websocket.send(json.dumps(payload, separators=(",", ":")))
-            await self.send_application_ping(websocket)
-        generation = self.open_generation()
-        self.record_success()
-        return generation
+        self._admit_external_attempt()
+        generation: GenerationRef | None = None
+        heartbeat: asyncio.Task[None] | None = None
+        received = 0
+        published = 0
+        dropped_before = self.inbound.dropped
+        outcome = SessionRunOutcome.FAILED
+        try:
+            async with connect(
+                MEXC_WS_URL,
+                proxy=None,
+                ping_interval=None,
+                max_queue=self.inbound.capacity,
+                open_timeout=5,
+                close_timeout=5,
+            ) as websocket:
+                generation = self.open_generation()
+                heartbeat = asyncio.create_task(self._heartbeat(websocket, generation))
+                for payload in staged:
+                    self._admit_external_attempt()
+                    await websocket.send(json.dumps(payload, separators=(",", ":")))
+                await self.send_application_ping(websocket)
+                while max_frames is None or received < max_frames:
+                    frame = await websocket.recv()
+                    received += 1
+                    if self.accept_message(generation, frame):
+                        decoded = None
+                        try:
+                            decoded = json.loads(frame)
+                        except (TypeError, ValueError, json.JSONDecodeError):
+                            pass
+                        if not (isinstance(decoded, dict) and decoded.get("channel") == "pong"):
+                            published += 1
+                outcome = SessionRunOutcome.COMPLETED
+                self.record_success()
+        except asyncio.CancelledError:
+            outcome = SessionRunOutcome.CANCELLED
+            self._last_result = SessionRunResult(
+                generation,
+                outcome,
+                received,
+                published,
+                self.inbound.dropped - dropped_before,
+                self._pong_count,
+            )
+            raise
+        except SessionError:
+            outcome = SessionRunOutcome.ADMISSION_DENIED
+            self.record_failure()
+        except Exception as exc:
+            outcome = (
+                SessionRunOutcome.CLOSED
+                if type(exc).__name__
+                in {"ConnectionClosed", "ConnectionClosedError", "StopAsyncIteration"}
+                else SessionRunOutcome.FAILED
+            )
+            self.record_failure()
+        finally:
+            if heartbeat is not None:
+                heartbeat.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await heartbeat
+            self._retire_generation(generation)
+        result = SessionRunResult(
+            generation,
+            outcome,
+            received,
+            published,
+            self.inbound.dropped - dropped_before,
+            self._pong_count,
+        )
+        self._last_result = result
+        return result
 
-    async def connect_with_retry(self, intents: tuple[SubscriptionIntent, ...]) -> GenerationRef:
+    async def connect_with_retry(self, intents: tuple[SubscriptionIntent, ...]) -> SessionRunResult:
         last_error: BaseException | None = None
         for attempt in range(1, self.retry_policy.max_attempts + 1):
             try:
-                return await self.connect_once(intents)
+                result = await self.connect_once(intents)
+                if result.outcome is SessionRunOutcome.COMPLETED:
+                    return result
+                last_error = SessionError(f"session ended with {result.outcome.value}")
             except Exception as exc:
                 last_error = exc
-                self.record_failure()
-                if attempt == self.retry_policy.max_attempts:
-                    break
-                await asyncio.sleep(self.retry_policy.delay_ms(attempt) / 1000)
+            if attempt == self.retry_policy.max_attempts:
+                break
+            if self.circuit is CircuitState.OPEN:
+                break
+            await self._sleep(self.retry_policy.delay_ms(attempt) / 1000)
         raise SessionError("bounded public session retry budget exhausted") from last_error
 
 
@@ -283,18 +426,16 @@ class MexcPublicRest:
         )
 
     async def _get_json(self, path: str, *, params: dict[str, Any] | None = None) -> dict[str, Any]:
-        if self.admission is not None:
-            decision = self.admission.admit(priority="PUBLIC_MARKET_DATA", cost=1)
-            if decision.outcome is not AdmissionOutcome.ADMIT:
-                raise SessionError("public REST request denied by Module 29 admission")
         client = await self._client()
         async with client:
             last_error: BaseException | None = None
             for attempt in range(1, self.retry_policy.max_attempts + 1):
                 try:
+                    if self.admission is not None:
+                        decision = self.admission.admit(priority="PUBLIC_MARKET_DATA", cost=1)
+                        if decision.outcome is not AdmissionOutcome.ADMIT:
+                            raise SessionError("public REST attempt denied by Module 29 admission")
                     response = await client.get(path, params=params)
-                    if response.status_code >= 500:
-                        response.raise_for_status()
                     response.raise_for_status()
                     result = response.json()
                     if not isinstance(result, dict):

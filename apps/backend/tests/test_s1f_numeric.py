@@ -83,6 +83,11 @@ def test_decimal_constructor_and_nonnegative_policy_are_fail_closed() -> None:
     with pytest.raises(NumericPolicyError):
         DecimalValue(Decimal("1"), "1e0", 0)
     with pytest.raises(NumericPolicyError):
+        DecimalValue(Decimal("1"), "999", 0)
+    with pytest.raises(NumericPolicyError):
+        DecimalValue(Decimal("1.20"), "1.2", 1)
+    assert DecimalValue(Decimal("1.20"), "1.2", 2).canonical_text == "1.2"
+    with pytest.raises(NumericPolicyError):
         DecimalValue(Decimal("1"), "1", True)  # type: ignore[arg-type]
     with pytest.raises(NumericPolicyError):
         DecimalValue(Decimal("1"), "1", 19)

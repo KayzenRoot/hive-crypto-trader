@@ -122,6 +122,13 @@ jobs:
           assert manifest["source_sha256"] == "57ebc13fea788a1c568c8aeabfdf50acc0c9f5b5a882af4855837d53499940e3"
           assert manifest["normalized_schema_version"] == "S1F_MEXC_SOURCE_CONTRACT_V1"
           assert manifest["fixture_hashes"]["mexc-public-fixtures.json"] == hashlib.sha256(fixture.read_bytes()).hexdigest()
+          fixture_data = json.loads(fixture.read_text())["fixtures"]
+          assert "kline_rest_official" in fixture_data
+          assert "depth_commits_official" in fixture_data
+          assert fixture_data["kline_rest_official"]["success"] is True
+          assert fixture_data["kline_rest_official"]["code"] == 0
+          assert fixture_data["depth_commits_official"]["success"] is True
+          assert fixture_data["depth_commits_official"]["code"] == 0
           print("H013 exact dependency delta and fixture provenance: PASS")
           PY
 
@@ -156,14 +163,23 @@ jobs:
               "S1F-STRESS-BACKPRESSURE-V1": 65536,
           }
           assert result["mode"] == "BASELINE_ESTABLISHMENT_V1"
-          assert {item["profile"]: item["messages_decoded"] for item in result["profiles"]} == expected
+          assert {item["profile"]: item["messages_produced"] for item in result["profiles"]} == expected
           for item in result["profiles"]:
               assert item["correctness"] == "PASS"
               assert item["bounded_completion"] is True
+              assert item["messages_decoded"] == item["consumed_count"]
+              assert item["admitted_count"] == item["consumed_count"]
+              assert item["consumed_count"] + item["dropped_count"] == item["messages_produced"]
               assert item["normalization_throughput_per_second"] > 0
               assert item["replay_throughput_per_second"] > 0
-              assert item["value_state_update_latency_distribution"]["p95"] >= item["value_state_update_latency_distribution"]["p50"]
+              assert item["normalization_latency_distribution"]["p95"] >= item["normalization_latency_distribution"]["p50"]
+              assert item["immutable_value_publication_latency_distribution"]["p95"] >= item["immutable_value_publication_latency_distribution"]["p50"]
+              assert item["queue_age_samples"] == item["consumed_count"]
               assert item["queue_depth_max"] <= item["queue_capacity"]
+          by_profile = {item["profile"]: item for item in result["profiles"]}
+          assert by_profile["S1F-CONTRACT-MICRO-V1"]["dropped_count"] == 0
+          assert by_profile["S1F-NOMINAL-MULTICHANNEL-V1"]["dropped_count"] == 0
+          assert by_profile["S1F-STRESS-BACKPRESSURE-V1"]["dropped_count"] > 0
           print("S1F exact profiles, latency distribution, bounded queue and replay evidence: PASS")
           PY
 
@@ -211,10 +227,19 @@ jobs:
               "production_deployment_authorized=false",
               "limited_live_authorized=false",
               "live_trading_authorized=false",
+              "Status: `AUTHOR_PREFLIGHT`",
+              "IMP-H001",
+              "IMP-H002",
+              "IMP-H003",
+              "IMP-H004",
+              "IMP-H005",
+              "IMP-H006",
+              "IMP-H007",
+              "Independent review remains required",
           )
           for marker in required:
               assert marker in combined, marker
-          for forbidden in ("workflow_dispatch", "private/order", "real-money trading authorization"):
+          for forbidden in ("workflow_dispatch", "private/order", "real-money trading authorization", "status: `execution_in_progress`", "verdict: `approved`"):
               assert forbidden not in combined.lower(), forbidden
           print("Author evidence and implementation/production/live firewall: PASS")
           PY

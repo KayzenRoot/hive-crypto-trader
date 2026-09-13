@@ -21,8 +21,12 @@ from hct_backend.s1f_numeric import (
 from hct_backend.s1f_values import (
     BookLevel,
     CandleBar,
+    CandleCloseProof,
+    CandleProofKind,
     CapabilityState,
     CapabilityValue,
+    DepthRecoveryEvidence,
+    DepthRecoverySnapshot,
     Finality,
     FundingEvidence,
     OrderBookDelta,
@@ -317,6 +321,58 @@ class MexcPublicDecoder:
             context.subscription_context,
         )
 
+    def decode_rest_depth_commits(
+        self, raw: str | bytes, context: MexcDecodeContext
+    ) -> DepthRecoveryEvidence:
+        payload = self._json_object(raw)
+        payload_fp = _payload_fingerprint(payload)
+        self._require_success_wrapper(payload, payload_fp)
+        data = payload.get("data")
+        if not isinstance(data, list) or not data:
+            raise MexcQuarantineError("DEPTH_COMMITS_DATA_ARRAY_REQUIRED", payload_fp)
+        snapshots: list[DepthRecoverySnapshot] = []
+        for item in data:
+            if not isinstance(item, dict):
+                raise MexcQuarantineError("DEPTH_COMMITS_SNAPSHOT_OBJECT_REQUIRED", payload_fp)
+            asks = _field(item, "asks", payload)
+            bids = _field(item, "bids", payload)
+            version_raw = _field(item, "version", payload)
+            try:
+                version = int(version_raw)
+            except (TypeError, ValueError) as exc:
+                raise MexcQuarantineError("DEPTH_COMMITS_VERSION_INVALID", payload_fp) from exc
+            if isinstance(version_raw, bool) or version < 0:
+                raise MexcQuarantineError("DEPTH_COMMITS_VERSION_INVALID", payload_fp)
+            if not isinstance(asks, list) or not isinstance(bids, list):
+                raise MexcQuarantineError("DEPTH_COMMITS_LEVEL_ARRAY_REQUIRED", payload_fp)
+            try:
+                snapshot = DepthRecoverySnapshot(
+                    source_id=context.source_id,
+                    contract_id=context.contract_id,
+                    environment=context.environment,
+                    generation=context.generation,
+                    subscription_context=context.subscription_context,
+                    bids=tuple(
+                        _book_level(level, payload, MEXC_SOURCE_CONTRACT_VERSION) for level in bids
+                    ),
+                    asks=tuple(
+                        _book_level(level, payload, MEXC_SOURCE_CONTRACT_VERSION) for level in asks
+                    ),
+                    version=version,
+                    provider_event_time=None,
+                    knowledge_time=_utc(context.knowledge_time),
+                    wall_receive_time=_utc(context.wall_receive_time),
+                )
+            except (ValueError, TypeError) as exc:
+                raise MexcQuarantineError("DEPTH_COMMITS_SNAPSHOT_INVALID", payload_fp) from exc
+            snapshots.append(snapshot)
+        try:
+            return DepthRecoveryEvidence(tuple(snapshots), context.previous_depth_version)
+        except (ValueError, TypeError) as exc:
+            raise MexcQuarantineError(
+                "DEPTH_COMMITS_RECOVERY_NOT_AN_ADVANCING_ANCHOR", payload_fp
+            ) from exc
+
     def decode_rest_kline_close_proof(
         self,
         raw: str | bytes,
@@ -325,31 +381,68 @@ class MexcPublicDecoder:
         expected_interval: str,
         expected_start: datetime,
         expected_end: datetime,
-    ) -> str:
+    ) -> CandleCloseProof:
         payload = self._json_object(raw)
         payload_fp = _payload_fingerprint(payload)
-        if payload.get("interval") != expected_interval or payload.get("symbol") not in {
-            None,
-            context.symbol,
-        }:
-            raise MexcQuarantineError("KLINE_CLOSE_IDENTITY_MISMATCH", payload_fp)
-        times = _field(payload, "time", payload)
-        if not isinstance(times, list) or not any(
-            _epoch_seconds(item) == expected_start for item in times
+        self._require_success_wrapper(payload, payload_fp)
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            raise MexcQuarantineError("KLINE_DATA_OBJECT_REQUIRED", payload_fp)
+        expected_fields = {"time", "open", "close", "high", "low", "vol", "amount"}
+        if set(data) != expected_fields or any(
+            not isinstance(data[key], list) for key in expected_fields
         ):
-            raise MexcQuarantineError("KLINE_CLOSE_TIME_PROOF_MISMATCH", payload_fp)
-        if expected_end <= expected_start:
+            raise MexcQuarantineError("KLINE_ARRAY_SHAPE_INVALID", payload_fp)
+        lengths = {len(data[key]) for key in expected_fields}
+        if len(lengths) != 1 or not lengths or next(iter(lengths)) == 0:
+            raise MexcQuarantineError("KLINE_ARRAY_LENGTH_MISMATCH", payload_fp)
+        try:
+            timeframe = _timeframe(expected_interval, payload)
+            expected_start = _utc(expected_start)
+            expected_end = _utc(expected_end)
+        except (TypeError, ValueError) as exc:
+            raise MexcQuarantineError("KLINE_INTERVAL_INVALID", payload_fp) from exc
+        if expected_end - expected_start != timedelta(seconds=timeframe.duration_seconds):
             raise MexcQuarantineError("KLINE_INTERVAL_INVALID", payload_fp)
-        return _hash(
-            {
-                "source": MEXC_SOURCE_CONTRACT_VERSION,
-                "symbol": context.symbol,
-                "interval": expected_interval,
-                "start": expected_start.isoformat(),
-                "end": expected_end.isoformat(),
-                "time": times,
-            }
+        try:
+            times = [_epoch_seconds(item) for item in data["time"]]
+            if times != sorted(times) or len(set(times)) != len(times):
+                raise MexcQuarantineError("KLINE_TIME_ORDER_INVALID", payload_fp)
+            if times[0] != expected_start or any(
+                item < expected_start or item >= expected_end for item in times
+            ):
+                raise MexcQuarantineError("KLINE_CLOSE_TIME_PROOF_MISMATCH", payload_fp)
+            for key in ("open", "close", "high", "low"):
+                for value in data[key]:
+                    _decimal(value, payload, price=True)
+            for key in ("vol", "amount"):
+                for value in data[key]:
+                    _decimal(value, payload, quantity=True)
+        except MexcQuarantineError:
+            raise
+        except (TypeError, ValueError) as exc:
+            raise MexcQuarantineError("KLINE_ARRAY_VALUE_INVALID", payload_fp) from exc
+        if expected_start >= expected_end:
+            raise MexcQuarantineError("KLINE_INTERVAL_INVALID", payload_fp)
+        return CandleCloseProof(
+            kind=CandleProofKind.REST_CONFIRMATION,
+            source_id=context.source_id,
+            contract_id=context.contract_id,
+            environment=context.environment,
+            generation=context.generation,
+            timeframe_fingerprint=timeframe.fingerprint,
+            expected_start=expected_start,
+            expected_end=expected_end,
+            evidence_fingerprint=payload_fp,
+            knowledge_time=_utc(context.knowledge_time),
+            admissibility_time=_utc(context.wall_receive_time),
+            origin="MEXC_REST_KLINE_V1",
         )
+
+    @staticmethod
+    def _require_success_wrapper(payload: dict[str, Any], payload_fp: str) -> None:
+        if payload.get("success") is not True or payload.get("code") not in {0, "0"}:
+            raise MexcQuarantineError("REST_RESPONSE_NOT_SUCCESS", payload_fp)
 
     def _json_object(self, raw: str | bytes) -> dict[str, Any]:
         try:

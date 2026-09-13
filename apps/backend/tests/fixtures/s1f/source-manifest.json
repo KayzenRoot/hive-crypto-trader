@@ -5,7 +5,7 @@
   "normalized_schema_version": "S1F_MEXC_SOURCE_CONTRACT_V1",
   "fixture_file": "mexc-public-fixtures.json",
   "fixture_hashes": {
-    "mexc-public-fixtures.json": "0ca1b646e538d238735f142855a08b379a2917e4c8396c349736a078564c024c"
+    "mexc-public-fixtures.json": "57bbfd602b807361bbc6b60e682adf3731e1a8a42a3330d2c288bdf6584e08fd"
   },
   "network_policy": "CI_ZERO_UNCONTROLLED_MEXC_NETWORK_CALLS"
 }

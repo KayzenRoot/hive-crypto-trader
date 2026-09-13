@@ -8,6 +8,7 @@ import json
 import sys
 import time
 import tracemalloc
+from collections import deque
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -15,10 +16,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "apps" / "backend" / "src"))
 
-from hct_backend.contracts import Environment, IdentityKind, StableId
-from hct_backend.market_truth import GenerationRef
-from hct_backend.s1f_mexc import MexcDecodeContext, MexcPublicDecoder
-from hct_backend.s1f_session import BoundedInboundQueue
+from hct_backend.contracts import Environment, IdentityKind, StableId  # noqa: E402
+from hct_backend.market_truth import GenerationRef  # noqa: E402
+from hct_backend.s1f_mexc import MexcDecodeContext, MexcPublicDecoder  # noqa: E402
 
 PROFILES = {
     "S1F-CONTRACT-MICRO-V1": {
@@ -162,7 +162,7 @@ def run(profile_name: str) -> dict[str, object]:
     kline_count = int(profile["kline"])
     depth_levels = int(profile["depth-levels"])
     queue_capacity = int(profile.get("queue-capacity", 4096))
-    queue = BoundedInboundQueue(queue_capacity)
+    queue: deque[tuple[str, int, str, int]] = deque()
     kinds = (
         ("ticker", ticker_count),
         ("deal", deal_count),
@@ -176,22 +176,25 @@ def run(profile_name: str) -> dict[str, object]:
     for kind, amount in kinds:
         running += amount
         cumulative.append((kind, running))
-    latencies_ns: list[int] = []
+    normalization_latencies_ns: list[int] = []
+    publication_latencies_ns: list[int] = []
+    queue_ages_ns: list[int] = []
     raw_hasher = hashlib.sha256()
     event_context_time = datetime(2026, 1, 1, tzinfo=UTC)
-    tracemalloc.start()
-    started = time.perf_counter()
-    for index in range(count):
-        kind = next(name for name, limit in cumulative if index < limit)
-        if kind == "ticker":
-            raw = ticker_message(index)
-        elif kind == "deal":
-            raw = deal_message(index)
-        elif kind == "kline":
-            raw = kline_message(index)
-        else:
-            raw = depth_message(index, depth_levels)
-        raw_hasher.update(raw.encode("utf-8"))
+    stress = profile_name == "S1F-STRESS-BACKPRESSURE-V1"
+    consumer_every = 8 if stress else 1
+    produced = 0
+    admitted = 0
+    consumed = 0
+    dropped = 0
+    max_queue_depth = 0
+
+    def consume_one() -> None:
+        nonlocal consumed
+        if not queue:
+            return
+        raw, enqueued_ns, kind, index = queue.popleft()
+        queue_ages_ns.append(max(0, time.perf_counter_ns() - enqueued_ns))
         context = MexcDecodeContext(
             source,
             Environment.REPLAY,
@@ -206,44 +209,107 @@ def run(profile_name: str) -> dict[str, object]:
             previous_depth_version=index if kind == "depth" else None,
             full_depth=kind == "depth-full",
         )
-        event_started = time.perf_counter_ns()
-        decoder.decode(raw, context)
-        latencies_ns.append(time.perf_counter_ns() - event_started)
-        queue.publish(raw)
+        normalization_started = time.perf_counter_ns()
+        decoded = decoder.decode(raw, context)
+        normalization_latencies_ns.append(
+            time.perf_counter_ns() - normalization_started
+        )
+        publication_started = time.perf_counter_ns()
+        published_fingerprints = tuple(
+            getattr(value, "fingerprint") for value in decoded.values
+        )
+        if not published_fingerprints:
+            raise AssertionError("canonical publication produced no value")
+        publication_latencies_ns.append(time.perf_counter_ns() - publication_started)
+        consumed += 1
+
+    tracemalloc.start()
+    started = time.perf_counter()
+    for index in range(count):
+        kind = next(name for name, limit in cumulative if index < limit)
+        if kind == "ticker":
+            raw = ticker_message(index)
+        elif kind == "deal":
+            raw = deal_message(index)
+        elif kind == "kline":
+            raw = kline_message(index)
+        else:
+            raw = depth_message(index, depth_levels)
+        raw_hasher.update(raw.encode("utf-8"))
+        produced += 1
+        if len(queue) < queue_capacity:
+            queue.append((raw, time.perf_counter_ns(), kind, index))
+            admitted += 1
+            max_queue_depth = max(max_queue_depth, len(queue))
+        else:
+            dropped += 1
+        if (index + 1) % consumer_every == 0:
+            consume_one()
+    while queue:
+        consume_one()
     elapsed = max(time.perf_counter() - started, 1e-9)
     current, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
-    latency = {
+    normalization_latency = {
         "unit": "nanoseconds",
-        "min": min(latencies_ns),
-        "p50": percentile(latencies_ns, 0.50),
-        "p95": percentile(latencies_ns, 0.95),
-        "p99": percentile(latencies_ns, 0.99),
-        "max": max(latencies_ns),
+        "min": min(normalization_latencies_ns),
+        "p50": percentile(normalization_latencies_ns, 0.50),
+        "p95": percentile(normalization_latencies_ns, 0.95),
+        "p99": percentile(normalization_latencies_ns, 0.99),
+        "max": max(normalization_latencies_ns),
     }
+    publication_latency = {
+        "unit": "nanoseconds",
+        "min": min(publication_latencies_ns),
+        "p50": percentile(publication_latencies_ns, 0.50),
+        "p95": percentile(publication_latencies_ns, 0.95),
+        "p99": percentile(publication_latencies_ns, 0.99),
+        "max": max(publication_latencies_ns),
+    }
+    queue_age_ms_max = max(queue_ages_ns, default=0) / 1_000_000
+    completion_invariant = consumed + dropped == produced and admitted == consumed
+    baseline_no_loss = not stress and dropped == 0 and consumed == produced
+    stress_shed_invariant = stress and dropped > 0 and completion_invariant
+    correctness = "PASS" if (baseline_no_loss or stress_shed_invariant) else "FAIL"
     return {
         "profile": profile_name,
         "parameters": profile,
         "seed": 0,
-        "messages_decoded": count,
+        "messages_produced": produced,
+        "messages_decoded": consumed,
+        "admitted_count": admitted,
+        "consumed_count": consumed,
+        "dropped_count": dropped,
         "elapsed_seconds": elapsed,
-        "normalization_throughput_per_second": count / elapsed,
-        "replay_throughput_per_second": count / elapsed,
-        "value_state_update_latency_distribution": latency,
+        "normalization_throughput_per_second": consumed / elapsed,
+        "replay_throughput_per_second": consumed / elapsed,
+        "normalization_latency_distribution": normalization_latency,
+        "immutable_value_publication_latency_distribution": publication_latency,
         "peak_memory_bytes": peak,
         "steady_memory_bytes": current,
-        "queue_capacity": queue.capacity,
-        "queue_depth_max": queue.depth,
-        "queue_age_ms_max": 0,
-        "queue_dropped": queue.dropped,
-        "correctness": "PASS",
-        "bounded_completion": True,
+        "queue_capacity": queue_capacity,
+        "queue_depth_max": max_queue_depth,
+        "queue_age_ms_max": queue_age_ms_max,
+        "queue_age_samples": len(queue_ages_ns),
+        "queue_dropped": dropped,
+        "correctness": correctness,
+        "bounded_completion": completion_invariant
+        and max_queue_depth <= queue_capacity,
+        "producer_model": "deterministic_one_frame_per_iteration",
+        "consumer_model": (
+            "deterministic_one_frame_every_eight_produced_frames_with_final_drain"
+            if stress
+            else "deterministic_one_frame_per_produced_frame"
+        ),
+        "producer_rate_per_second": produced / elapsed,
+        "consumer_rate_per_second": consumed / elapsed,
         "raw_artifact_hash": raw_hasher.hexdigest(),
         "limitations": [
             "synthetic pinned multichannel fixture stream",
             "no product latency SLO asserted",
             "no live network",
-            "queue age is measured at immediate admission and has no consumer scheduling delay",
+            "stress profile intentionally sheds under a deterministic bounded consumer "
+            "rate",
         ],
     }
 

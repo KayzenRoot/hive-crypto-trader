@@ -2,17 +2,39 @@
   "mode": "BASELINE_ESTABLISHMENT_V1",
   "profiles": [
     {
+      "admitted_count": 8192,
       "bounded_completion": true,
+      "consumed_count": 8192,
+      "consumer_model": "deterministic_one_frame_per_produced_frame",
+      "consumer_rate_per_second": 155.59467944601434,
       "correctness": "PASS",
-      "elapsed_seconds": 30.788302700000713,
+      "dropped_count": 0,
+      "elapsed_seconds": 52.64961519999997,
+      "immutable_value_publication_latency_distribution": {
+        "max": 10524700,
+        "min": 201200,
+        "p50": 486200,
+        "p95": 5440100,
+        "p99": 6265700,
+        "unit": "nanoseconds"
+      },
       "limitations": [
         "synthetic pinned multichannel fixture stream",
         "no product latency SLO asserted",
         "no live network",
-        "queue age is measured at immediate admission and has no consumer scheduling delay"
+        "stress profile intentionally sheds under a deterministic bounded consumer rate"
       ],
       "messages_decoded": 8192,
-      "normalization_throughput_per_second": 266.0750766231686,
+      "messages_produced": 8192,
+      "normalization_latency_distribution": {
+        "max": 33852000,
+        "min": 423800,
+        "p50": 1003900,
+        "p95": 12772700,
+        "p99": 14824600,
+        "unit": "nanoseconds"
+      },
+      "normalization_throughput_per_second": 155.59467944601434,
       "parameters": {
         "deal": 4096,
         "depth": 2048,
@@ -24,24 +46,19 @@
         "ticker": 1024,
         "total": 8192
       },
-      "peak_memory_bytes": 1623328,
+      "peak_memory_bytes": 1455995,
+      "producer_model": "deterministic_one_frame_per_iteration",
+      "producer_rate_per_second": 155.59467944601434,
       "profile": "S1F-NOMINAL-MULTICHANNEL-V1",
-      "queue_age_ms_max": 0,
+      "queue_age_ms_max": 0.2927,
+      "queue_age_samples": 8192,
       "queue_capacity": 4096,
-      "queue_depth_max": 4096,
-      "queue_dropped": 4096,
+      "queue_depth_max": 1,
+      "queue_dropped": 0,
       "raw_artifact_hash": "da20bfa1915ce08a03fd2ff2f7ef667c6e70ee5b2d09d7221a2cd60e286e66de",
-      "replay_throughput_per_second": 266.0750766231686,
+      "replay_throughput_per_second": 155.59467944601434,
       "seed": 0,
-      "steady_memory_bytes": 1609134,
-      "value_state_update_latency_distribution": {
-        "max": 24861100,
-        "min": 368700,
-        "p50": 874000,
-        "p95": 10638300,
-        "p99": 12556300,
-        "unit": "nanoseconds"
-      }
+      "steady_memory_bytes": 1449521
     }
   ]
 }
