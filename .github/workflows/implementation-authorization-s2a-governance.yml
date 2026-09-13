@@ -1,0 +1,289 @@
+name: HCT-IMPL-AUTH-0009 S2A Authorization Governance
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+env:
+  CANONICAL_BASE_SHA: 3ee5ad4d967bb6ef051eae1982990d728c6ade9e
+  CHECKPOINT_ID: HCT-CP-0032
+  CHECKPOINT_STATUS: S1F_IMPLEMENTATION_APPROVED_MERGED
+  CANDIDATE_AUTHORIZATION_ID: HCT-IMPL-AUTH-0009
+  CANDIDATE_IMPLEMENTATION_ID: HCT-IMP-0009-S2A
+  RESOLVED_PREREQUISITE: HCT-IMP-0010-S1F
+
+jobs:
+  s2a-authorization-governance:
+    name: s2a-authorization-governance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact pull request head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Assert pull-request-only exact head, base and canonical main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_EVENT_NAME}" = "pull_request"
+          test "${{ github.event.pull_request.base.ref }}" = "main"
+          test "${{ github.event.pull_request.base.sha }}" = "${CANONICAL_BASE_SHA}"
+          test "${{ github.event.pull_request.head.sha }}" = "$(git rev-parse HEAD)"
+          git fetch --no-tags origin main
+          test "$(git rev-parse origin/main)" = "${CANONICAL_BASE_SHA}"
+
+      - name: Validate CP0032 canonical closure and fail-closed authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          latest = json.loads(Path("checkpoints/workstreams/planning/latest.json").read_text())
+          checkpoint = json.loads(Path("checkpoints/history/HCT-CP-0032.json").read_text())
+          keys = (
+              "checkpoint_id", "status", "implementation_merge_sha", "approved_candidate_head_sha",
+              "exact_head_ci_run", "exact_head_ci_check", "exact_head_ci_job", "exact_head_ci_conclusion",
+              "independent_review_id", "independent_verdict", "critical_findings_unresolved",
+              "high_findings_unresolved", "implementation_authorized", "implementation_authorization_scope",
+              "implementation_authorization_ceiling", "production_credentials_authorized",
+              "production_deployment_authorized", "limited_live_authorized", "live_trading_authorized",
+          )
+          for key in keys:
+              assert checkpoint[key] == latest[key], key
+          assert checkpoint["checkpoint_id"] == "HCT-CP-0032"
+          assert checkpoint["status"] == "S1F_IMPLEMENTATION_APPROVED_MERGED"
+          assert checkpoint["prior_checkpoint"] == "HCT-CP-0031"
+          assert checkpoint["completed_increment"] == "HCT-IMP-0010-S1F"
+          assert checkpoint["implementation_authorized"] is False
+          assert checkpoint["implementation_authorization_scope"] == []
+          assert checkpoint["implementation_authorization_ceiling"] == "NONE_PENDING_NEXT_GOVERNED_AUTHORIZATION"
+          for key in ("production_credentials_authorized", "production_deployment_authorized", "limited_live_authorized", "live_trading_authorized"):
+              assert checkpoint[key] is False, key
+          assert checkpoint["independent_review_id"] == 5191783715
+          assert checkpoint["independent_verdict"] == "APPROVED"
+          assert checkpoint["critical_findings_unresolved"] == 0
+          assert checkpoint["high_findings_unresolved"] == 0
+          print("CP0032 canonical closure and fail-closed authority: PASS")
+          PY
+
+      - name: Validate exact governance-only changed-file allowlist
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t actual < <(git diff --name-only "${CANONICAL_BASE_SHA}...${{ github.event.pull_request.head.sha }}" | sort)
+          expected=(
+            ".github/workflows/implementation-authorization-s2a-governance.yml"
+            "docs/130-implementation-authorization-s2a-candidate.md"
+            "work-orders/HCT-IMPL-AUTH-0009.md"
+            "work-orders/HCT-IMP-0009-S2A.md"
+          )
+          mapfile -t expected_sorted < <(printf '%s\n' "${expected[@]}" | sort)
+          test "${#actual[@]}" -eq "${#expected_sorted[@]}"
+          for index in "${!expected_sorted[@]}"; do test "${actual[$index]}" = "${expected_sorted[$index]}"; done
+          git diff --check "${CANONICAL_BASE_SHA}...${{ github.event.pull_request.head.sha }}"
+          echo "Governance-only four-file boundary: PASS"
+
+      - name: Validate exact frozen source identities and S1F handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import subprocess
+
+          expected = {
+              "docs/06-test-benchmark-plan.md": "29401ce8fe1616f9390a317bae62d3a157addaa5",
+              "checkpoints/history/HCT-CP-0032.json": "f910b60f0b2dc3c046cac12795dca29a8b7aa3a2",
+              "checkpoints/workstreams/planning/latest.json": "3a8ad6d6887cca478f1d999feb8ba15421b817a4",
+              "adr/HCT-ADR-0050-s1f-realtime-public-market-value-ingest.md": "609ddc4656220027ce14503a6ba7ae71acc4c039",
+              "work-orders/HCT-IMP-0010-S1F.md": "c9cf955dbb83c337760af3cff4d3136e32228319",
+              "evidence/HCT-IMP-0010-S1F.md": "9061c9f072d8e111cda3d2983242fd6466e1101e",
+              "apps/backend/src/hct_backend/s1f_values.py": "38620bc4ea4f1fc5b14cd525c7a9ca0251d9cbfd",
+              "apps/backend/src/hct_backend/s1f_numeric.py": "76c74b1d746f74dfa0e0aac54a286584ab545cb8",
+              "apps/backend/src/hct_backend/s1f_session.py": "ca3c572e6f4eb0f6921b6c3f602dbc571fabab6f",
+              "apps/backend/src/hct_backend/s1f_mexc.py": "48e90d8c29f77ee4c702057b8c737715a55f124e",
+          }
+          for path, digest in expected.items():
+              actual = subprocess.check_output(["git", "rev-parse", f"{os.environ['CANONICAL_BASE_SHA']}:{path}"], text=True).strip()
+              assert actual == digest, (path, actual, digest)
+          print("Frozen source identities and S1F handoff: PASS")
+          PY
+
+      - name: Validate active canonical-base integrity H013
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          expected = os.environ["CANONICAL_BASE_SHA"]
+          assert re.fullmatch(r"[0-9a-f]{40}", expected)
+          truncated = expected[:-1]
+          historical = "625dd0c145087038bdbccd665548d811e187194c"
+          documents = (
+              "docs/130-implementation-authorization-s2a-candidate.md",
+              "work-orders/HCT-IMPL-AUTH-0009.md",
+              "work-orders/HCT-IMP-0009-S2A.md",
+          )
+          canonical_terms = (
+              "canonical base",
+              "canonical preparation base",
+              "canonical main",
+              "exact canonical base",
+          )
+          sha_pattern = re.compile(r"(?<![0-9a-f])([0-9a-f]{39,40})(?![0-9a-f])")
+          truncated_pattern = re.compile(rf"(?<![0-9a-f]){re.escape(truncated)}(?![0-9a-f])")
+
+          for path in documents:
+              text = Path(path).read_text()
+              assert expected in text, path
+              assert not truncated_pattern.search(text), (path, "truncated active base")
+              for line_number, line in enumerate(text.splitlines(), 1):
+                  lower = line.lower()
+                  if historical in line:
+                      assert any(token in lower for token in ("historical", "cp0030", "blocked_by_prerequisite")), (path, line_number)
+                  if not any(term in lower for term in canonical_terms):
+                      continue
+                  if any(token in lower for token in ("historical", "cp0030", "blocked_by_prerequisite")):
+                      continue
+                  matches = sha_pattern.findall(line)
+                  assert matches, (path, line_number, line)
+                  for digest in matches:
+                      assert len(digest) == 40 and digest == expected, (path, line_number, digest)
+          print("Active canonical-base integrity H013: PASS")
+          PY
+
+      - name: Validate B001 resolution, feature contract and negative scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          candidate = Path("docs/130-implementation-authorization-s2a-candidate.md").read_text()
+          authorization = Path("work-orders/HCT-IMPL-AUTH-0009.md").read_text()
+          implementation = Path("work-orders/HCT-IMP-0009-S2A.md").read_text()
+          workflow = Path(".github/workflows/implementation-authorization-s2a-governance.yml").read_text()
+          combined = candidate + "\n" + authorization + "\n" + implementation
+          required = (
+              "RECOMPILED_AFTER_S1F", "B001=RESOLVED_BY_HCT-IMP-0010-S1F_CP0032", "HCT-CP-0032",
+              "HCT-IMP-0010-S1F", "HCT-IMP-0009-S2A", "AUTHOR_SIDE_GOVERNANCE_PREFLIGHT_NOT_INDEPENDENT_APPROVAL",
+              "docs/06-test-benchmark-plan.md", "29401ce8fe1616f9390a317bae62d3a157addaa5",
+              "S2A_EXACT_V1_CORE_FEATURE_SET=F-RET-001,F-SMA-001,F-EMA-001,F-ROC-001,F-RSI-001,F-TR-001,F-ATR-001,F-VSMA-001",
+              "FEATURE_DECIMAL_POLICY_VERSION=FEATURE_DECIMAL_V1", "FEATURE_DECIMAL_INTERNAL_PRECISION=76",
+              "FEATURE_DECIMAL_MAX_PRECISION=38", "FEATURE_DECIMAL_MAX_SCALE=18",
+              "FEATURE_DECIMAL_ROUNDING=ROUND_HALF_EVEN", "FEATURE_DECIMAL_BINARY_FLOAT=FORBIDDEN",
+              "S2A_BENCHMARK_MODE=S2A_BASELINE_ESTABLISHMENT_V1", "MICRO", "NOMINAL", "STRESS",
+              "S2A_AXIS_SEPARATION=FeatureValidity;MarketStateTrust;DataAuthority;ResourceRestriction;UniverseLifecycleRestriction",
+              "PO-F01", "PO-F10", "R05::Time and freshness requirements::B1-B5", "R05::State coherency requirements::B1-B4",
+              "R05::Candle/cache/replay requirements::B1-B5", "INT-002", "INT-012", "INT-018", "VAL-003", "VAL-005",
+              "R11-REQ-006", "R11-REQ-014", "HCT-DEC-0061", "HCT-DEC-0065", "ADR-0049",
+              "implementation_authorized=false", "production_credentials_authorized=false",
+              "production_deployment_authorized=false", "limited_live_authorized=false", "live_trading_authorized=false",
+              "LIVE", "PAPER", "SHADOW", "REPLAY", "no-lookahead", "governance-only",
+          )
+          for marker in required:
+              assert marker in combined, marker
+          required_new_contract = (
+              "S2A_FEATURE_ALGORITHM_VERSION=S2A_STANDARD_FEATURES_V1",
+              "S2A_PARAMETER_N_MIN=2",
+              "S2A_RSI_WILDER_SEED=MEAN_FIRST_N_DELTAS",
+              "S2A_RSI_ZERO_ZERO=50",
+              "S2A_ATR_WILDER_SEED=MEAN_FIRST_N_TR",
+              "S2A_TR_FIRST_BAR=HIGH_MINUS_LOW",
+              "S2A_EMA_SEED=SMA_N",
+              "S2A_MTF_SOURCE=COMPLETE_CLOSED_1M_CONSTITUENTS",
+              "S2A_MTF_5M_COUNT=5",
+              "S2A_MTF_15M_COUNT=15",
+              "S2A_MTF_OHLCV=FIRST_OPEN_MAX_HIGH_MIN_LOW_LAST_CLOSE_SUM_NATIVE_Q",
+              "S2A_MTF_KNOWLEDGE_TIME=MAX_CONSTITUENT_KNOWLEDGE_TIME",
+              "S2A_MTF_LINEAGE=ORDERED_CONSTITUENT_CANDLE_FINGERPRINTS",
+              "S2A_MTF_MARKET_TRUTH_AUTHORITY=NONE_DERIVED_ANALYTICAL_EVIDENCE_ONLY",
+              "S2A_RECURSIVE_STATE_VERSION=S2A_ACCUMULATOR_STATE_V1",
+              "S2A_RECURSIVE_UPDATE_CONTEXT=DECIMAL_PRECISION_76_ROUND_HALF_EVEN",
+              "S2A_RECURSIVE_NEXT_STATE=CANONICAL_SCALE_18_ONLY",
+              "S2A_RECURSIVE_HIDDEN_STATE=FORBIDDEN",
+              "S2A_RESUME_REPLAY_PARITY=BIT_FOR_BIT",
+              "S2A_EMA_STATE=PREVIOUS_EMA_CANONICAL_SMA_N_SEED",
+              "S2A_ATR_STATE=PREVIOUS_ATR_CANONICAL_MEAN_FIRST_N_TR_SEED",
+              "S2A_RSI_STATE=AVG_GAIN_AVG_LOSS_CANONICAL_WILDER",
+              "S2A_REQUIRED_SAMPLE_CARDINALITY_VERSION=S2A_SAMPLE_CARDINALITY_V1",
+              "S2A_RET_REQUIRED_INPUTS=2_CLOSED_CLOSES",
+              "S2A_RET_FIRST_VALID_INDEX=2",
+              "S2A_SMA_REQUIRED_INPUTS=N_CLOSED_SAMPLES",
+              "S2A_SMA_FIRST_VALID_INDEX=N",
+              "S2A_EMA_REQUIRED_INPUTS=N_CLOSED_SAMPLES",
+              "S2A_EMA_FIRST_VALID_INDEX=N_SEED_SMA_N",
+              "S2A_ROC_REQUIRED_INPUTS=N_PLUS_1_CLOSED_CLOSES",
+              "S2A_ROC_FIRST_VALID_INDEX=N_PLUS_1",
+              "S2A_RSI_REQUIRED_INPUTS=N_PLUS_1_CLOSED_CLOSES_N_DELTAS",
+              "S2A_RSI_FIRST_VALID_INDEX=N_PLUS_1",
+              "S2A_TR_REQUIRED_INPUTS=1_CLOSED_OHLC_BAR_PRIOR_CLOSE_OPTIONAL",
+              "S2A_TR_FIRST_VALID_INDEX=1",
+              "S2A_ATR_REQUIRED_INPUTS=N_TR_VALUES_FROM_N_CLOSED_BARS",
+              "S2A_ATR_FIRST_VALID_INDEX=N",
+              "S2A_VSMA_REQUIRED_INPUTS=N_CLOSED_NATIVE_Q_SAMPLES",
+              "S2A_VSMA_FIRST_VALID_INDEX=N",
+              "S2A_MTF_VALIDITY_WARMUP=PRE_CLOSE_OR_EXPECTED_CLOSE_BOUNDARY_NOT_YET_OCCURRED",
+              "S2A_MTF_VALIDITY_UNKNOWN=BOUNDARY_PASSED_REQUIRED_CLOSED_CONSTITUENT_UNAVAILABLE",
+              "S2A_MTF_VALIDITY_INVALID=STRUCTURAL_OR_PROVENANCE_CONTRADICTION",
+              "S2A_MTF_VALIDITY_DEGRADED=COMPLETE_COHERENT_UPSTREAM_DEGRADED",
+              "S2A_MTF_VALIDITY_VALID=COMPLETE_CONTIGUOUS_5_OR_15_CLOSED_ADMISSIBLE",
+              "S2A_MTF_EVENT_TIME=MAX_CONSTITUENT_EVENT_TIME",
+              "S2A_MTF_WALL_RECEIVE_TIME=MAX_CONSTITUENT_WALL_RECEIVE_TIME",
+              "S2A_MTF_PROVENANCE=DERIVED_ANALYTICAL_V1",
+          )
+          for document in (candidate, authorization, implementation):
+              for marker in required_new_contract:
+                  assert marker in document, marker
+          assert "Status: `PENDING_INDEPENDENT_HIGH_ASSURANCE_REVIEW`" in candidate
+          assert "Status: `PENDING_INDEPENDENT_HIGH_ASSURANCE_REVIEW`" in authorization
+          assert "Status: `PENDING_SEPARATE_AUTHORIZATION_CHECKPOINT`" in implementation
+          assert "INVALID/UNKNOWN" not in combined
+          assert "WARMUP/UNKNOWN" not in combined
+          for feature_id in ("F-RET-001", "F-SMA-001", "F-EMA-001", "F-ROC-001", "F-RSI-001", "F-TR-001", "F-ATR-001", "F-VSMA-001"):
+              assert combined.count(feature_id) >= 2, feature_id
+          assert "BLOCKED_BY_PREREQUISITE" in candidate + authorization
+          assert "RESOLVED_BY_HCT-IMP-0010-S1F_CP0032" in combined
+          manual_trigger = "workflow" + "_" + "dispatch"
+          assert manual_trigger not in workflow
+          assert "on:\n  pull_request:" in workflow
+          print("B001 resolution, exact feature/numeric/lineage/axis contract and negative scope: PASS")
+          PY
+
+      - name: Publish S2A authorization governance summary
+        shell: bash
+        run: |
+          echo "candidateAuthorizationId=${CANDIDATE_AUTHORIZATION_ID}"
+          echo "candidateImplementationId=${CANDIDATE_IMPLEMENTATION_ID}"
+          echo "canonicalBase=${CANONICAL_BASE_SHA}"
+          echo "checkpoint=${CHECKPOINT_ID}/${CHECKPOINT_STATUS}"
+          echo "resolvedPrerequisite=${RESOLVED_PREREQUISITE}"
+          echo "governanceOnlyDiff=PASS"
+          echo "b001Resolved=PASS"
+          echo "h002BenchmarkSourceLock=PASS"
+          echo "h003ExactFeatureSet=PASS"
+          echo "h004NumericPolicy=PASS"
+          echo "h005OrderedLineage=PASS"
+          echo "h006AxisSeparation=PASS"
+          echo "h007GovernanceState=PASS"
+          echo "h008FeatureAlgorithmContract=PASS"
+          echo "h009MultiTimeframeContract=PASS"
+          echo "h010RecursiveState=PASS_CANONICAL_SCALE_18"
+          echo "h011SampleCardinality=PASS"
+          echo "h012MtfValidityTimeProvenance=PASS"
+          echo "implementationAuthorized=false"
+          echo "productionCredentials=false"
+          echo "productionDeployment=false"
+          echo "limitedLive=false"
+          echo "liveTrading=false"
