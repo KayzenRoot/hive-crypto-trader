@@ -87,17 +87,42 @@ The following are blocking violations of this Work Order:
 
 The implementation must trace to the frozen R05/R11 requirements and retain the applicable restrictions from the R12 baseline. R05 locators below are exact `R05::<heading>::B<ordinal>` positions computed from the frozen `docs/54-r05-realtime-requirements-addendum.md` blob; no topic-only locator is sufficient:
 
-- `R05::Transport and feed requirements::B1`, `B2`, `B3`, `B4`;
-- `R05::Backpressure and resource requirements::B1`, `B3`, `B4`;
-- `R05::Time and freshness requirements::B1`, `B2`, `B3`;
-- `R05::State coherency requirements::B1`, `B2`, `B3`, `B4`;
-- `R05::Candle/cache/replay requirements::B3`, `B4`, `B5`;
-- `R05::Persistence and schema requirements::B3`, `B4`;
-- `R05::Universe lifecycle requirements::B1`, `B2`;
-- `R05::Authority requirements::B1`, `B2`, `B3`;
-- `R05::Validation requirements::B1`, `B2`, `B3`, `B6`, `B7`, `B8`, `B9`, `B12`, `B13`, `B18`.
+- `R05::Transport and feed requirements::B1`;
+- `R05::Transport and feed requirements::B2`;
+- `R05::Transport and feed requirements::B3`;
+- `R05::Transport and feed requirements::B4`;
+- `R05::Backpressure and resource requirements::B1`;
+- `R05::Backpressure and resource requirements::B3`;
+- `R05::Backpressure and resource requirements::B4`;
+- `R05::Time and freshness requirements::B1`;
+- `R05::Time and freshness requirements::B2`;
+- `R05::Time and freshness requirements::B3`;
+- `R05::State coherency requirements::B1`;
+- `R05::State coherency requirements::B2`;
+- `R05::State coherency requirements::B3`;
+- `R05::State coherency requirements::B4`;
+- `R05::Candle/cache/replay requirements::B3`;
+- `R05::Candle/cache/replay requirements::B4`;
+- `R05::Candle/cache/replay requirements::B5`;
+- `R05::Persistence and schema requirements::B3`;
+- `R05::Persistence and schema requirements::B4`;
+- `R05::Universe lifecycle requirements::B1`;
+- `R05::Universe lifecycle requirements::B2`;
+- `R05::Authority requirements::B1`;
+- `R05::Authority requirements::B2`;
+- `R05::Authority requirements::B3`;
+- `R05::Validation requirements::B1`;
+- `R05::Validation requirements::B2`;
+- `R05::Validation requirements::B3`;
+- `R05::Validation requirements::B6`;
+- `R05::Validation requirements::B7`;
+- `R05::Validation requirements::B8`;
+- `R05::Validation requirements::B9`;
+- `R05::Validation requirements::B12`;
+- `R05::Validation requirements::B13`;
+- `R05::Validation requirements::B18`.
 
-The following R05 requirements are intentionally deferred because their concrete runtime owners are outside S1E: transport reconnect/resubscription (`Transport::B5`), private/public runtime isolation (`Transport::B6`), decision-lifetime propagation and execution expiry (`Time::B4-B6`), candle revision semantics (`Candle/cache/replay::B1-B2`), persistence outage runtime (`Persistence::B1-B2`), reconnect/load-specific validation (`Validation::B4-B5`, `B10-B11`, `B14-B17`), and HA/fencing runtime (`HA::B1-B4`). Deferral does not weaken the frozen source.
+The following R05 requirements are intentionally deferred because their concrete runtime owners are outside S1E: `R05::Transport and feed requirements::B5`, `R05::Transport and feed requirements::B6`, `R05::Time and freshness requirements::B4`, `R05::Time and freshness requirements::B5`, `R05::Time and freshness requirements::B6`, `R05::Candle/cache/replay requirements::B1`, `R05::Candle/cache/replay requirements::B2`, `R05::Persistence and schema requirements::B1`, `R05::Persistence and schema requirements::B2`, `R05::Validation requirements::B4`, `R05::Validation requirements::B5`, `R05::Validation requirements::B10`, `R05::Validation requirements::B11`, `R05::Validation requirements::B14`, `R05::Validation requirements::B15`, `R05::Validation requirements::B16`, `R05::Validation requirements::B17`, `R05::HA and bootstrap requirements::B1`, `R05::HA and bootstrap requirements::B2`, `R05::HA and bootstrap requirements::B3` and `R05::HA and bootstrap requirements::B4`. Deferral does not weaken the frozen source.
 
 The active baseline is explicitly `HCT-REQ-BASELINE-V1-CANDIDATE` / `docs/99-r12-frozen-requirements-baseline.md`. At minimum the candidate retains:
 

@@ -150,15 +150,40 @@ Provide deterministic fixtures/replay inputs, contract tests, state-transition t
 
 The active baseline is `HCT-REQ-BASELINE-V1-CANDIDATE` / `docs/99-r12-frozen-requirements-baseline.md`. Exact R05 locators are computed from `docs/54-r05-realtime-requirements-addendum.md` using `R05::<heading>::B<ordinal>`:
 
-- `R05::Transport and feed requirements::B1`, `B2`, `B3`, `B4`;
-- `R05::Backpressure and resource requirements::B1`, `B3`, `B4`;
-- `R05::Time and freshness requirements::B1`, `B2`, `B3`;
-- `R05::State coherency requirements::B1`, `B2`, `B3`, `B4`;
-- `R05::Candle/cache/replay requirements::B3`, `B4`, `B5`;
-- `R05::Persistence and schema requirements::B3`, `B4`;
-- `R05::Universe lifecycle requirements::B1`, `B2`;
-- `R05::Authority requirements::B1`, `B2`, `B3`;
-- `R05::Validation requirements::B1`, `B2`, `B3`, `B6`, `B7`, `B8`, `B9`, `B12`, `B13`, `B18`.
+- `R05::Transport and feed requirements::B1`;
+- `R05::Transport and feed requirements::B2`;
+- `R05::Transport and feed requirements::B3`;
+- `R05::Transport and feed requirements::B4`;
+- `R05::Backpressure and resource requirements::B1`;
+- `R05::Backpressure and resource requirements::B3`;
+- `R05::Backpressure and resource requirements::B4`;
+- `R05::Time and freshness requirements::B1`;
+- `R05::Time and freshness requirements::B2`;
+- `R05::Time and freshness requirements::B3`;
+- `R05::State coherency requirements::B1`;
+- `R05::State coherency requirements::B2`;
+- `R05::State coherency requirements::B3`;
+- `R05::State coherency requirements::B4`;
+- `R05::Candle/cache/replay requirements::B3`;
+- `R05::Candle/cache/replay requirements::B4`;
+- `R05::Candle/cache/replay requirements::B5`;
+- `R05::Persistence and schema requirements::B3`;
+- `R05::Persistence and schema requirements::B4`;
+- `R05::Universe lifecycle requirements::B1`;
+- `R05::Universe lifecycle requirements::B2`;
+- `R05::Authority requirements::B1`;
+- `R05::Authority requirements::B2`;
+- `R05::Authority requirements::B3`;
+- `R05::Validation requirements::B1`;
+- `R05::Validation requirements::B2`;
+- `R05::Validation requirements::B3`;
+- `R05::Validation requirements::B6`;
+- `R05::Validation requirements::B7`;
+- `R05::Validation requirements::B8`;
+- `R05::Validation requirements::B9`;
+- `R05::Validation requirements::B12`;
+- `R05::Validation requirements::B13`;
+- `R05::Validation requirements::B18`.
 
 Concrete reconnect/resubscription, private/public runtime isolation, downstream Decision Freshness propagation, candle-specific revision logic, persistence outage runtime, reconnect/HA/fencing runtime and other non-S1E validation items are explicitly deferred; their frozen requirements remain authoritative for their later owners.
 
