@@ -10,6 +10,7 @@ on:
       - "apps/backend/tests/test_features.py"
       - "scripts/scan_s2a_boundaries.py"
       - "scripts/benchmark_s2a.py"
+      - "evidence/HCT-IMP-0009-S2A-CONTEXT-LOCK.md"
       - "evidence/HCT-IMP-0009-S2A.md"
       - ".github/workflows/s2a-quality.yml"
 
@@ -85,7 +86,7 @@ jobs:
         run: |
           set -euo pipefail
           mapfile -t changed < <(git diff --name-only "${EXECUTION_BASE_SHA}...HEAD" | sort)
-          allowed='^(\.github/workflows/s2a-quality\.yml|apps/backend/src/hct_backend/(features|feature_engine)\.py|apps/backend/tests/test_features\.py|scripts/(scan_s2a_boundaries|benchmark_s2a)\.py|evidence/HCT-IMP-0009-S2A\.md)$'
+          allowed='^(\.github/workflows/s2a-quality\.yml|apps/backend/src/hct_backend/(features|feature_engine)\.py|apps/backend/tests/test_features\.py|scripts/(scan_s2a_boundaries|benchmark_s2a)\.py|evidence/HCT-IMP-0009-S2A(-CONTEXT-LOCK)?\.md)$'
           invalid=()
           for path in "${changed[@]}"; do
             if ! [[ "${path}" =~ ${allowed} ]]; then invalid+=("${path}"); fi
