@@ -241,7 +241,7 @@ Every future behavior/test must trace to applicable frozen locators: `REQ02::Tra
 ## ACCEPTANCE CRITERIA
 
 - `B001` is materially resolved by the typed S1F public market-value plane and CP0032 merge;
-- exact canonical base is `3ee5ad4d967bb6ef051eae1982990d728c6ade9` and CP0032 is fail-closed;
+- exact canonical base is `3ee5ad4d967bb6ef051eae1982990d728c6ade9e` and CP0032 is fail-closed;
 - the future implementation is restricted to the eight feature IDs and `FEATURE_DECIMAL_V1`;
 - no-lookahead, warmup, stale/untrusted/unknown/degraded propagation, lineage and multi-timeframe boundaries are explicit;
 - axis separation preserves `FeatureValidity`, `MarketStateTrust`, `DataAuthority`, resource restriction and Universe/lifecycle restriction;

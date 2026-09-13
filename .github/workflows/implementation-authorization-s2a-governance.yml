@@ -116,6 +116,52 @@ jobs:
           print("Frozen source identities and S1F handoff: PASS")
           PY
 
+      - name: Validate active canonical-base integrity H013
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          expected = os.environ["CANONICAL_BASE_SHA"]
+          assert re.fullmatch(r"[0-9a-f]{40}", expected)
+          truncated = expected[:-1]
+          historical = "625dd0c145087038bdbccd665548d811e187194c"
+          documents = (
+              "docs/130-implementation-authorization-s2a-candidate.md",
+              "work-orders/HCT-IMPL-AUTH-0009.md",
+              "work-orders/HCT-IMP-0009-S2A.md",
+          )
+          canonical_terms = (
+              "canonical base",
+              "canonical preparation base",
+              "canonical main",
+              "exact canonical base",
+          )
+          sha_pattern = re.compile(r"(?<![0-9a-f])([0-9a-f]{39,40})(?![0-9a-f])")
+          truncated_pattern = re.compile(rf"(?<![0-9a-f]){re.escape(truncated)}(?![0-9a-f])")
+
+          for path in documents:
+              text = Path(path).read_text()
+              assert expected in text, path
+              assert not truncated_pattern.search(text), (path, "truncated active base")
+              for line_number, line in enumerate(text.splitlines(), 1):
+                  lower = line.lower()
+                  if historical in line:
+                      assert any(token in lower for token in ("historical", "cp0030", "blocked_by_prerequisite")), (path, line_number)
+                  if not any(term in lower for term in canonical_terms):
+                      continue
+                  if any(token in lower for token in ("historical", "cp0030", "blocked_by_prerequisite")):
+                      continue
+                  matches = sha_pattern.findall(line)
+                  assert matches, (path, line_number, line)
+                  for digest in matches:
+                      assert len(digest) == 40 and digest == expected, (path, line_number, digest)
+          print("Active canonical-base integrity H013: PASS")
+          PY
+
       - name: Validate B001 resolution, feature contract and negative scope
         shell: bash
         run: |
@@ -230,7 +276,7 @@ jobs:
           echo "h004NumericPolicy=PASS"
           echo "h005OrderedLineage=PASS"
           echo "h006AxisSeparation=PASS"
-          echo "h007GovernanceState=PASS_PENDING_METADATA_HANDOFF"
+          echo "h007GovernanceState=PASS"
           echo "h008FeatureAlgorithmContract=PASS"
           echo "h009MultiTimeframeContract=PASS"
           echo "h010RecursiveState=PASS_CANONICAL_SCALE_18"
