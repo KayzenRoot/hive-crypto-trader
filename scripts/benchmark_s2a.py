@@ -18,8 +18,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "apps" / "backend" / "src"))
 
-from hct_backend.contracts import Environment, IdentityKind, StableId  # noqa: E402
-from hct_backend.features import (  # noqa: E402
+from hct_backend.contracts import Environment, IdentityKind, StableId
+from hct_backend.features import (
     FeatureSample,
     FeatureValidity,
     FeatureVersion,
@@ -27,9 +27,9 @@ from hct_backend.features import (  # noqa: E402
     evaluate_feature,
     evaluate_feature_series,
 )
-from hct_backend.market_truth import GenerationRef  # noqa: E402
-from hct_backend.s1f_numeric import DecimalValue  # noqa: E402
-from hct_backend.s1f_values import (  # noqa: E402
+from hct_backend.market_truth import GenerationRef
+from hct_backend.s1f_numeric import DecimalValue
+from hct_backend.s1f_values import (
     CandleBar,
     CandleCloseProof,
     Finality,
@@ -80,8 +80,8 @@ def _sample(contract_number: int, index: int) -> FeatureSample:
         contract_id=contract,
         environment=Environment.REPLAY,
     )
-    high = DecimalValue.parse(str(close.value + Decimal("2")))
-    low = DecimalValue.parse(str(close.value - Decimal("1")))
+    high = DecimalValue.parse(str(close.value + Decimal(2)))
+    low = DecimalValue.parse(str(close.value - Decimal(1)))
     quantity = Quantity(
         DecimalValue.parse(str(1 + (index % 11))),
         QuantityUnit.CONTRACTS_PROVIDER_NATIVE_V1,
@@ -148,8 +148,8 @@ def _candle(contract_number: int, generation_number: int, index: int) -> CandleB
         start,
         start + timedelta(minutes=1),
         close,
-        DecimalValue.parse(str(close.value + Decimal("2"))),
-        DecimalValue.parse(str(close.value - Decimal("1"))),
+        DecimalValue.parse(str(close.value + Decimal(2))),
+        DecimalValue.parse(str(close.value - Decimal(1))),
         close,
         Quantity(
             DecimalValue.parse(str(1 + index % 11)),
