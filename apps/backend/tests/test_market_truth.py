@@ -160,6 +160,11 @@ def event(
     )
 
 
+def healthy_sequence() -> SequenceEvaluation:
+    cap = capability(SequenceMode.STRICT_SEQUENCE)
+    return evaluate_sequence(cap, None, observation(900, update_id=900, snapshot=True, cap=cap))
+
+
 def resource(
     disposition: ResourceDisposition = ResourceDisposition.AVAILABLE,
 ) -> ResourceAdmissionEvidence:
@@ -195,7 +200,7 @@ def assessment(
     return QualityAssessment(
         age_ms=age_ms,
         freshness_limit_ms=freshness_limit_ms,
-        sequence=sequence or SequenceEvaluation(SequenceResultKind.ACCEPT, True),
+        sequence=sequence or healthy_sequence(),
         clock=clock,
         schema_valid=schema_valid,
         provenance_valid=provenance_valid,
@@ -299,7 +304,6 @@ def state(
     current_proof = proof or SynchronizationProof.from_sequence_evaluation(
         capability=current_capability,
         generation=current_generation,
-        snapshot_fingerprint=sync_observation.event_fingerprint,
         evaluation=sync_evaluation,
     )
     return MarketStateSnapshot(
@@ -309,13 +313,19 @@ def state(
         source_id=SOURCE,
         source_version=1,
         provenance_fingerprint=PROVENANCE,
-        event_fingerprints=(sync_observation.event_fingerprint,),
+        event_fingerprints=(
+            current_proof.synchronization_anchor_fingerprint,
+            current_proof.latest_event_fingerprint,
+        ),
         trust=trust,
         data_authority=authority or decision(),
         synchronized=synchronized,
         synchronization_proof=current_proof,
         capability_fingerprint=current_capability.fingerprint,
         capability_policy_version=current_capability.policy_version,
+        channel=current_capability.channel,
+        schema_version=current_capability.schema_version,
+        visibility=current_capability.visibility,
         lifecycle_restriction=lifecycle,
     )
 
@@ -389,6 +399,12 @@ def test_monotonic_update_id_only_calls_jumps_gaps_when_proven() -> None:
 
 
 def test_sequence_evaluation_rejects_contradictory_authoritative_material() -> None:
+    with pytest.raises(MarketTruthConsistencyError):
+        SequenceEvaluation(SequenceResultKind.ACCEPT, True)
+    with pytest.raises(MarketTruthConsistencyError):
+        SequenceEvaluation(SequenceResultKind.ACCEPT, True, None)
+    with pytest.raises(MarketTruthConsistencyError):
+        SequenceEvaluation(SequenceResultKind.DUPLICATE, True, QualityReason.DUPLICATE)
     with pytest.raises(MarketTruthConsistencyError):
         SequenceEvaluation(SequenceResultKind.GAP, True, QualityReason.GAP)
     with pytest.raises(MarketTruthConsistencyError):
@@ -505,6 +521,31 @@ def test_h007_monotonic_continuity_and_unproven_jump_are_fail_closed() -> None:
     )
     assert unproven_jump.result is SequenceResultKind.SEQUENCE_UNPROVABLE
     assert not unproven_jump.synchronized
+
+
+def test_h011_synchronized_evaluations_require_evaluator_attested_continuity() -> None:
+    cap = capability(SequenceMode.STRICT_SEQUENCE)
+    snapshot = observation(10, update_id=10, snapshot=True, cap=cap)
+    evaluation = evaluate_sequence(cap, None, snapshot)
+    assert evaluation.continuity is not None
+    assert evaluation.continuity.synchronization_anchor_fingerprint == snapshot.event_fingerprint
+    with pytest.raises(MarketTruthConsistencyError):
+        SequenceEvaluation(SequenceResultKind.ACCEPT, True, continuity=None)
+    with pytest.raises(MarketTruthConsistencyError):
+        SequenceEvaluation(SequenceResultKind.DUPLICATE, True, QualityReason.DUPLICATE)
+    healthy = derive_data_authority(assessment(sequence=evaluation))
+    assert healthy.state is DataAuthorityState.ALLOW_NEW_EXPOSURE
+
+
+def test_h011_quality_assessment_rejects_unattested_synchronized_sequence() -> None:
+    forged = object.__new__(SequenceEvaluation)
+    object.__setattr__(forged, "result", SequenceResultKind.ACCEPT)
+    object.__setattr__(forged, "synchronized", True)
+    object.__setattr__(forged, "reason", None)
+    object.__setattr__(forged, "continuity", None)
+    object.__setattr__(forged, "_attestation", None)
+    with pytest.raises(MarketTruthConsistencyError):
+        assessment(sequence=forged)
 
 
 def test_timestamp_ordering_bounds_lateness_without_inventing_gaps() -> None:
@@ -737,7 +778,7 @@ def test_trusted_state_requires_verified_synchronization_and_quality() -> None:
         {"age_ms": 101},
         {
             "sequence": SequenceEvaluation(
-                SequenceResultKind.DUPLICATE, True, QualityReason.DUPLICATE
+                SequenceResultKind.DUPLICATE, False, QualityReason.DUPLICATE
             )
         },
         {"clock": ClockHealth.DRIFT},
@@ -769,12 +810,74 @@ def test_h008_factory_proof_binds_generation_and_capability_context() -> None:
     proof = SynchronizationProof.from_sequence_evaluation(
         capability=cap,
         generation=current.generation,
-        snapshot_fingerprint=current.event_fingerprint,
         evaluation=evaluation,
     )
     assert proof.verified
+    assert proof.contract_id == CONTRACT
+    assert proof.channel == cap.channel
+    assert proof.schema_version == cap.schema_version
+    assert proof.visibility is cap.visibility
     with pytest.raises(MarketTruthConsistencyError):
         state(gen=generation(2), proof=proof)
+
+
+def test_h012_proof_binds_contract_channel_schema_visibility_and_event_lineage() -> None:
+    valid = state()
+    with pytest.raises(MarketTruthConsistencyError):
+        replace(
+            valid,
+            contract_id=StableId(kind=IdentityKind.INSTRUMENT, value="eth-usdt-perpetual"),
+        )
+    with pytest.raises(MarketTruthConsistencyError):
+        replace(valid, channel="other-channel")
+    with pytest.raises(MarketTruthConsistencyError):
+        replace(valid, schema_version=2)
+    with pytest.raises(MarketTruthConsistencyError):
+        replace(valid, visibility=ChannelVisibility.PRIVATE)
+    with pytest.raises(MarketTruthConsistencyError):
+        replace(valid, capability_fingerprint="d" * 64)
+    with pytest.raises(MarketTruthConsistencyError):
+        replace(valid, capability_policy_version=2)
+
+    cap = capability(SequenceMode.STRICT_SEQUENCE)
+    snapshot = observation(10, update_id=10, snapshot=True, cap=cap)
+    delta_one = observation(11, update_id=11, cap=cap)
+    delta_two = observation(12, update_id=12, cap=cap)
+    first = evaluate_sequence(cap, None, snapshot)
+    second = evaluate_sequence(cap, snapshot, delta_one, first.continuity)
+    third = evaluate_sequence(cap, delta_one, delta_two, second.continuity)
+    proof = SynchronizationProof.from_sequence_evaluation(
+        capability=cap, generation=delta_two.generation, evaluation=third
+    )
+    assert proof.synchronization_anchor_fingerprint == snapshot.event_fingerprint
+    assert proof.latest_event_fingerprint == delta_two.event_fingerprint
+    assert proof.synchronization_anchor_fingerprint != proof.latest_event_fingerprint
+    coherent = replace(
+        valid,
+        synchronization_proof=proof,
+        event_fingerprints=(
+            proof.synchronization_anchor_fingerprint,
+            proof.latest_event_fingerprint,
+        ),
+    )
+    assert coherent.synchronization_proof is proof
+    with pytest.raises(MarketTruthConsistencyError):
+        replace(
+            coherent,
+            event_fingerprints=(proof.synchronization_anchor_fingerprint,),
+        )
+
+
+def test_h012_retired_generation_and_cross_context_proofs_fail_closed() -> None:
+    cap = capability(SequenceMode.STRICT_SEQUENCE)
+    snapshot = observation(1, update_id=1, snapshot=True, cap=cap)
+    evaluation = evaluate_sequence(cap, None, snapshot)
+    with pytest.raises(MarketTruthConsistencyError):
+        SynchronizationProof.from_sequence_evaluation(
+            capability=cap,
+            generation=snapshot.generation.retire(),
+            evaluation=evaluation,
+        )
 
 
 def test_h009_projection_constructor_and_upgrade_paths_are_closed() -> None:
@@ -931,12 +1034,11 @@ def test_lifecycle_evidence_direct_construction_is_rejected() -> None:
 
 
 def test_lifecycle_mismatch_cannot_rewrite_another_contract() -> None:
-    evidence = UniverseLifecycleEvidence.from_snapshot(universe_snapshot(), CONTRACT)
-    other = replace(
-        state(), contract_id=StableId(kind=IdentityKind.INSTRUMENT, value="eth-usdt-perpetual")
-    )
     with pytest.raises(MarketTruthConsistencyError):
-        apply_universe_lifecycle(other, evidence)
+        replace(
+            state(),
+            contract_id=StableId(kind=IdentityKind.INSTRUMENT, value="eth-usdt-perpetual"),
+        )
 
 
 def test_projection_has_lease_invalidation_and_no_reverse_authority_path() -> None:
@@ -971,7 +1073,7 @@ def test_invalid_capability_and_assessment_boundaries_fail_closed() -> None:
         replace(capability(SequenceMode.SNAPSHOT_ONLY), snapshot_available=False)
     with pytest.raises(MarketTruthInputError):
         ResourceAdmissionEvidence(ResourceDisposition.AVAILABLE, "bad reason", "bad")
-    with pytest.raises(MarketTruthInputError):
+    with pytest.raises(MarketTruthConsistencyError):
         QualityAssessment(
             0,
             1,

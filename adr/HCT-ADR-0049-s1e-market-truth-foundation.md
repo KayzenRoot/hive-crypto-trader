@@ -62,6 +62,21 @@ axis and may coexist with otherwise trusted market truth. Resource evidence,
 projections and lifecycle restrictions cannot upgrade stale, gapped,
 contradictory, expired or otherwise untrusted market data.
 
+The H011/H012 hardening closes the remaining permissive paths. A synchronized
+`SequenceEvaluation` is evaluator-issued only and carries valid attested
+continuity with a synchronization anchor; direct synchronized construction,
+missing continuity and synchronized duplicate evidence fail closed. The quality
+assessment and authority derivation repeat this fence defensively, so
+`ALLOW_NEW_EXPOSURE` cannot arise from caller-created or unproven continuity.
+
+`SynchronizationProof` materializes contract, channel, schema and visibility
+from the `ChannelCapability`, and requires a non-null contract scope for a
+trusted contract-scoped state. It binds both the exact synchronization anchor
+and the latest accepted event. `MarketStateSnapshot` must match that context
+and contain both proof fingerprints in its event lineage; cross-contract,
+cross-channel, schema/visibility-mismatched, retired-generation or incomplete
+lineage evidence is rejected before `TRUSTED`.
+
 ## Explicit non-scope
 
 No socket, WebSocket, endpoint, venue DTO, network client, credential, private

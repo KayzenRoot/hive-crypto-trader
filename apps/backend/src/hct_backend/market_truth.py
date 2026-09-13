@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Final
@@ -135,6 +135,7 @@ class ResourceDisposition(StrEnum):
 
 
 _CONTINUITY_ATTESTATION: Final = object()
+_SEQUENCE_EVALUATION_ATTESTATION: Final = object()
 
 
 def _positive(value: int, label: str) -> None:
@@ -363,6 +364,7 @@ class SequenceContinuityState:
     generation: GenerationRef
     capability_fingerprint: str
     capability_policy_version: int
+    synchronization_anchor_fingerprint: str | None
     last_event_fingerprint: str
     last_update_id: int | None
     synchronized: bool
@@ -380,12 +382,27 @@ class SequenceContinuityState:
         observation: SequenceObservation,
         synchronized: bool,
         valid: bool,
+        synchronization_anchor_fingerprint: str | None,
     ) -> SequenceContinuityState:
+        if synchronization_anchor_fingerprint is not None:
+            _fingerprint(
+                synchronization_anchor_fingerprint,
+                "synchronization anchor fingerprint",
+            )
+        if synchronized and (not valid or synchronization_anchor_fingerprint is None):
+            raise MarketTruthConsistencyError(
+                "synchronized continuity requires a valid synchronization anchor"
+            )
         instance = object.__new__(cls)
         object.__setattr__(instance, "source_id", capability.source_id)
         object.__setattr__(instance, "generation", observation.generation)
         object.__setattr__(instance, "capability_fingerprint", capability.fingerprint)
         object.__setattr__(instance, "capability_policy_version", capability.policy_version)
+        object.__setattr__(
+            instance,
+            "synchronization_anchor_fingerprint",
+            synchronization_anchor_fingerprint,
+        )
         object.__setattr__(instance, "last_event_fingerprint", observation.event_fingerprint)
         object.__setattr__(instance, "last_update_id", observation.update_id)
         object.__setattr__(instance, "synchronized", synchronized)
@@ -409,12 +426,47 @@ class SequenceContinuityState:
         )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class SequenceEvaluation:
     result: SequenceResultKind
     synchronized: bool
     reason: QualityReason | None = None
     continuity: SequenceContinuityState | None = None
+    _attestation: object = field(default=None, repr=False, compare=False)
+
+    def __init__(
+        self,
+        result: SequenceResultKind,
+        synchronized: bool,
+        reason: QualityReason | None = None,
+        continuity: SequenceContinuityState | None = None,
+    ) -> None:
+        object.__setattr__(self, "result", result)
+        object.__setattr__(self, "synchronized", synchronized)
+        object.__setattr__(self, "reason", reason)
+        object.__setattr__(self, "continuity", continuity)
+        object.__setattr__(self, "_attestation", None)
+        self.__post_init__()
+
+    @classmethod
+    def _from_evaluator(
+        cls,
+        result: SequenceResultKind,
+        synchronized: bool,
+        reason: QualityReason | None,
+        continuity: SequenceContinuityState,
+    ) -> SequenceEvaluation:
+        instance = object.__new__(cls)
+        object.__setattr__(instance, "result", result)
+        object.__setattr__(instance, "synchronized", synchronized)
+        object.__setattr__(instance, "reason", reason)
+        object.__setattr__(instance, "continuity", continuity)
+        object.__setattr__(instance, "_attestation", _SEQUENCE_EVALUATION_ATTESTATION)
+        instance.__post_init__()
+        return instance
+
+    def _is_attested(self) -> bool:
+        return self._attestation is _SEQUENCE_EVALUATION_ATTESTATION
 
     def __post_init__(self) -> None:
         if not isinstance(self.result, SequenceResultKind):
@@ -423,6 +475,15 @@ class SequenceEvaluation:
             raise MarketTruthInputError("synchronization flag must be boolean")
         if self.reason is not None and not isinstance(self.reason, QualityReason):
             raise MarketTruthInputError("invalid sequence reason")
+        if self.synchronized and (
+            not self._is_attested()
+            or self.continuity is None
+            or not self.continuity.valid
+            or not self.continuity.synchronized
+        ):
+            raise MarketTruthConsistencyError(
+                "synchronized sequence evaluation requires evaluator-issued valid continuity"
+            )
         if self.continuity is not None:
             if not isinstance(self.continuity, SequenceContinuityState):
                 raise MarketTruthInputError("invalid sequence continuity")
@@ -510,13 +571,25 @@ def evaluate_sequence(
             next_continuity = continuity
         else:
             source_observation = current if valid or previous is None else previous
+            previous_anchor = (
+                continuity.synchronization_anchor_fingerprint
+                if continuity is not None and continuity._is_attested()
+                else None
+            )
+            if synchronized:
+                synchronization_anchor = (
+                    current.event_fingerprint if current.is_snapshot else previous_anchor
+                )
+            else:
+                synchronization_anchor = previous_anchor
             next_continuity = SequenceContinuityState._from_evaluator(
                 capability=capability,
                 observation=source_observation,
                 synchronized=synchronized,
                 valid=valid,
+                synchronization_anchor_fingerprint=synchronization_anchor,
             )
-        return SequenceEvaluation(result, synchronized, reason, next_continuity)
+        return SequenceEvaluation._from_evaluator(result, synchronized, reason, next_continuity)
 
     if current.generation.retired:
         return evaluated(
@@ -841,6 +914,15 @@ class QualityAssessment:
             _positive(self.freshness_limit_ms, "freshness limit")
         if not isinstance(self.sequence, SequenceEvaluation):
             raise MarketTruthInputError("sequence evidence is required")
+        if self.sequence.synchronized and (
+            not self.sequence._is_attested()
+            or self.sequence.continuity is None
+            or not self.sequence.continuity.valid
+            or not self.sequence.continuity.synchronized
+        ):
+            raise MarketTruthConsistencyError(
+                "quality assessment requires evaluator-issued synchronized continuity"
+            )
         if not isinstance(self.clock, ClockHealth):
             raise MarketTruthInputError("clock evidence is required")
         for value, label in (
@@ -954,6 +1036,13 @@ def derive_data_authority(assessment: QualityAssessment) -> DataAuthorityDecisio
     """Reduce hard predicates in restrictive order; score is explanatory only."""
 
     reasons: set[QualityReason] = set()
+    if assessment.sequence.synchronized and (
+        not assessment.sequence._is_attested()
+        or assessment.sequence.continuity is None
+        or not assessment.sequence.continuity.valid
+        or not assessment.sequence.continuity.synchronized
+    ):
+        reasons.add(QualityReason.SEQUENCE_UNPROVABLE)
     if assessment.age_ms is None or assessment.freshness_limit_ms is None:
         reasons.add(QualityReason.EXPIRED)
     elif assessment.age_ms > assessment.freshness_limit_ms * 2:
@@ -1048,7 +1137,12 @@ class SynchronizationProof:
     source_id: StableId
     generation: GenerationRef
     mode: SequenceMode
-    snapshot_fingerprint: str
+    contract_id: StableId
+    channel: str
+    schema_version: int
+    visibility: ChannelVisibility
+    synchronization_anchor_fingerprint: str
+    latest_event_fingerprint: str
     capability_fingerprint: str
     capability_policy_version: int
     verified: bool
@@ -1064,13 +1158,11 @@ class SynchronizationProof:
         *,
         capability: ChannelCapability,
         generation: GenerationRef,
-        snapshot_fingerprint: str,
         evaluation: SequenceEvaluation,
     ) -> SynchronizationProof:
         if not isinstance(capability, ChannelCapability):
             raise MarketTruthInputError("channel capability is required")
         _generation(generation)
-        _fingerprint(snapshot_fingerprint, "proof snapshot")
         if not isinstance(evaluation, SequenceEvaluation):
             raise MarketTruthInputError("sequence evaluation is required")
         continuity = evaluation.continuity
@@ -1085,7 +1177,9 @@ class SynchronizationProof:
             or continuity.generation != generation
             or continuity.capability_fingerprint != capability.fingerprint
             or continuity.capability_policy_version != capability.policy_version
-            or continuity.last_event_fingerprint != snapshot_fingerprint
+            or continuity.synchronization_anchor_fingerprint is None
+            or continuity.last_event_fingerprint is None
+            or capability.contract_scope is None
         ):
             raise MarketTruthConsistencyError(
                 "synchronization proof requires evaluator-issued matching evidence"
@@ -1094,7 +1188,16 @@ class SynchronizationProof:
         object.__setattr__(instance, "source_id", capability.source_id)
         object.__setattr__(instance, "generation", generation)
         object.__setattr__(instance, "mode", capability.mode)
-        object.__setattr__(instance, "snapshot_fingerprint", snapshot_fingerprint)
+        object.__setattr__(instance, "contract_id", capability.contract_scope)
+        object.__setattr__(instance, "channel", capability.channel)
+        object.__setattr__(instance, "schema_version", capability.schema_version)
+        object.__setattr__(instance, "visibility", capability.visibility)
+        object.__setattr__(
+            instance,
+            "synchronization_anchor_fingerprint",
+            continuity.synchronization_anchor_fingerprint,
+        )
+        object.__setattr__(instance, "latest_event_fingerprint", continuity.last_event_fingerprint)
         object.__setattr__(instance, "capability_fingerprint", capability.fingerprint)
         object.__setattr__(instance, "capability_policy_version", capability.policy_version)
         object.__setattr__(instance, "verified", True)
@@ -1104,11 +1207,19 @@ class SynchronizationProof:
     def _validate_material(self) -> None:
         _stable(self.source_id, IdentityKind.EXCHANGE, "proof source")
         _generation(self.generation)
+        if self.generation.retired:
+            raise MarketTruthConsistencyError("retired generation cannot carry proof")
         if self.source_id != self.generation.source_id:
             raise MarketTruthConsistencyError("proof source and generation differ")
         if not isinstance(self.mode, SequenceMode):
             raise MarketTruthInputError("proof mode is invalid")
-        _fingerprint(self.snapshot_fingerprint, "proof snapshot")
+        _stable(self.contract_id, IdentityKind.INSTRUMENT, "proof contract")
+        _token(self.channel, "proof channel")
+        _positive(self.schema_version, "proof schema version")
+        if not isinstance(self.visibility, ChannelVisibility):
+            raise MarketTruthInputError("proof visibility is invalid")
+        _fingerprint(self.synchronization_anchor_fingerprint, "proof synchronization anchor")
+        _fingerprint(self.latest_event_fingerprint, "proof latest event")
         _fingerprint(self.capability_fingerprint, "proof capability")
         _positive(self.capability_policy_version, "proof capability policy version")
         if not isinstance(self.verified, bool):
@@ -1258,6 +1369,9 @@ class MarketStateSnapshot:
     synchronization_proof: SynchronizationProof | None
     capability_fingerprint: str
     capability_policy_version: int
+    channel: str
+    schema_version: int
+    visibility: ChannelVisibility
     lifecycle_restriction: LifecycleRestriction = LifecycleRestriction.NONE
 
     def __post_init__(self) -> None:
@@ -1274,6 +1388,10 @@ class MarketStateSnapshot:
         _fingerprint(self.provenance_fingerprint, "state provenance")
         _fingerprint(self.capability_fingerprint, "state capability")
         _positive(self.capability_policy_version, "state capability policy version")
+        _token(self.channel, "state channel")
+        _positive(self.schema_version, "state schema version")
+        if not isinstance(self.visibility, ChannelVisibility):
+            raise MarketTruthInputError("state visibility is invalid")
         if not self.event_fingerprints or any(
             not _HASH_PATTERN.fullmatch(item) for item in self.event_fingerprints
         ):
@@ -1299,6 +1417,22 @@ class MarketStateSnapshot:
                 != self.capability_policy_version
             ):
                 raise MarketTruthConsistencyError("state proof capability policy differs")
+            if self.synchronization_proof.contract_id != self.contract_id:
+                raise MarketTruthConsistencyError("state proof contract differs")
+            if self.synchronization_proof.channel != self.channel:
+                raise MarketTruthConsistencyError("state proof channel differs")
+            if self.synchronization_proof.schema_version != self.schema_version:
+                raise MarketTruthConsistencyError("state proof schema differs")
+            if self.synchronization_proof.visibility is not self.visibility:
+                raise MarketTruthConsistencyError("state proof visibility differs")
+            proof_fingerprints = {
+                self.synchronization_proof.synchronization_anchor_fingerprint,
+                self.synchronization_proof.latest_event_fingerprint,
+            }
+            if not proof_fingerprints.issubset(set(self.event_fingerprints)):
+                raise MarketTruthConsistencyError(
+                    "state event lineage does not contain synchronization proof"
+                )
         if self.trust is MarketStateTrust.TRUSTED and (
             not self.synchronized
             or self.synchronization_proof is None
@@ -1330,9 +1464,19 @@ class MarketStateSnapshot:
                 "synchronized": self.synchronized,
                 "capability": self.capability_fingerprint,
                 "capability_policy_version": self.capability_policy_version,
-                "proof": self.synchronization_proof.snapshot_fingerprint
-                if self.synchronization_proof
-                else None,
+                "channel": self.channel,
+                "schema_version": self.schema_version,
+                "visibility": self.visibility.value,
+                "proof": (
+                    {
+                        "synchronization_anchor": (
+                            self.synchronization_proof.synchronization_anchor_fingerprint
+                        ),
+                        "latest_event": self.synchronization_proof.latest_event_fingerprint,
+                    }
+                    if self.synchronization_proof
+                    else None
+                ),
                 "lifecycle": self.lifecycle_restriction.value,
             }
         )
