@@ -125,7 +125,7 @@ jobs:
           for path, digest in expected.items():
               actual = subprocess.check_output(["git", "rev-parse", f"{base}:{path}"], text=True).strip()
               assert actual == digest, (path, actual, digest)
-          assert subprocess.check_output(["git", "rev-parse", f"{base}:evidence/HCT-IMP-0009-S2A-CONTEXT-LOCK.md"], text=True).strip()
+          assert subprocess.check_output(["git", "rev-parse", "HEAD:evidence/HCT-IMP-0009-S2A-CONTEXT-LOCK.md"], text=True).strip()
           print("Frozen requirement identities and CP0033 handoff: PASS")
           PY
 
