@@ -32,19 +32,24 @@ If separately authorized after independent review and a dedicated checkpoint, th
 
 ### Typed public market-value plane
 
-- `TradeTick`: typed price and quantity, optional aggressor/side only when canonically available, event/knowledge/wall-receive times, and source/channel/contract/generation/provenance identity;
-- `TickerState`: only the last/close/reference fields required by the frozen scope and supported by the canonical source; unsupported fields remain absent or explicitly unknown;
-- `CandleBar`: timeframe, interval start/end/close, OHLC, volume where sourced, completeness/closed state, source generation and ordered input lineage;
-- mark/index/fair-price and funding evidence only where required and source-supported;
-- the minimum frozen Stage-1 order-book value plane. Full depth and advanced microstructure are deferred unless an exact frozen locator makes them necessary for this prerequisite;
+- `TradeTick`: exact Decimal price and nonnegative Decimal quantity, event identity/times and optional side/aggressor only when provider-authoritative;
+- `TickerState`: last price, bid/ask when present, reference fields and explicit unavailable state for every absent provider field;
+- `CandleBar`: Decimal OHLC, sourced volume/amount, timeframe/interval/finality/revision and ordered lineage;
+- `OrderBookSnapshot` and `OrderBookDelta` with ordered bid/ask `BookLevel(price, quantity)`, source/channel/contract/generation/schema/provenance, sequence/update evidence and snapshot/delta identity;
+- `ReferencePriceEvidence` with typed kind `MARK`, `INDEX` or `FAIR`, exact value and provenance, plus `FundingEvidence` with rate/value, applicable time/boundary and provenance;
+- capability state `SUPPORTED`, `UNSUPPORTED` or `UNKNOWN` per family/channel. Full analytical microstructure remains future; raw order-book value contracts are necessary now;
 - every value object is typed, immutable, versioned and content-fingerprinted. A display string, opaque payload fingerprint or ordinary uncanonicalized float is not a substitute for a typed value.
 
 ### Numeric determinism
 
-- Decimal or an equivalent fixed-point representation with a declared precision source, scale limits, quantization and rounding mode;
-- canonical numeric serialization used by equality and fingerprints;
+- exact canonical backend type: `Decimal` parsed from source decimal text or exact integer-plus-scale material; binary float input is rejected at authoritative constructors;
+- exact bounds: `S1F_NUMERIC_MAX_PRECISION=38`, `S1F_NUMERIC_MAX_SCALE=18`, `S1F_NUMERIC_MAX_INTEGER_DIGITS=20`; these bounds cover the official MEXC examples and are safety limits, not truncation instructions;
+- raw exchange values are never rounded to fit. Provider/contract precision and increments are validated when authoritative ContractReference/capability material supplies them;
+- canonical cross-runtime serialization is base-10 decimal text with no exponent, no leading plus, canonical zero and removal of semantically irrelevant trailing fractional zeros; material scale is included separately in the policy fingerprint;
+- `S1F_NUMERIC_POLICY_VERSION=DECIMAL_TEXT_V1` and its policy fingerprint bind grammar, bounds and validation rules;
 - rejection of NaN, positive/negative Infinity, malformed numeric strings, nonpositive prices, invalid negative quantities and impossible OHLC relationships;
-- explicit overflow and underflow behavior;
+- explicit overflow and scale-limit rejection as typed `INVALID`/`UNKNOWN` with reason code; no clipping, saturation or fallback zero;
+- raw-value quantization/rounding is forbidden. An operation requiring quantization must name its increment and rounding rule in a versioned policy;
 - divide-by-zero, empty, undefined and insufficient-input cases produce typed `UNKNOWN`, `INVALID` or `WARMUP` states as appropriate, never a silent zero, platform exception or fabricated valid number.
 
 ### Lineage, windows and time
@@ -54,8 +59,13 @@ If separately authorized after independent review and a dedicated checkpoint, th
 - rolling and multi-timeframe series carry an ordered manifest of every input value fingerprint or a deterministic Merkle/content manifest. Insert, delete, reorder, correction, generation or value mutation must be visible;
 - mixed source, contract, environment or generation fails closed unless an explicit legal cross-source contract exists;
 - UTC canonical timestamps keep `event_time`, `knowledge_time`, `wall_receive_time` and monotonic age distinct;
-- interval convention, timeframe ID/version/epoch, boundary inclusion, open/closed state and late-correction versioning are explicit and not implementation-defined;
-- a late correction creates a new version and does not rewrite prior point-in-time history; an open/incomplete candle cannot feed a closed higher timeframe unless an explicit feature definition allows it.
+- canonical time zone is UTC; standard fixed timeframes align to Unix epoch multiples of the duration unless an authoritative venue contract explicitly requires another alignment;
+- canonical fixed-bar interval is half-open `[start, end)`: start inclusive, end exclusive; `S1F_INTERVAL_MODEL=HALF_OPEN_START_INCLUSIVE_END_EXCLUSIVE`;
+- `event_time` is source market time, `wall_receive_time` is local UTC receive time, monotonic elapsed evidence measures age/latency, and `knowledge_time` is the earliest point HCT had admissible evidence of that value/version;
+- point-in-time replay/admissibility is governed by `knowledge_time`, never future `event_time` alone;
+- `CandleBar.finality` is explicitly `OPEN` or `CLOSED`; it becomes `CLOSED` only after the interval boundary and required source/finality evidence under capability policy;
+- a late/corrected bar creates an immutable revision with predecessor/source lineage and a new fingerprint; prior point-in-time versions are never rewritten;
+- an open/incomplete lower-timeframe bar cannot enter a closed higher-timeframe window; timeframe identity includes duration/alignment/version and mixed versions fail closed.
 
 ### S1E axis separation
 
@@ -63,7 +73,73 @@ The contract must preserve a truth-validity matrix covering at least `TRUSTED+RE
 
 ### Public ingest boundary
 
-Provider-specific transport is `OUT OF SCOPE` when the canonical sources do not provide enough official detail to specify it without guessing. If the frozen Stage-1 contract objectively requires actual public unauthenticated ingest, the future implementation may include only the minimum public boundary, integrated with Module 29 quota/backpressure and S1E generation/quality contracts. It may not add credentials, private APIs, signing or live execution surfaces.
+Public unauthenticated realtime session ingest is `NECESSARY` for S1F. The future implementation includes one provider-neutral session/transport interface and the V1 concrete MEXC Futures public realtime adapter. The official source lock is the current MEXC Contract API page at `https://mexcdevelop.github.io/apidocs/contract_v1_en/`, retrieved `2026-09-13`, raw HTML SHA-256 `57ebc13fea788a1c568c8aeabfdf50acc0c9f5b5a882af4855837d53499940e`. Relevant official sections are Native WS connection address (`wss://contract.mexc.com/edge`), ping/pong and one-minute disconnect rule, Public Channels `sub.tickers`, `sub.deal`, `sub.depth`, `sub.depth.full` and `sub.kline`, and depth maintenance by REST snapshot/version followed by WS updates. The raw response is retained in the review evidence cache under the URL/date/SHA-256 convention; CI uses pinned fixtures/fakes and never fetches this URL.
+
+The adapter is public-only and decodes provider payloads through quarantine/schema validation into canonical typed events; provider DTOs never become canonical truth. Session generation is created on each connection/reconnection and retired before the replacement can publish. Reconnect uses bounded retry budget, exponential backoff with bounded jitter and circuit state; staged resubscription is deterministic and duplicate intent is idempotent. Module 29 admission/backpressure is consumed before public messages enter normalization. Private/account/order/position/balance streams are forbidden. Transport loss, gap and resync evidence flows to S1E quality/Market-State owners.
+
+## NORMATIVE DECISION LOCK
+
+`S1F_TRANSPORT_MODE=NECESSARY_PUBLIC_UNAUTHENTICATED`
+
+`S1F_MEXC_SOURCE_URL=https://mexcdevelop.github.io/apidocs/contract_v1_en/`
+
+`S1F_MEXC_SOURCE_RETRIEVED=2026-09-13`
+
+`S1F_MEXC_SOURCE_SHA256=57ebc13fea788a1c568c8aeabfdf50acc0c9f5b5a882af4855837d53499940e`
+
+`S1F_MEXC_WS_URL=wss://contract.mexc.com/edge`
+
+`S1F_MEXC_PUBLIC_CHANNELS=sub.tickers,sub.deal,sub.depth,sub.depth.full,sub.kline`
+
+`S1F_MEXC_PING_POLICY=ping every 10-20 seconds; disconnect if no ping within 1 minute`
+
+`S1F_NO_PRIVATE_CHANNELS=true`
+
+`S1F_DECODE_BOUNDARY=provider payload -> quarantine/schema validation -> canonical typed public value event`
+
+`S1F_SESSION_GENERATION=each connection/reconnection creates a generation; retired generations cannot publish`
+
+`S1F_NUMERIC_TYPE=Decimal`
+
+`S1F_NUMERIC_POLICY_VERSION=DECIMAL_TEXT_V1`
+
+`S1F_NUMERIC_MAX_PRECISION=38`
+
+`S1F_NUMERIC_MAX_SCALE=18`
+
+`S1F_NUMERIC_MAX_INTEGER_DIGITS=20`
+
+`S1F_NUMERIC_GRAMMAR=base-10 decimal text; no exponent; no leading plus; canonical zero`
+
+`S1F_FLOAT_INPUT=REJECTED`
+
+`S1F_RAW_VALUES=exact; no raw rounding; no raw quantization`
+
+`S1F_INTERVAL_MODEL=HALF_OPEN_START_INCLUSIVE_END_EXCLUSIVE`
+
+`S1F_TIMEZONE=UTC`
+
+`S1F_ALIGNMENT=UNIX_EPOCH_MULTIPLES`
+
+`S1F_KNOWLEDGE_ADMISSIBILITY=knowledge_time`
+
+`S1F_CANDLE_FINALITY=OPEN_UNTIL_BOUNDARY_AND_SOURCE_FINALITY`
+
+`S1F_LATE_CORRECTION=NEW_IMMUTABLE_REVISION`
+
+`S1F_VALUE_FAMILIES=TradeTick,TickerState,CandleBar,OrderBookSnapshot,OrderBookDelta,BookLevel,ReferencePriceEvidence,FundingEvidence`
+
+`S1F_CAPABILITY_STATES=SUPPORTED,UNSUPPORTED,UNKNOWN`
+
+`S1F_BENCHMARK_MODE=BASELINE_ESTABLISHMENT_V1`
+
+`S1F_PROFILE_CONTRACT_MICRO_V1=symbols=1;ticker=64;deal=256;depth=128;depth-full=32;kline=32;total=512;depth-levels=5;replay-seconds=60`
+
+`S1F_PROFILE_NOMINAL_MULTICHANNEL_V1=symbols=8;ticker=1024;deal=4096;depth=2048;depth-full=512;kline=512;total=8192;depth-levels=20;replay-seconds=900`
+
+`S1F_PROFILE_STRESS_BACKPRESSURE_V1=symbols=32;ticker=8192;deal=32768;depth=16384;depth-full=4096;kline=4096;total=65536;depth-levels=20;queue-capacity=4096;replay-seconds=3600`
+
+`S1F_BENCHMARK_MEASUREMENTS=normalization_throughput;value_state_latency_distribution;replay_throughput;peak_steady_memory;queue_depth_age`
 
 ## OUT OF SCOPE
 
@@ -74,12 +150,13 @@ Provider-specific transport is `OUT OF SCOPE` when the canonical sources do not 
 - persistence, database/RLS, feature stores, HA/fencing, deployment, infrastructure topology or production operations;
 - checkpoint promotion, implementation authorization, production credentials, production deployment, limited-live or live trading;
 - mutation of frozen requirements, source identities, existing checkpoint records, S1E ownership or PR #69 files;
-- provider-specific MEXC protocol/channel claims unless independently supported by canonical official evidence.
+- private/authenticated MEXC channels and any endpoint not in the official source lock;
 
 ## CAPABILITY CLASSIFICATION
 
 `NECESSARY`:
 
+- public unauthenticated realtime session ingest, provider-neutral session interface and V1 MEXC Futures public adapter;
 - typed provider-neutral public market values and coherent value-state contracts;
 - numeric determinism, validation and canonical serialization;
 - immutable value fingerprints and complete source/generation/provenance lineage;
@@ -90,13 +167,12 @@ Provider-specific transport is `OUT OF SCOPE` when the canonical sources do not 
 
 `IMPORTANT`:
 
-- the minimum public unauthenticated transport boundary only if the frozen Stage-1 sources objectively require it;
-- explicit Module 29 quota/backpressure integration and public fixture/replay harness where transport is in scope.
+- public fixture/replay harness and separately gated integration smoke test using the locked MEXC source contract;
+- operational tuning after the first `BASELINE_ESTABLISHMENT_V1` publication.
 
 `FUTURE`:
 
-- provider-specific MEXC channel/protocol details not established by canonical sources;
-- full-depth order book and advanced microstructure;
+- full analytical microstructure beyond raw order-book value contracts;
 - multi-provider reconciliation beyond an explicitly approved cross-source contract;
 - persistence, HA/fencing, deployment and operations.
 
@@ -122,6 +198,14 @@ Required governance and integration sources include `docs/00-source-hierarchy.md
 
 Minimum traceability locators include `R05::Transport and feed requirements::B1-B6`, `R05::Backpressure and resource requirements::B1-B5`, `R05::Time and freshness requirements::B1-B6`, `R05::State coherency requirements::B1-B4`, `R05::Candle/cache/replay requirements::B1-B5`, `R05::Authority requirements::B1-B3`, `R05::Validation requirements::B2,B3,B6,B8,B9,B10,B13,B15,B17`, `INT-002`, `INT-003`, `INT-004`, `INT-011`, `INT-012`, `INT-018`, `INT-022`, `INT-024`, `INT-025`, `INT-026`, `VAL-003`, `VAL-005`, `VAL-006`, `VAL-011`, `VAL-012`, `VAL-013`, `VAL-023`, `VAL-028`, `VAL-030`, `R11-REQ-006`, `R11-REQ-007`, `R11-REQ-011`, `R11-REQ-012`, `R11-REQ-013`, `R11-REQ-014`, `R11-REQ-015`, `R11-REQ-020`, `R11-REQ-022`, `R11-REQ-024`, `R11-REQ-025`, and Decisions `HCT-DEC-0007`, `0008`, `0012`, `0058`, `0060` through `0065`, `0068`, `0069`, `0071`, `0074`, `0077`, `0079`, `0083`, `0084`, `0089`, `0135`, `0136`, `0138`, `0139`, `0140`, `0141`.
 
+### Official MEXC public source lock
+
+- URL: `https://mexcdevelop.github.io/apidocs/contract_v1_en/`;
+- retrieved: `2026-09-13`;
+- raw response SHA-256: `57ebc13fea788a1c568c8aeabfdf50acc0c9f5b5a882af4855837d53499940e`;
+- protocol facts bound: `wss://contract.mexc.com/edge`, `ping`/`pong`, one-minute disconnect without ping, public `sub.tickers`, `sub.deal`, `sub.depth`, `sub.depth.full`, `sub.kline`, REST depth snapshot/version maintenance;
+- evidence convention: raw URL response hash plus retrieval date is authoritative for protocol truth; deterministic CI uses pinned fixtures/fakes and does not make live network calls.
+
 ## ARCHITECTURE RULES
 
 1. Module 4/5 owns normalized public market values and coherent Market-State; Module 7 owns quality. S1F cannot create a second truth source.
@@ -131,23 +215,25 @@ Minimum traceability locators include `R05::Transport and feed requirements::B1-
 5. Unknown, invalid, warmup, stale, gap, sequence-unprovable, clock-untrusted and retired-generation cases fail closed and are observable.
 6. A future feature engine consumes value/state contracts read-only and cannot mutate values, Market-State or authority.
 7. Exact interval boundaries and point-in-time knowledge are mandatory; wall clock and sleeps are not substitutes for injected timestamps.
+8. Public session ingest is NECESSARY, public-only and bounded by the locked MEXC contract; no private stream or live network is required by CI.
 
 ## CONSTRAINTS
 
 - planning/governance-only diff: exactly one candidate document, two Work Orders and one pull-request-only workflow;
 - exact canonical base and exact-head CI are mandatory;
 - no product/runtime code, dependency lock, frozen-source rewrite, checkpoint edit or PR #69 mutation;
-- no provider detail may be guessed; unsupported fields remain absent/unknown;
-- benchmark targets are not invented. Workload assumptions, deterministic method, baseline/regression thresholds or an approved no-hard-target rationale are required;
+- only the official MEXC source lock may define adapter protocol facts; unsupported fields remain `UNSUPPORTED`/`UNKNOWN`;
+- numeric policy is exactly `DECIMAL_TEXT_V1`, precision 38, scale 18, integer digits 20, no binary float, no raw rounding and no arbitrary quantization;
+- benchmark mode and profiles are exactly `BASELINE_ESTABLISHMENT_V1`, `S1F-CONTRACT-MICRO-V1`, `S1F-NOMINAL-MULTICHANNEL-V1` and `S1F-STRESS-BACKPRESSURE-V1` as frozen below;
 - no authorization is implied by planning freeze or by this candidate; implementation authorization and live trading authorization remain separate gates.
 
 ## ACCEPTANCE CRITERIA
 
 1. B001 is closed at the contract level by a typed value plane that can support deterministic public analytics without a second truth source.
-2. Typed value kinds, supported fields and minimum order-book scope are explicit; unsupported/provider-specific details are explicitly deferred.
-3. Numeric representation, precision, scale, rounding, finite-value, invariant, overflow, empty and divide-by-zero semantics are canonical and testable.
+2. The complete value-kind manifest is explicit: `TradeTick`, `TickerState`, `CandleBar`, `OrderBookSnapshot`, `OrderBookDelta`, `BookLevel`, `ReferencePriceEvidence`, `FundingEvidence` and capability state.
+3. Numeric policy is exactly `DECIMAL_TEXT_V1` with precision 38, scale 18, integer digits 20, base-10 no-exponent serialization and binary-float rejection.
 4. Every value and every rolling/multi-timeframe input series has immutable fingerprint and complete ordered lineage; mutations and mixed identities fail closed.
-5. UTC event/knowledge/receive/monotonic semantics, timeframe ID/version/epoch, interval boundaries, incomplete state and correction versioning are explicit.
+5. UTC, Unix-epoch alignment, half-open `[start, end)`, `knowledge_time` admissibility, `OPEN`/`CLOSED` finality and immutable correction revisions are explicit.
 6. The truth-validity matrix preserves `MarketStateTrust` versus `DataAuthority`, resource, eligibility and lifecycle axes, including `TRUSTED+RESOURCE_DEGRADED` and `TRUSTED+INELIGIBLE`.
 7. `docs/06-test-benchmark-plan.md` is in the source lock and the benchmark method defines workload assumptions, deterministic procedure, evidence context and limitations.
 8. Exact traceability covers source hierarchy, R05/R06/R07/R11 locators, decisions, ADR-0049, DoD and frozen baseline/change-control rules.
@@ -156,9 +242,9 @@ Minimum traceability locators include `R05::Transport and feed requirements::B1-
 
 ## TESTS AND BENCHMARK EVIDENCE
 
-Required future tests include typed parsing and canonical serialization; Decimal/fixed-point round trips; NaN/Infinity/malformed/negative/nonpositive/impossible-OHLC rejection; overflow/underflow; empty/divide-by-zero/warmup states; immutable fingerprint mutation detection; ordered insertion/deletion/reorder/correction/generation tests; interval and close-boundary tests; late-correction versioning; mixed source/contract/environment/generation rejection; UTC/time-axis and no-sleep injected-clock tests; state/value truth-validity matrix tests; public fixture/replay determinism; schema drift and sequence/gap/reconnect/stale/backpressure/quota cases where transport is in scope; and negative-capability scanning.
+Required future tests include public session generation/reconnect/retirement, staged resubscription, retry/backoff/circuit and Module 29 admission; provider fixture schema validation/quarantine; exact Decimal parse/serialization/equality/fingerprint; float/NaN/Infinity/malformed/overflow/scale/invariant rejection; all value-family constructors and capability states; order-book snapshot/delta ordering, duplicate/gap/out-of-order/generation rollover/resync; half-open interval, UTC epoch, OPEN/CLOSED finality and immutable revisions; ordered lineage mutation properties; S1E axis matrix; LIVE/PAPER/SHADOW/REPLAY non-aliasing; negative capability; and deterministic benchmark fixtures.
 
-Benchmark method must bind `docs/06-test-benchmark-plan.md`: declare symbols, channels, event rate, candle intervals, depth and fixture sizes; use deterministic fixtures and a pinned tool/runtime/dependency environment; measure normalization throughput, value-state update latency, memory footprint and replay throughput; add queue/backpressure measurements only if public transport is in scope; report baseline and regression thresholds or an approved no-hard-target rationale; and publish code/build/dependency, fixture/config/policy, seed, hardware/environment, tool version, hashes and limitations. No uncontrolled live network is allowed in CI.
+Benchmark method must bind `docs/06-test-benchmark-plan.md` with `S1F_BENCHMARK_MODE=BASELINE_ESTABLISHMENT_V1`. Freeze these deterministic profiles: `S1F-CONTRACT-MICRO-V1` = 1 symbol, ticker 64/deal 256/depth 128/depth-full 32/kline 32, total 512 messages, depth 5, 60-second replay; `S1F-NOMINAL-MULTICHANNEL-V1` = 8 symbols, ticker 1024/deal 4096/depth 2048/depth-full 512/kline 512, total 8192 messages, depth 20, 900-second replay; `S1F-STRESS-BACKPRESSURE-V1` = 32 symbols, ticker 8192/deal 32768/depth 16384/depth-full 4096/kline 4096, total 65536 messages, depth 20, queue capacity 4096 and 3600-second replay. Mandatory measurements are normalization throughput, per-event/value-state update latency distribution, replay throughput, peak/steady memory and queue depth/age. Acceptance is correctness, bounded completion, no unbounded memory/queue growth and complete baseline publication; no product SLO is asserted. Evidence records code/build/dependency/runtime, fixture/config/policy versions, seed, hardware/environment, benchmark tool, raw artifact/hash and limitations. Future regression thresholds are proposals until a later governed decision/checkpoint. No uncontrolled live network is used in CI.
 
 ## DELIVERABLES
 

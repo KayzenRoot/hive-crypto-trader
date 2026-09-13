@@ -28,14 +28,15 @@ The implementation must use read-only upstream identity and must preserve `Marke
 - `TradeTick`: positive typed price and nonnegative quantity, optional aggressor/side only if available from the authoritative source, event/knowledge/wall-receive/monotonic times, source/channel/contract/environment/generation/schema/provenance/originating event and value fingerprint;
 - `TickerState`: only frozen/source-supported last, close or reference values, each with explicit availability and provenance;
 - `CandleBar`: typed timeframe ID/version/epoch, explicit interval start/end/boundary convention, OHLC, sourced volume, complete/closed state, source generation and ordered input lineage;
-- mark/index/fair-price and funding evidence only if required by frozen scope and source-supported;
-- minimum Stage-1 order-book value contract required by the frozen source set. Full depth and advanced microstructure are deferred unless explicitly authorized by exact requirements.
+- `OrderBookSnapshot` and `OrderBookDelta` with ordered bid/ask `BookLevel(price, quantity)`, sequence/update evidence and snapshot/delta identity;
+- `ReferencePriceEvidence` with typed kind `MARK`/`INDEX`/`FAIR` and `FundingEvidence` with rate/value, applicable time/boundary and provenance;
+- explicit `SUPPORTED`/`UNSUPPORTED`/`UNKNOWN` capability state per family/channel. Raw order-book value contracts are necessary; full analytical microstructure remains future.
 
 All value objects are immutable, typed, versioned and content-fingerprinted. Unsupported or absent fields are not synthesized.
 
 ### Numeric policy
 
-Use Decimal or fixed-point semantics, never ordinary floating-point equality. Declare precision source, scale limits, quantization and rounding. Canonical serialization must be stable across runtimes and included in fingerprints. Reject malformed numbers, NaN, positive/negative Infinity, nonpositive prices, negative quantities, impossible OHLC, overflow and underflow according to typed policy. Empty, undefined, insufficient-input and divide-by-zero results are `UNKNOWN`, `INVALID` or `WARMUP` with reason codes, never silent zero, platform exception or fabricated `VALID`.
+Use exactly `Decimal` semantics parsed from source decimal text or exact integer-plus-scale material. `S1F_NUMERIC_POLICY_VERSION=DECIMAL_TEXT_V1`, `S1F_NUMERIC_MAX_PRECISION=38`, `S1F_NUMERIC_MAX_SCALE=18` and `S1F_NUMERIC_MAX_INTEGER_DIGITS=20` are frozen safety bounds; binary float input is rejected at authoritative constructors. Raw exchange values are never rounded to fit. Canonical cross-runtime serialization is base-10 decimal text with no exponent, no leading plus, canonical zero and semantically irrelevant trailing-zero removal; material scale is separately fingerprinted. NaN, positive/negative Infinity, malformed text, nonpositive prices, negative quantities, impossible OHLC, overflow and scale-limit violations fail with typed reason codes. No silent clipping, saturation or fallback zero. Raw quantization/rounding is forbidden unless a versioned policy names the increment and rule. Empty, undefined, insufficient-input and divide-by-zero results are `UNKNOWN`, `INVALID` or `WARMUP`, never fabricated `VALID`.
 
 ### Lineage and state
 
@@ -43,11 +44,33 @@ Bind each value to source ID, channel, contract, environment, generation, schema
 
 ### Time and interval
 
-Use UTC canonical timestamps with distinct `event_time`, `knowledge_time`, `wall_receive_time` and monotonic age. Inject time in tests; do not use sleeps to define correctness. Declare interval inclusion/exclusion, timeframe ID/version/epoch, close boundary, open/incomplete semantics and late-correction versioning. A correction creates a new value version and never rewrites prior point-in-time history. An open/incomplete candle cannot be used as a closed higher timeframe without an explicit downstream feature rule.
+Use UTC canonical timestamps. Standard fixed timeframes align to Unix epoch multiples of the duration unless an authoritative venue contract requires another alignment. Fixed bars use half-open `[start, end)` intervals: start inclusive, end exclusive. `event_time` is source market time; `wall_receive_time` is local UTC receive time; monotonic elapsed evidence measures age/latency; `knowledge_time` is the earliest point HCT had admissible evidence of the value/version. Point-in-time replay/admissibility uses `knowledge_time`, never future `event_time` alone. `CandleBar.finality` is `OPEN` or `CLOSED`; closed requires the interval boundary and source/finality evidence. Corrections create immutable revisions with predecessor/source lineage and new fingerprint. Open lower-timeframe bars cannot enter closed higher-timeframe windows; timeframe identity includes duration/alignment/version and mixed versions fail closed.
 
 ### Ingest boundary
 
-Keep provider-specific transport out of scope if canonical sources do not contain enough official protocol/channel detail. If a frozen Stage-1 requirement objectively requires a public unauthenticated boundary, implement only that minimum, integrate Module 29 quota/backpressure and S1E generation/quality, and keep uncontrolled live network out of CI. No credential, private API, signing or account surface is allowed.
+Public unauthenticated realtime session ingest is `NECESSARY`. Implement one provider-neutral session/transport interface and the V1 concrete MEXC Futures public realtime adapter from the official source lock below. The native endpoint is `wss://contract.mexc.com/edge`; public intents are `sub.tickers`, `sub.deal`, `sub.depth`, `sub.depth.full` and `sub.kline`; `ping` is sent on the locked 10-20 second policy and absence for one minute is a disconnect condition. Each connection/reconnection creates a generation; replacement retires the previous generation before publication. Use bounded retry budget, exponential backoff with bounded jitter, circuit state, deterministic staged resubscription and idempotent duplicate intent. Module 29 admission/backpressure gates normalized publication. Provider payloads are quarantined/schema-validated before canonical typed values; DTOs never become truth. Private/account/order/position/balance channels are forbidden. CI uses pinned fixtures/fakes and no uncontrolled live network.
+
+## FROZEN S1F DECISION VALUES
+
+`S1F_TRANSPORT_MODE=NECESSARY_PUBLIC_UNAUTHENTICATED`
+
+`S1F_MEXC_WS_URL=wss://contract.mexc.com/edge`
+
+`S1F_MEXC_PUBLIC_CHANNELS=sub.tickers,sub.deal,sub.depth,sub.depth.full,sub.kline`
+
+`S1F_SESSION_GENERATION=each connection/reconnection creates a generation; retired generations cannot publish`
+
+`S1F_NUMERIC_TYPE=Decimal`; `S1F_NUMERIC_POLICY_VERSION=DECIMAL_TEXT_V1`; `S1F_NUMERIC_MAX_PRECISION=38`; `S1F_NUMERIC_MAX_SCALE=18`; `S1F_NUMERIC_MAX_INTEGER_DIGITS=20`
+
+`S1F_FLOAT_INPUT=REJECTED`; `S1F_RAW_VALUES=exact; no raw rounding; no raw quantization`
+
+`S1F_INTERVAL_MODEL=HALF_OPEN_START_INCLUSIVE_END_EXCLUSIVE`; `S1F_TIMEZONE=UTC`; `S1F_ALIGNMENT=UNIX_EPOCH_MULTIPLES`; `S1F_KNOWLEDGE_ADMISSIBILITY=knowledge_time`; `S1F_CANDLE_FINALITY=OPEN_UNTIL_BOUNDARY_AND_SOURCE_FINALITY`; `S1F_LATE_CORRECTION=NEW_IMMUTABLE_REVISION`
+
+`S1F_VALUE_FAMILIES=TradeTick,TickerState,CandleBar,OrderBookSnapshot,OrderBookDelta,BookLevel,ReferencePriceEvidence,FundingEvidence`; `S1F_CAPABILITY_STATES=SUPPORTED,UNSUPPORTED,UNKNOWN`
+
+`S1F_BENCHMARK_MODE=BASELINE_ESTABLISHMENT_V1`; `S1F_PROFILE_CONTRACT_MICRO_V1=symbols=1;ticker=64;deal=256;depth=128;depth-full=32;kline=32;total=512;depth-levels=5;replay-seconds=60`; `S1F_PROFILE_NOMINAL_MULTICHANNEL_V1=symbols=8;ticker=1024;deal=4096;depth=2048;depth-full=512;kline=512;total=8192;depth-levels=20;replay-seconds=900`; `S1F_PROFILE_STRESS_BACKPRESSURE_V1=symbols=32;ticker=8192;deal=32768;depth=16384;depth-full=4096;kline=4096;total=65536;depth-levels=20;queue-capacity=4096;replay-seconds=3600`
+
+`S1F_BENCHMARK_MEASUREMENTS=normalization_throughput;value_state_latency_distribution;replay_throughput;peak_steady_memory;queue_depth_age`
 
 ## OUT OF SCOPE
 
@@ -68,6 +91,8 @@ Before implementation, read canonical `main@625dd0c145087038bdbccd665548d811e187
 
 Frozen source identities are the nine requirement hashes in the authorization Work Order; `docs/06-test-benchmark-plan.md` is bound at blob `29401ce8fe1616f9390a317bae62d3a157addaa5`.
 
+Official MEXC source lock: `https://mexcdevelop.github.io/apidocs/contract_v1_en/`, retrieved `2026-09-13`, raw response SHA-256 `57ebc13fea788a1c568c8aeabfdf50acc0c9f5b5a882af4855837d53499940e`. Protocol facts are limited to the Native WS address `wss://contract.mexc.com/edge`; `ping`/`pong` and one-minute no-ping disconnect; public `sub.tickers`, `sub.deal`, `sub.depth`, `sub.depth.full`, `sub.kline`; and REST depth snapshot/version maintenance. CI binds this URL/date/hash as source evidence but uses deterministic pinned fixtures/fakes instead of live network.
+
 ## REQUIREMENTS
 
 Trace every contract, behavior, test and evidence item to exact locators. The minimum set is:
@@ -86,34 +111,36 @@ Trace every contract, behavior, test and evidence item to exact locators. The mi
 4. The coherent-state owner is the only authority for state assembly; value/feature layers cannot rewrite or upgrade it.
 5. Time, interval, completeness, correction and ordered lineage are content-bearing and fingerprinted.
 6. No missing, contradictory, stale, invalid, mixed or unprovable input can become a normal valid value through defaults, zero-fill or scoring.
+7. Public session ingest is NECESSARY, public-only and bounded by the official MEXC lock; generation retirement, reconnect/backoff/circuit and Module 29 admission are part of the S1F boundary.
 
 ## CONSTRAINTS
 
 - implement only after a new authorization checkpoint explicitly grants S1F;
 - preserve exact frozen source identities and CP0030 history; no force/reset/rewrite or unrelated cleanup;
-- no ordinary float as canonical value identity; no guessed provider protocol;
+- exact numeric policy is `DECIMAL_TEXT_V1` with Decimal precision 38, scale 18 and integer digits 20; no binary float, raw rounding or arbitrary raw quantization;
+- no provider protocol fact may be used outside the official MEXC source lock; provider DTOs remain quarantined;
 - tests and benchmark evidence must be deterministic and reproducible; no uncontrolled live network in CI;
 - no code path may create implementation, production, deployment, limited-live or live-trading authority implicitly.
 
 ## ACCEPTANCE CRITERIA
 
-1. A typed `TradeTick`/`TickerState`/`CandleBar` and source-supported reference-value plane is available to read-only consumers, with explicit absent/unknown fields.
-2. Numeric semantics are canonical, finite, invariant-checked and deterministic across supported runtimes.
+1. A typed `TradeTick`/`TickerState`/`CandleBar`/order-book/reference/funding plane and NECESSARY public MEXC session ingest are available to read-only consumers, with explicit capability state.
+2. Numeric semantics are exactly `DECIMAL_TEXT_V1`, finite, invariant-checked and deterministic across supported runtimes.
 3. Immutable value fingerprints include canonical numeric fields and all material identity; ordered window lineage detects every material mutation.
-4. UTC point-in-time and interval/close/correction semantics are explicit and tested.
+4. UTC Unix-epoch alignment, half-open `[start, end)`, `knowledge_time` admissibility, OPEN/CLOSED finality and immutable correction semantics are explicit and tested.
 5. S1E trust/DataAuthority/resource/eligibility/lifecycle axes are preserved without authority upgrades or truth falsification.
-6. Public transport, if objectively required, is unauthenticated/minimal and bound to quota/backpressure/generation/quality; otherwise it is deferred with no invented protocol.
-7. Tests cover parsing, numeric failure states, lineage, time, windows, generation fences, quality/trust matrix, replay and negative firewall.
-8. Benchmark method binds `docs/06-test-benchmark-plan.md` and reports assumptions, method, normalization throughput, value-state latency, memory, replay and reproducible evidence; transport queue/backpressure only if in scope.
+6. Public transport is the locked unauthenticated MEXC adapter, bound to quota/backpressure/generation/quality and proven with fixtures/fakes.
+7. Tests cover session generation/reconnect/retirement, quarantine, exact numeric failure states, all families, order-book ordering/resync, lineage, time, S1E matrix, replay and negative firewall.
+8. Benchmark method binds `docs/06-test-benchmark-plan.md`, `BASELINE_ESTABLISHMENT_V1`, the exact three profiles/counts and mandatory throughput/latency/replay/memory/queue measurements below.
 9. Exact traceability and independent HIGH_ASSURANCE review are complete before checkpoint consideration.
 
 ## TESTS
 
-Test typed parsing and canonical serialization; Decimal/fixed-point round trip and rounding; NaN/Infinity/malformed/nonpositive/negative/impossible-OHLC/overflow/underflow rejection; empty/divide-by-zero/undefined/warmup typed outcomes; immutable fingerprint and ordered manifest/Merkle mutation detection; mixed identity/generation rejection; interval inclusion, close and incomplete candles; late correction versioning; UTC injected time and no-lookahead; S1E truth-validity matrix; fixture/replay determinism; schema drift, sequence/gap, reconnect, stale, quota/backpressure and public ingest only if that boundary is authorized; and negative-capability scanning for credentials/private/trading/persistence/deployment/live surfaces.
+Test public session generation/reconnect/retirement, staged resubscription, bounded retry/backoff/circuit and Module 29 admission; provider fixture schema validation/quarantine; exact Decimal parse/serialization/equality/fingerprint; reject binary float, NaN, Infinity, malformed, overflow/scale violation and negative/impossible invariants; Trade/Ticker/Candle/Book/ReferencePrice/Funding type constructors and capability state; order-book snapshot/delta ordering, duplicate/gap/out-of-order/generation rollover/resync; half-open interval, UTC epoch alignment, OPEN/CLOSED finality and late immutable revisions; ordered lineage mutations; S1E axis matrix; LIVE/PAPER/SHADOW/REPLAY non-aliasing; negative scanner; and deterministic benchmark fixtures.
 
 ## BENCHMARK AND EVIDENCE
 
-Declare symbols, channels, event rate, candle intervals, depth, fixture sizes and workload assumptions. Run deterministic fixtures with pinned code/build/dependency, configuration/policy, seed, hardware/environment and tool version. Measure normalization throughput, value-state update latency, memory footprint and replay throughput. If public transport is included, measure bounded queue/backpressure without uncontrolled live network CI. Report baseline and regression thresholds or a separately approved no-hard-target rationale, plus hashes and limitations.
+Freeze `S1F_BENCHMARK_MODE=BASELINE_ESTABLISHMENT_V1`: `S1F-CONTRACT-MICRO-V1` = 1 symbol, ticker 64/deal 256/depth 128/depth-full 32/kline 32, total 512, depth 5, 60-second replay; `S1F-NOMINAL-MULTICHANNEL-V1` = 8 symbols, ticker 1024/deal 4096/depth 2048/depth-full 512/kline 512, total 8192, depth 20, 900-second replay; `S1F-STRESS-BACKPRESSURE-V1` = 32 symbols, ticker 8192/deal 32768/depth 16384/depth-full 4096/kline 4096, total 65536, depth 20, queue capacity 4096, 3600-second replay. Declare the locked public channels, fixture configuration, seed, code/build/dependency/runtime, hardware/environment, tool version and hashes. Mandatory measurements are normalization throughput, per-event/value-state update latency distribution, replay throughput, peak/steady memory and queue depth/age. Acceptance is correctness, bounded completion, no unbounded memory/queue growth and complete baseline publication, with no product SLO. Evidence records raw artifact/hash and limitations; future regression thresholds are proposals until later governance. No uncontrolled live network is used in CI.
 
 ## DELIVERABLES
 

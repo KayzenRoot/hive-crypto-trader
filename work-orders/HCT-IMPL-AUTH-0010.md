@@ -23,18 +23,19 @@ R11 Stage 1 owns the dependency chain through public market data, capability/rul
 
 The future separately authorized S1F implementation may define and implement only:
 
-- typed immutable/versioned `TradeTick`, `TickerState`, `CandleBar` and source-supported mark/index/fair/funding evidence;
-- the minimum frozen Stage-1 order-book value plane, with full depth/advanced microstructure explicitly deferred unless a frozen locator proves it necessary;
-- Decimal or fixed-point numeric representation, precision/scale/quantization/rounding, canonical serialization, finite-value and invariant validation, overflow/underflow and typed empty/divide-by-zero semantics;
+- public unauthenticated realtime session ingest is `NECESSARY`, through one provider-neutral session/transport interface and the V1 concrete MEXC Futures public realtime adapter;
+- typed immutable/versioned `TradeTick`, `TickerState`, `CandleBar`, `OrderBookSnapshot`, `OrderBookDelta`, `BookLevel`, `ReferencePriceEvidence` and `FundingEvidence`, with explicit `SUPPORTED`/`UNSUPPORTED`/`UNKNOWN` capability state;
+- exact `Decimal` numeric representation using source decimal text or exact integer-plus-scale material, with `S1F_NUMERIC_MAX_PRECISION=38`, `S1F_NUMERIC_MAX_SCALE=18`, `S1F_NUMERIC_MAX_INTEGER_DIGITS=20` and `S1F_NUMERIC_POLICY_VERSION=DECIMAL_TEXT_V1`;
+- canonical base-10 serialization with no exponent/leading plus, canonical zero, irrelevant trailing-zero removal, float rejection, no raw rounding/quantization, finite/invariant validation and typed overflow/underflow/empty/divide-by-zero outcomes;
 - source/channel/contract/environment/generation/schema/version/provenance/originating-event/value-fingerprint identity;
 - Market-State-owned coherent state and read-only consumers;
 - ordered rolling/multi-timeframe input manifests or deterministic Merkle/content manifests with mutation visibility;
-- UTC event/knowledge/wall-receive/monotonic time axes, explicit interval/timeframe ID/version/epoch, close/incomplete semantics and late-correction versioning;
+- UTC Unix-epoch-aligned fixed timeframes, half-open `[start, end)` intervals, explicit `event_time`/`knowledge_time`/`wall_receive_time`/monotonic axes, `OPEN`/`CLOSED` finality and immutable late-correction revisions;
 - explicit truth-validity treatment of MarketStateTrust, DataAuthority/resource, Universe eligibility and lifecycle axes;
 - deterministic fixtures/replay/tests/evidence and a bounded benchmark method tied to `docs/06-test-benchmark-plan.md`;
-- a minimum public unauthenticated transport boundary only when frozen sources objectively require it and only with Module 29 quota/backpressure and S1E generation/quality binding.
+- MEXC session generation/reconnect/retirement, bounded retry/backoff/jitter/circuit, deterministic staged resubscription, Module 29 admission/backpressure, quarantine before canonical normalization and S1E generation/quality binding.
 
-No concrete provider protocol may be guessed from this Work Order. Unsupported provider details remain deferred.
+Protocol facts are restricted to the official source lock below. Unsupported provider fields remain explicit `UNSUPPORTED`/`UNKNOWN`; private/account/order/position/balance streams are forbidden.
 
 ## OUT OF SCOPE
 
@@ -54,6 +55,8 @@ Frozen requirement blob identities are:
 `docs/02-requirements.md=292da9552ae816e4d51b8a299456305da1658e55`, `docs/48-r04-execution-requirements-addendum.md=f20c1ed00bdb13801aaff8a3b648371bfcffba58`, `docs/54-r05-realtime-requirements-addendum.md=636ad01da9c25e760dd5e2f033b93a0f04578a17`, `docs/61-r06-intelligence-requirements-addendum.md=fea197e60532eb6ff3b11b628b9aabcbcfc00c41`, `docs/67-r07-validation-laboratory-requirements-addendum.md=c8a426966c5a0dc34704d1413f506332e770c2c7`, `docs/73-r08-multitenant-security-requirements-addendum.md=c859c0c4a718e3017c34aa50013d4c50959853b4`, `docs/80-r09-cockpit-uiux-requirements-addendum.md=bc897ebd470857a53055bdee85128b5bd31a5822`, `docs/87-r10-observability-audit-incident-finops-requirements-addendum.md=023187ef23b01d5a11f978bbfe6e38abf172bb3b`, and `docs/93-r11-integration-requirements-addendum.md=6935e9973696d5b706546d63d847ea398780d936`.
 
 `docs/06-test-benchmark-plan.md` is an additional mandatory source lock (`29401ce8fe1616f9390a317bae62d3a157addaa5`) because H002 exposed its omission from S2A.
+
+Official MEXC public source lock: `https://mexcdevelop.github.io/apidocs/contract_v1_en/`, retrieved `2026-09-13`, raw response SHA-256 `57ebc13fea788a1c568c8aeabfdf50acc0c9f5b5a882af4855837d53499940e`. Bound sections are Native WS connection address `wss://contract.mexc.com/edge`; ping/pong and disconnect if no ping within one minute; public `sub.tickers`, `sub.deal`, `sub.depth`, `sub.depth.full`, `sub.kline`; and REST depth snapshot/version maintenance. Evidence uses URL/date/raw-response SHA-256 and deterministic pinned fixtures/fakes; CI does not fetch the network.
 
 ## REQUIREMENTS
 
@@ -75,32 +78,34 @@ Every future behavior, test and evidence item must carry exact locators and pres
 5. Event, knowledge, wall-receive and monotonic time are distinct. Intervals, close boundaries, timeframe ID/version/epoch and correction versions are explicit.
 6. Mixed generation/source/contract/environment, missing/invalid/unknown, stale/gap, sequence-unprovable, clock-untrusted and retired-generation cases fail closed.
 7. S2A and future analytical consumers are read-only. Feature evidence cannot create a candidate trade, Risk approval, Execution plan or live authority.
+8. Public realtime session ingest is NECESSARY, public-only and bounded by the locked MEXC contract; session generations retire on reconnect and cannot mutate current state.
 
 ## CONSTRAINTS
 
 - exactly four governance files in the candidate PR: the candidate document, this Work Order, `HCT-IMP-0010-S1F.md` and the pull-request-only workflow;
 - exact base `625dd0c145087038bdbccd665548d811e187194c` and fail-closed CP0030 are mandatory;
 - no `workflow_dispatch`, no runtime/product code, no dependency-lock changes, no frozen-source rewrite and no checkpoint mutation;
-- no provider-specific MEXC transport/channel detail without canonical official support;
-- no numeric performance target may be invented; workload assumptions and method must be declared with a baseline/regression threshold or approved no-hard-target rationale;
+- canonical numeric policy is exactly `DECIMAL_TEXT_V1` with precision 38, scale 18 and integer digits 20; binary float input, raw rounding and arbitrary raw quantization are forbidden;
+- no provider protocol fact may appear outside the official MEXC source lock; provider DTOs are quarantined and cannot become canonical truth;
+- benchmark mode and profiles are exactly `BASELINE_ESTABLISHMENT_V1`, `S1F-CONTRACT-MICRO-V1`, `S1F-NOMINAL-MULTICHANNEL-V1` and `S1F-STRESS-BACKPRESSURE-V1`;
 - planning freeze is not implementation authorization, and implementation authorization is not live-trading authorization.
 
 ## ACCEPTANCE CRITERIA
 
-1. A typed public market-value plane closes B001 at the contract level without inventing a second truth source.
-2. `TradeTick`, `TickerState`, `CandleBar`, supported mark/index/fair/funding evidence and minimum order-book scope are explicit; unsupported fields are absent/unknown and deferred scope is stated.
-3. Decimal/fixed-point representation, precision/scale, quantization/rounding, canonical serialization, finite-value, invalid-value, overflow/underflow, empty and divide-by-zero semantics are testable.
+1. A typed public market-value plane and `NECESSARY` public MEXC session ingest close B001 at the contract level without inventing a second truth source.
+2. The complete value-family manifest is explicit: `TradeTick`, `TickerState`, `CandleBar`, `OrderBookSnapshot`, `OrderBookDelta`, `BookLevel`, `ReferencePriceEvidence`, `FundingEvidence` and capability state.
+3. Numeric policy is exactly `DECIMAL_TEXT_V1` with Decimal precision 38, scale 18, integer digits 20, base-10 no-exponent serialization and binary-float rejection.
 4. Value fingerprints and ordered input manifests make insert/delete/reorder/correction/generation/value changes visible.
-5. UTC axes, interval/timeframe identity, completeness/close semantics and point-in-time corrections are explicit.
+5. UTC Unix-epoch alignment, half-open `[start, end)`, `knowledge_time` admissibility, `OPEN`/`CLOSED` finality and immutable correction revisions are explicit.
 6. The S1E truth-validity matrix preserves trust, quality, DataAuthority/resource, eligibility and lifecycle independently.
 7. `docs/06-test-benchmark-plan.md` is bound and benchmark method/evidence fields are complete.
 8. Exact traceability, negative scope and governance-only allowlist pass exact-head CI.
 
 ## TESTS
 
-The future implementation must provide deterministic tests for typed parsing, canonical numeric serialization, Decimal/fixed-point equality, NaN/Infinity/malformed/nonpositive/negative/impossible-OHLC rejection, overflow/underflow, empty/divide-by-zero/warmup outcomes, fingerprint immutability, ordered manifests, Merkle/content changes, interval boundary/close/incomplete behavior, late-correction versioning, mixed identity rejection, UTC injected time, source/generation fencing, S1E truth-validity matrix, fixture/replay repeatability, schema drift, sequence/gap/stale/reconnect/backpressure/quota cases where transport is included, and a negative-capability scanner.
+The future implementation must provide deterministic tests for public session generation/reconnect/retirement, staged resubscription, bounded retry/backoff/circuit and Module 29 admission; provider fixture schema validation/quarantine; exact Decimal parse/serialization/equality/fingerprint; rejection of binary float, NaN, Infinity, malformed, overflow/scale violation and negative/impossible invariants; Trade/Ticker/Candle/Book/ReferencePrice/Funding constructors and capability state; order-book snapshot/delta ordering, duplicate/gap/out-of-order/generation rollover/resync; half-open interval/UTC epoch/OPEN-CLOSED finality/immutable revisions; ordered lineage mutations; S1E axis matrix; LIVE/PAPER/SHADOW/REPLAY non-aliasing; negative scanner; and deterministic benchmark fixtures.
 
-Benchmark evidence must declare symbols, channels, event rate, candle intervals, depth, fixture sizes, deterministic procedure, baseline/regression thresholds or an approved no-hard-target rationale, code/build/dependency, fixture/config/policy, seed, hardware/environment, tool version, hashes and limitations. At minimum measure normalization throughput, value-state update latency, memory footprint and replay throughput. Public transport queue/backpressure is measured only if included, with no uncontrolled live network in CI.
+Benchmark evidence freezes `S1F_BENCHMARK_MODE=BASELINE_ESTABLISHMENT_V1` and: `S1F-CONTRACT-MICRO-V1` = 1 symbol, ticker 64/deal 256/depth 128/depth-full 32/kline 32, total 512, depth 5, 60-second replay; `S1F-NOMINAL-MULTICHANNEL-V1` = 8 symbols, ticker 1024/deal 4096/depth 2048/depth-full 512/kline 512, total 8192, depth 20, 900-second replay; `S1F-STRESS-BACKPRESSURE-V1` = 32 symbols, ticker 8192/deal 32768/depth 16384/depth-full 4096/kline 4096, total 65536, depth 20, queue capacity 4096, 3600-second replay. Mandatory measurements are normalization throughput, per-event/value-state update latency distribution, replay throughput, peak/steady memory and queue depth/age. Acceptance is correctness, bounded completion, no unbounded memory/queue growth and complete baseline publication, without a product SLO. Evidence records code/build/dependency/runtime, fixture/config/policy versions, seed, hardware/environment, tool, raw artifact/hash and limitations. Future regression thresholds are proposals until later governance.
 
 ## DELIVERABLES
 

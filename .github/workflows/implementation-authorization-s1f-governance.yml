@@ -108,7 +108,8 @@ jobs:
           for marker in (
               "HCT-IMPL-AUTH-0010", "HCT-IMP-0010-S1F", "HCT-CP-0030", os.environ["CANONICAL_BASE_SHA"],
               "Realtime Public Market Value Plane & Ingest Foundation", "TradeTick", "TickerState", "CandleBar",
-              "Decimal", "fixed-point", "NaN", "Infinity", "divide-by-zero", "overflow", "canonical serialization",
+              "OrderBookSnapshot", "OrderBookDelta", "BookLevel", "ReferencePriceEvidence", "FundingEvidence",
+              "Decimal", "NaN", "Infinity", "divide-by-zero", "overflow", "canonical serialization",
               "ordered manifest", "Merkle", "event_time", "knowledge_time", "wall_receive_time", "monotonic",
               "interval", "timeframe", "generation", "provenance", "MarketStateTrust", "DataAuthority",
               "RESOURCE_DEGRADED", "INELIGIBLE", "UNKNOWN", "STALE", "GAP", "SEQUENCE_UNPROVABLE",
@@ -118,6 +119,50 @@ jobs:
               "production_deployment_authorized=false", "limited_live_authorized=false", "live_trading_authorized=false",
           ):
               assert marker in combined, marker
+          exact_decisions = (
+              "S1F_TRANSPORT_MODE=NECESSARY_PUBLIC_UNAUTHENTICATED",
+              "S1F_MEXC_SOURCE_URL=https://mexcdevelop.github.io/apidocs/contract_v1_en/",
+              "S1F_MEXC_SOURCE_RETRIEVED=2026-09-13",
+              "S1F_MEXC_SOURCE_SHA256=57ebc13fea788a1c568c8aeabfdf50acc0c9f5b5a882af4855837d53499940e",
+              "S1F_MEXC_WS_URL=wss://contract.mexc.com/edge",
+              "S1F_MEXC_PUBLIC_CHANNELS=sub.tickers,sub.deal,sub.depth,sub.depth.full,sub.kline",
+              "S1F_MEXC_PING_POLICY=ping every 10-20 seconds; disconnect if no ping within 1 minute",
+              "S1F_NO_PRIVATE_CHANNELS=true",
+              "S1F_DECODE_BOUNDARY=provider payload -> quarantine/schema validation -> canonical typed public value event",
+              "S1F_SESSION_GENERATION=each connection/reconnection creates a generation; retired generations cannot publish",
+              "S1F_NUMERIC_TYPE=Decimal",
+              "S1F_NUMERIC_POLICY_VERSION=DECIMAL_TEXT_V1",
+              "S1F_NUMERIC_MAX_PRECISION=38",
+              "S1F_NUMERIC_MAX_SCALE=18",
+              "S1F_NUMERIC_MAX_INTEGER_DIGITS=20",
+              "S1F_NUMERIC_GRAMMAR=base-10 decimal text; no exponent; no leading plus; canonical zero",
+              "S1F_FLOAT_INPUT=REJECTED",
+              "S1F_RAW_VALUES=exact; no raw rounding; no raw quantization",
+              "S1F_INTERVAL_MODEL=HALF_OPEN_START_INCLUSIVE_END_EXCLUSIVE",
+              "S1F_TIMEZONE=UTC",
+              "S1F_ALIGNMENT=UNIX_EPOCH_MULTIPLES",
+              "S1F_KNOWLEDGE_ADMISSIBILITY=knowledge_time",
+              "S1F_CANDLE_FINALITY=OPEN_UNTIL_BOUNDARY_AND_SOURCE_FINALITY",
+              "S1F_LATE_CORRECTION=NEW_IMMUTABLE_REVISION",
+              "S1F_VALUE_FAMILIES=TradeTick,TickerState,CandleBar,OrderBookSnapshot,OrderBookDelta,BookLevel,ReferencePriceEvidence,FundingEvidence",
+              "S1F_CAPABILITY_STATES=SUPPORTED,UNSUPPORTED,UNKNOWN",
+              "S1F_BENCHMARK_MODE=BASELINE_ESTABLISHMENT_V1",
+              "S1F_PROFILE_CONTRACT_MICRO_V1=symbols=1;ticker=64;deal=256;depth=128;depth-full=32;kline=32;total=512;depth-levels=5;replay-seconds=60",
+              "S1F_PROFILE_NOMINAL_MULTICHANNEL_V1=symbols=8;ticker=1024;deal=4096;depth=2048;depth-full=512;kline=512;total=8192;depth-levels=20;replay-seconds=900",
+              "S1F_PROFILE_STRESS_BACKPRESSURE_V1=symbols=32;ticker=8192;deal=32768;depth=16384;depth-full=4096;kline=4096;total=65536;depth-levels=20;queue-capacity=4096;replay-seconds=3600",
+              "S1F_BENCHMARK_MEASUREMENTS=normalization_throughput;value_state_latency_distribution;replay_throughput;peak_steady_memory;queue_depth_age",
+          )
+          for decision in exact_decisions:
+              assert decision in combined, decision
+          assert "https://mexcdevelop.github.io/apidocs/contract_v1_en/" in implementation
+          assert "57ebc13fea788a1c568c8aeabfdf50acc0c9f5b5a882af4855837d53499940e" in implementation
+          assert "Decimal or" not in combined
+          assert "equivalent fixed-point" not in combined
+          assert "implementation discretion" not in combined
+          assert "if objectively required" not in combined
+          assert "only if frozen" not in combined
+          assert "transport is in scope" not in combined
+          assert "only if that boundary is authorized" not in combined
           for forbidden in ("credential", "private API", "Risk", "OMS", "Execution", "persistence", "deployment", "live trading"):
               assert forbidden.lower() in combined.lower(), forbidden
           manual_trigger = "workflow" + "_" + "dispatch"
@@ -135,10 +180,15 @@ jobs:
           echo "governanceOnlyDiff=PASS"
           echo "sourceIdentity=10/10 PASS"
           echo "checkpointFailClosed=PASS"
-          echo "typedValuePlane=DECLARED"
-          echo "orderedInputLineage=DECLARED"
-          echo "intervalSemantics=DECLARED"
-          echo "s1eAxisSeparation=DECLARED"
+          echo "h001TransportMandatory=PASS"
+          echo "mexcOfficialSourceLock=PASS"
+          echo "h002CanonicalNumericPolicy=PASS"
+          echo "h003HalfOpenInterval=PASS"
+          echo "h004ValueFamilyManifest=PASS"
+          echo "h005BenchmarkProfiles=PASS"
+          echo "h006SemanticAssertions=PASS"
+          echo "orderedInputLineage=PASS"
+          echo "s1eAxisSeparation=PASS"
           echo "docs06Bound=PASS"
           echo "productImplementation=FORBIDDEN"
           echo "productionCredentials=false"
