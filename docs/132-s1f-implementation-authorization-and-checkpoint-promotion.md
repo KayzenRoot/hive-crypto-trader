@@ -54,7 +54,10 @@ Authorization ceiling:
 
 `NON_TRADING_STAGE_1_REALTIME_PUBLIC_MARKET_VALUE_INGEST_FOUNDATION_ONLY`
 
-The implementation tracking Issue is `#72`. Its authorized execution base is the post-promotion canonical main recorded in the checkpoint state. The implementation branch is `implementation/HCT-IMP-0010-S1F`.
+The implementation tracking Issue is `#72`. Its authorized execution base is the post-promotion canonical main:
+`main@3b972bd7e2016d333fa5d07d8c694a990bd1be88`.
+
+The implementation branch is `implementation/HCT-IMP-0010-S1F`.
 
 The authorized scope is limited to the approved provider-neutral typed public market-value plane, deterministic MEXC public source contract and decoder/session foundation, exact H013 runtime dependency delta, fixtures/source manifest, bounded BASELINE_ESTABLISHMENT_V1 evidence, tests, negative-capability scanning and exact-head implementation CI. It preserves S1E authority/resource/eligibility axes, generation and ordered lineage semantics, provider-native quantity units and fail-closed construction.
 

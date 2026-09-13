@@ -22,7 +22,7 @@
   "authorization_base_sha": "625dd0c145087038bdbccd665548d811e187194c",
   "approved_authorization_candidate_head_sha": "8c4d064fd24690131ff6bf9ef6739a1de8112a3a",
   "authorization_merge_sha": "9a775adae1ce1ceb9ed4a66667a7acc40c14f3c7",
-  "authorized_execution_base_sha": "9a775adae1ce1ceb9ed4a66667a7acc40c14f3c7",
+  "authorized_execution_base_sha": "3b972bd7e2016d333fa5d07d8c694a990bd1be88",
   "exact_head_governance_run": 34763689022,
   "exact_head_governance_check": "s1f-authorization-governance",
   "exact_head_governance_job": 103740795356,

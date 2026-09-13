@@ -115,7 +115,10 @@ Exact hosted authorization evidence:
 
 Full approval/promotion record: `docs/132-s1f-implementation-authorization-and-checkpoint-promotion.md`.
 
-The authorized execution base for S1F is the post-promotion canonical main recorded in the CP0031 state. The implementation branch is `implementation/HCT-IMP-0010-S1F`.
+The authorized execution base for S1F is the post-promotion canonical main:
+`main@3b972bd7e2016d333fa5d07d8c694a990bd1be88`.
+
+The implementation branch is `implementation/HCT-IMP-0010-S1F`.
 
 ## S1D implementation completion provenance
 Implementation Issue: `#62`
