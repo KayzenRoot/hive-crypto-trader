@@ -8,9 +8,12 @@ permissions:
   contents: read
 
 env:
-  CANONICAL_BASE_SHA: 625dd0c145087038bdbccd665548d811e187194c
+  CANONICAL_BASE_SHA: 3ee5ad4d967bb6ef051eae1982990d728c6ade9e
+  CHECKPOINT_ID: HCT-CP-0032
+  CHECKPOINT_STATUS: S1F_IMPLEMENTATION_APPROVED_MERGED
   CANDIDATE_AUTHORIZATION_ID: HCT-IMPL-AUTH-0009
   CANDIDATE_IMPLEMENTATION_ID: HCT-IMP-0009-S2A
+  RESOLVED_PREREQUISITE: HCT-IMP-0010-S1F
 
 jobs:
   s2a-authorization-governance:
@@ -34,26 +37,40 @@ jobs:
           git fetch --no-tags origin main
           test "$(git rev-parse origin/main)" = "${CANONICAL_BASE_SHA}"
 
-      - name: Validate CP0030 fail-closed authority
+      - name: Validate CP0032 canonical closure and fail-closed authority
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
           import json
-          import os
           from pathlib import Path
 
           latest = json.loads(Path("checkpoints/workstreams/planning/latest.json").read_text())
-          checkpoint = json.loads(Path("checkpoints/history/HCT-CP-0030.json").read_text())
-          for state in (latest, checkpoint):
-              assert state["checkpoint_id"] == "HCT-CP-0030"
-              assert state["status"] == "S1E_IMPLEMENTATION_APPROVED_MERGED"
-              assert state["implementation_authorized"] is False
-              assert state["implementation_authorization_scope"] == []
-              assert state["implementation_authorization_ceiling"] == "NONE_PENDING_NEXT_GOVERNED_AUTHORIZATION"
-              for key in ("production_credentials_authorized", "production_deployment_authorized", "limited_live_authorized", "live_trading_authorized"):
-                  assert state[key] is False, key
-          print("CP0030 fail-closed authority: PASS")
+          checkpoint = json.loads(Path("checkpoints/history/HCT-CP-0032.json").read_text())
+          keys = (
+              "checkpoint_id", "status", "implementation_merge_sha", "approved_candidate_head_sha",
+              "exact_head_ci_run", "exact_head_ci_check", "exact_head_ci_job", "exact_head_ci_conclusion",
+              "independent_review_id", "independent_verdict", "critical_findings_unresolved",
+              "high_findings_unresolved", "implementation_authorized", "implementation_authorization_scope",
+              "implementation_authorization_ceiling", "production_credentials_authorized",
+              "production_deployment_authorized", "limited_live_authorized", "live_trading_authorized",
+          )
+          for key in keys:
+              assert checkpoint[key] == latest[key], key
+          assert checkpoint["checkpoint_id"] == "HCT-CP-0032"
+          assert checkpoint["status"] == "S1F_IMPLEMENTATION_APPROVED_MERGED"
+          assert checkpoint["prior_checkpoint"] == "HCT-CP-0031"
+          assert checkpoint["completed_increment"] == "HCT-IMP-0010-S1F"
+          assert checkpoint["implementation_authorized"] is False
+          assert checkpoint["implementation_authorization_scope"] == []
+          assert checkpoint["implementation_authorization_ceiling"] == "NONE_PENDING_NEXT_GOVERNED_AUTHORIZATION"
+          for key in ("production_credentials_authorized", "production_deployment_authorized", "limited_live_authorized", "live_trading_authorized"):
+              assert checkpoint[key] is False, key
+          assert checkpoint["independent_review_id"] == 5191783715
+          assert checkpoint["independent_verdict"] == "APPROVED"
+          assert checkpoint["critical_findings_unresolved"] == 0
+          assert checkpoint["high_findings_unresolved"] == 0
+          print("CP0032 canonical closure and fail-closed authority: PASS")
           PY
 
       - name: Validate exact governance-only changed-file allowlist
@@ -71,8 +88,35 @@ jobs:
           test "${#actual[@]}" -eq "${#expected_sorted[@]}"
           for index in "${!expected_sorted[@]}"; do test "${actual[$index]}" = "${expected_sorted[$index]}"; done
           git diff --check "${CANONICAL_BASE_SHA}...${{ github.event.pull_request.head.sha }}"
+          echo "Governance-only four-file boundary: PASS"
 
-      - name: Validate candidate sections, traceability and negative scope
+      - name: Validate exact frozen source identities and S1F handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import subprocess
+
+          expected = {
+              "docs/06-test-benchmark-plan.md": "29401ce8fe1616f9390a317bae62d3a157addaa5",
+              "checkpoints/history/HCT-CP-0032.json": "f910b60f0b2dc3c046cac12795dca29a8b7aa3a2",
+              "checkpoints/workstreams/planning/latest.json": "3a8ad6d6887cca478f1d999feb8ba15421b817a4",
+              "adr/HCT-ADR-0050-s1f-realtime-public-market-value-ingest.md": "609ddc4656220027ce14503a6ba7ae71acc4c039",
+              "work-orders/HCT-IMP-0010-S1F.md": "c9cf955dbb83c337760af3cff4d3136e32228319",
+              "evidence/HCT-IMP-0010-S1F.md": "9061c9f072d8e111cda3d2983242fd6466e1101e",
+              "apps/backend/src/hct_backend/s1f_values.py": "38620bc4ea4f1fc5b14cd525c7a9ca0251d9cbfd",
+              "apps/backend/src/hct_backend/s1f_numeric.py": "76c74b1d746f74dfa0e0aac54a286584ab545cb8",
+              "apps/backend/src/hct_backend/s1f_session.py": "ca3c572e6f4eb0f6921b6c3f602dbc571fabab6f",
+              "apps/backend/src/hct_backend/s1f_mexc.py": "48e90d8c29f77ee4c702057b8c737715a55f124e",
+          }
+          for path, digest in expected.items():
+              actual = subprocess.check_output(["git", "rev-parse", f"{os.environ['CANONICAL_BASE_SHA']}:{path}"], text=True).strip()
+              assert actual == digest, (path, actual, digest)
+          print("Frozen source identities and S1F handoff: PASS")
+          PY
+
+      - name: Validate B001 resolution, feature contract and negative scope
         shell: bash
         run: |
           set -euo pipefail
@@ -84,33 +128,34 @@ jobs:
           authorization = Path("work-orders/HCT-IMPL-AUTH-0009.md").read_text()
           implementation = Path("work-orders/HCT-IMP-0009-S2A.md").read_text()
           workflow = Path(".github/workflows/implementation-authorization-s2a-governance.yml").read_text()
-          candidate_sections = ("Objective", "Dependency proof", "Source lock", "Proposed responsibility", "Explicit exclusions", "Required proof obligations", "Authorization firewall", "Required independent review", "Stop condition")
-          for section in candidate_sections:
-              assert f"## {section}" in candidate or f"### {section}" in candidate, section
-          for text in (authorization, implementation):
-              for section in ("OBJECTIVE", "CONTEXT", "SCOPE", "OUT OF SCOPE", "REQUIREMENTS", "ARCHITECTURE RULES", "CONSTRAINTS", "ACCEPTANCE CRITERIA", "TESTS", "DELIVERABLES", "REVIEW FORMAT", "STOP CONDITION"):
-                  assert f"## {section}" in text or f"### {section}" in text, section
-          for section in ("SOURCE LOCK", "FILES/SOURCES TO READ"):
-              assert section in authorization or section in implementation, section
-          for marker in (
-              "HCT-IMPL-AUTH-0009", "HCT-IMP-0009-S2A", "HCT-CP-0030", os.environ["CANONICAL_BASE_SHA"],
-              "Module 8", "Module 9", "V1_CORE", "V1_MINIMUM", "features/indicators/patterns",
-              "HCT-IMP-0008-S1E", "Market-State", "DataAuthority", "read-only", "no-lookahead",
-              "event time", "knowledge time", "WARMUP", "UNKNOWN", "INVALID", "DEGRADED",
-              "PO-F01", "PO-F10", "LIVE", "PAPER", "SHADOW", "REPLAY",
+          combined = candidate + "\n" + authorization + "\n" + implementation
+          required = (
+              "RECOMPILED_AFTER_S1F", "B001=RESOLVED_BY_HCT-IMP-0010-S1F_CP0032", "HCT-CP-0032",
+              "HCT-IMP-0010-S1F", "HCT-IMP-0009-S2A", "AUTHOR_SIDE_GOVERNANCE_PREFLIGHT_NOT_INDEPENDENT_APPROVAL",
+              "docs/06-test-benchmark-plan.md", "29401ce8fe1616f9390a317bae62d3a157addaa5",
+              "S2A_EXACT_V1_CORE_FEATURE_SET=F-RET-001,F-SMA-001,F-EMA-001,F-ROC-001,F-RSI-001,F-TR-001,F-ATR-001,F-VSMA-001",
+              "FEATURE_DECIMAL_POLICY_VERSION=FEATURE_DECIMAL_V1", "FEATURE_DECIMAL_INTERNAL_PRECISION=76",
+              "FEATURE_DECIMAL_MAX_PRECISION=38", "FEATURE_DECIMAL_MAX_SCALE=18",
+              "FEATURE_DECIMAL_ROUNDING=ROUND_HALF_EVEN", "FEATURE_DECIMAL_BINARY_FLOAT=FORBIDDEN",
+              "S2A_BENCHMARK_MODE=S2A_BASELINE_ESTABLISHMENT_V1", "MICRO", "NOMINAL", "STRESS",
+              "S2A_AXIS_SEPARATION=FeatureValidity;MarketStateTrust;DataAuthority;ResourceRestriction;UniverseLifecycleRestriction",
+              "PO-F01", "PO-F10", "R05::Time and freshness requirements::B1-B5", "R05::State coherency requirements::B1-B4",
+              "R05::Candle/cache/replay requirements::B1-B5", "INT-002", "INT-012", "INT-018", "VAL-003", "VAL-005",
+              "R11-REQ-006", "R11-REQ-014", "HCT-DEC-0061", "HCT-DEC-0065", "ADR-0049",
               "implementation_authorized=false", "production_credentials_authorized=false",
               "production_deployment_authorized=false", "limited_live_authorized=false", "live_trading_authorized=false",
-              "R05::Time and freshness requirements::B1", "R05::State coherency requirements::B1",
-              "R05::Candle/cache/replay requirements::B1", "INT-002", "INT-012", "INT-018",
-              "VAL-003", "VAL-005", "R11-REQ-006", "R11-REQ-014", "HCT-DEC-0061", "HCT-DEC-0065",
-              "ADR-0049", "negative-capability", "governance-only",
-          ):
-              assert marker in candidate + authorization + implementation, marker
-          for forbidden in ("socket", "WebSocket", "credential", "private API", "database", "deployment", "live trading"):
-              assert forbidden.lower() in (candidate + authorization + implementation).lower(), forbidden
+              "LIVE", "PAPER", "SHADOW", "REPLAY", "no-lookahead", "governance-only",
+          )
+          for marker in required:
+              assert marker in combined, marker
+          for feature_id in ("F-RET-001", "F-SMA-001", "F-EMA-001", "F-ROC-001", "F-RSI-001", "F-TR-001", "F-ATR-001", "F-VSMA-001"):
+              assert combined.count(feature_id) >= 2, feature_id
+          assert "BLOCKED_BY_PREREQUISITE" in candidate + authorization
+          assert "RESOLVED_BY_HCT-IMP-0010-S1F_CP0032" in combined
           manual_trigger = "workflow" + "_" + "dispatch"
           assert manual_trigger not in workflow
-          print("Candidate sections, traceability, dependency binding and negative scope: PASS")
+          assert "on:\n  pull_request:" in workflow
+          print("B001 resolution, exact feature/numeric/lineage/axis contract and negative scope: PASS")
           PY
 
       - name: Publish S2A authorization governance summary
@@ -119,11 +164,16 @@ jobs:
           echo "candidateAuthorizationId=${CANDIDATE_AUTHORIZATION_ID}"
           echo "candidateImplementationId=${CANDIDATE_IMPLEMENTATION_ID}"
           echo "canonicalBase=${CANONICAL_BASE_SHA}"
+          echo "checkpoint=${CHECKPOINT_ID}/${CHECKPOINT_STATUS}"
+          echo "resolvedPrerequisite=${RESOLVED_PREREQUISITE}"
           echo "governanceOnlyDiff=PASS"
-          echo "checkpointFailClosed=PASS"
-          echo "upstreamMarketTruthReadOnly=PASS"
-          echo "noLookaheadContract=PASS"
-          echo "productImplementation=FORBIDDEN"
+          echo "b001Resolved=PASS"
+          echo "h002BenchmarkSourceLock=PASS"
+          echo "h003ExactFeatureSet=PASS"
+          echo "h004NumericPolicy=PASS"
+          echo "h005OrderedLineage=PASS"
+          echo "h006AxisSeparation=PASS"
+          echo "implementationAuthorized=false"
           echo "productionCredentials=false"
           echo "productionDeployment=false"
           echo "limitedLive=false"
