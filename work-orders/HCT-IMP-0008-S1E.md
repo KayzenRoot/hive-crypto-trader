@@ -28,9 +28,13 @@ S1E is a vertical foundation across Modules 4, 7, 5 and 30 with a narrow Module 
 
 Define immutable normalized public event envelopes with typed event identity, canonical contract/channel identity, source/provenance, schema/version, environment namespace, generation binding and deterministic content fingerprint. Preserve distinct `event_time`, `wall_receive_time` and monotonic elapsed-time evidence.
 
+Add an immutable provider-neutral Channel Capability / Sequence Policy contract binding venue/exchange identity, public/private class, channel/topic identity, symbol/contract scope, schema/version, snapshot availability, delta/update semantics, ordering evidence, sequence/update identifiers where available, update cadence/heartbeat evidence where applicable and continuity policy. Its finite modes are `STRICT_SEQUENCE`, `MONOTONIC_UPDATE_ID`, `TIMESTAMP_ORDERED_WITH_LIMITS`, `SNAPSHOT_ONLY` and `NO_PROVABLE_SEQUENCE`. Concrete MEXC transport, subscription and reconnect I/O remain out of scope.
+
 ### Module 7 — Data Quality/Freshness
 
 Define finite quality/freshness predicates and reason codes for fresh/valid, stale/expired, gap, duplicate, out-of-order, `SEQUENCE_UNPROVABLE`, clock unhealthy/drift/jump/untrusted, malformed/schema-quarantined, missing provenance/generation and cross-channel contradiction evidence. A score may explain evidence but cannot hide a failed critical predicate.
+
+Module 7 must emit exactly the typed data-authority states `ALLOW_NEW_EXPOSURE`, `DEGRADED_NEW_EXPOSURE`, `NO_NEW_EXPOSURE`, `REDUCE_ONLY`, `RECONCILIATION_ONLY` and `EMERGENCY`. Hard predicates map deterministically to the finite result; aggregate scores are explanatory only. The result is restrictive-only input to the R11 authority lattice and cannot authorize trading, bypass Risk/Safety/Session/Exchange restrictions or create live authority.
 
 ### Module 5 — coherent Market-State
 
@@ -43,6 +47,10 @@ Define immutable projection envelopes with source/generation/provenance/fingerpr
 ### Module 29 — resource-control integration
 
 Define a typed seam showing quota/backpressure admission, denial, deferral, shedding or resource degradation constrains work but cannot synthesize market events, mark data fresh, promote untrusted state or override quality/trust barriers.
+
+### S1C universe/lifecycle seam
+
+Consume typed immutable S1C `UniverseSnapshot` / `UniverseEligibilityState` evidence owned by ADR-0047, including snapshot identity/fingerprint, contract reference, universe generation, state/reason and source/policy versions. S1E is not a second universe owner. `INELIGIBLE`, `UNKNOWN`, retired or otherwise lifecycle-invalid evidence must deterministically invalidate, retire or degrade the affected Market-State/cache projection and prevent it from presenting as current trusted state.
 
 ### Test/evidence foundation
 
@@ -65,6 +73,9 @@ Provide deterministic fixtures/replay inputs, contract tests, state-transition t
 - `checkpoints/workstreams/planning/latest.json`;
 - `checkpoints/history/HCT-CP-0028.json`;
 - `docs/00-source-hierarchy.md`;
+- `docs/03-scope.md`;
+- `docs/04-architecture.md`;
+- `docs/06-test-benchmark-plan.md`;
 - `docs/09-definition-of-done.md`;
 - `docs/11-checkpoint.md`;
 - `docs/14-product-module-map.md`, Modules 4, 5, 7, 29 and 30;
@@ -78,6 +89,8 @@ Provide deterministic fixtures/replay inputs, contract tests, state-transition t
 - `docs/104-chat-delivery-and-prompt-artifact-policy.md`;
 - `docs/10-decisions-ledger.md`, especially HCT-DEC-0005, HCT-DEC-0012, HCT-DEC-0132, HCT-DEC-0135, HCT-DEC-0136, HCT-DEC-0138 and HCT-DEC-0139;
 - `docs/126-s1d-implementation-approval-and-checkpoint-promotion.md`;
+- `adr/HCT-ADR-0047-s1c-market-universe-registry.md`;
+- `adr/HCT-ADR-0048-s1d-quota-backpressure-governor.md`;
 - `work-orders/HCT-IMPL-AUTH-0008.md`.
 
 ## REQUIREMENTS
@@ -91,6 +104,13 @@ Provide deterministic fixtures/replay inputs, contract tests, state-transition t
 - `event_time`, `wall_receive_time` and monotonic elapsed-time evidence remain separate; wall time alone cannot drive elapsed safety decisions.
 - Missing, malformed, contradictory or unknown identity/provenance/time evidence is rejected or explicitly untrusted.
 
+### Channel Capability / Sequence Policy
+
+- The capability contract is immutable, provider-neutral and fingerprinted from venue/exchange identity, public/private class, channel/topic, symbol/contract scope, schema/version, snapshot availability, delta/update semantics, ordering evidence, sequence/update identifiers, cadence/heartbeat evidence and continuity policy.
+- `STRICT_SEQUENCE` requires contiguous identifiers; `MONOTONIC_UPDATE_ID` requires increasing identifiers and only treats jumps as gaps when contiguity is proven; `TIMESTAMP_ORDERED_WITH_LIMITS` bounds timestamp order but cannot infer missing updates; `SNAPSHOT_ONLY` treats each valid snapshot as a synchronization point; `NO_PROVABLE_SEQUENCE` yields `SEQUENCE_UNPROVABLE` for continuity-dependent decisions.
+- Each mode defines deterministic duplicate, late/out-of-order, gap and resynchronization predicates. Unsupported proof is `SEQUENCE_UNPROVABLE`, never inferred certainty.
+- Equal normalized capability material has equal fingerprints, while policy/version changes are fingerprint-visible.
+
 ### Data Quality and Freshness predicates
 
 - Quality state is finite, machine-readable and separately inspectable.
@@ -98,6 +118,7 @@ Provide deterministic fixtures/replay inputs, contract tests, state-transition t
 - Unknown/unproven freshness, continuity, clock health, schema or coherence fails closed.
 - Aggregate scores are explanatory only and cannot convert a failed critical predicate into a trusted/allowing state.
 - Quality outputs declare affected action classes, fallback/degradation and recovery/resynchronization expectations.
+- The exact canonical data-authority state set is `ALLOW_NEW_EXPOSURE`, `DEGRADED_NEW_EXPOSURE`, `NO_NEW_EXPOSURE`, `REDUCE_ONLY`, `RECONCILIATION_ONLY` and `EMERGENCY`. A deterministic restrictive precedence selects the result; required-feed untrusted, severe unresolved contradiction, untrusted clock/time-sensitive state, required sequence-unprovable and Module 29 resource starvation cannot yield an allowing state. Module 7 is restrictive-only and cannot itself authorize trading or live authority.
 
 ### Market-State trust and synchronization
 
@@ -122,6 +143,26 @@ Provide deterministic fixtures/replay inputs, contract tests, state-transition t
 - Module 30 owns projections and freshness leases only.
 - Module 29 owns resource admission/backpressure only and cannot own market truth.
 - Consumers cannot become competing truth owners through convenience caching, UI, telemetry or aggregate scoring.
+- ADR-0047 remains the sole owner of structural universe/lifecycle truth; S1E consumes typed evidence only.
+- ADR-0048 remains the sole owner of quota/backpressure decisions; S1E consumes resource/admission evidence only.
+
+### Frozen source and Decision traceability
+
+The active baseline is `HCT-REQ-BASELINE-V1-CANDIDATE` / `docs/99-r12-frozen-requirements-baseline.md`. Exact R05 locators are computed from `docs/54-r05-realtime-requirements-addendum.md` using `R05::<heading>::B<ordinal>`:
+
+- `R05::Transport and feed requirements::B1`, `B2`, `B3`, `B4`;
+- `R05::Backpressure and resource requirements::B1`, `B3`, `B4`;
+- `R05::Time and freshness requirements::B1`, `B2`, `B3`;
+- `R05::State coherency requirements::B1`, `B2`, `B3`, `B4`;
+- `R05::Candle/cache/replay requirements::B3`, `B4`, `B5`;
+- `R05::Persistence and schema requirements::B3`, `B4`;
+- `R05::Universe lifecycle requirements::B1`, `B2`;
+- `R05::Authority requirements::B1`, `B2`, `B3`;
+- `R05::Validation requirements::B1`, `B2`, `B3`, `B6`, `B7`, `B8`, `B9`, `B12`, `B13`, `B18`.
+
+Concrete reconnect/resubscription, private/public runtime isolation, downstream Decision Freshness propagation, candle-specific revision logic, persistence outage runtime, reconnect/HA/fencing runtime and other non-S1E validation items are explicitly deferred; their frozen requirements remain authoritative for their later owners.
+
+Decision binding is explicit: `HCT-DEC-0058` applies to generation/sync fencing; `HCT-DEC-0059` applies at the Module 29 seam; `HCT-DEC-0060` applies to time/clock evidence; `HCT-DEC-0061` applies to coherency; `HCT-DEC-0062` applies to schema quarantine/evidence degradation while persistence runtime is deferred; `HCT-DEC-0063` applies directly to the six canonical data-authority states; `HCT-DEC-0064` applies only to S1E age/freshness evidence while downstream propagation is deferred; `HCT-DEC-0065` applies to cache/replay/lifecycle convergence; `HCT-DEC-0066` is explicitly deferred because HA single-writer/fencing is outside S1E. ADR-0047 and ADR-0048 preserve sole-owner boundaries.
 
 ## ARCHITECTURE RULES
 
@@ -134,6 +175,7 @@ Provide deterministic fixtures/replay inputs, contract tests, state-transition t
 - Preserve tenant/account/environment identity where applicable without introducing tenant or credential runtime in S1E.
 - Treat frontend, cache and telemetry as projections, never authority.
 - Never relax a stricter quality, trust, safety or reconciliation decision downstream.
+- A `UniverseEligibilityState` transition to `INELIGIBLE`, `UNKNOWN`, retired or lifecycle-invalid deterministically invalidates, retires or degrades affected projections; no projection may silently survive as current trusted state.
 
 ## CONSTRAINTS
 
@@ -158,10 +200,13 @@ The S1E implementation is acceptable only if:
 8. Cache freshness leases/TTL/invalidation and no-authority-upgrade are explicit and tested.
 9. Module 29 integration constrains resources without owning or upgrading market truth.
 10. Environment namespace and typed identity/versioning are preserved.
-11. Deterministic fixtures/replay prove the foundation without live MEXC/network.
-12. Negative-capability scanning rejects network, endpoints, credentials, private APIs, trading/Risk/OMS/Execution, persistence, deployment and live authority.
-13. Full prior-stage regressions, coverage, contracts, static analysis, build, audits and exact-head CI pass.
-14. No unresolved CRITICAL/HIGH finding remains and fresh independent HIGH_ASSURANCE/HEDS Delta review is `APPROVED`.
+11. Every sequence-policy mode has deterministic duplicate, late/out-of-order, gap and resynchronization/`SEQUENCE_UNPROVABLE` behavior, and capability fingerprints expose material policy/version changes.
+12. Module 7 emits exactly the six canonical HCT-DEC-0063 data-authority states and cannot grant authority alone.
+13. S1C lifecycle evidence is consumed through a typed seam and the required invalidation/degradation transitions are deterministic.
+14. Deterministic fixtures/replay prove the foundation without live MEXC/network.
+15. Negative-capability scanning rejects network, endpoints, credentials, private APIs, trading/Risk/OMS/Execution, persistence, deployment and live authority.
+16. Full prior-stage regressions, coverage, contracts, static analysis, build, audits and exact-head CI pass.
+17. No unresolved CRITICAL/HIGH finding remains and fresh independent HIGH_ASSURANCE/HEDS Delta review is `APPROVED`.
 
 ## TESTS
 
@@ -176,6 +221,10 @@ At minimum, provide:
 - generation rollover, retired-generation and mixed-generation tests;
 - snapshot/delta synchronization and trust-state transition tests;
 - cache TTL/lease/invalidation and no-authority-upgrade tests;
+- equal normalized Channel Capability fingerprint tests and policy/version-change fingerprint tests;
+- one deterministic duplicate, late/out-of-order, gap and resynchronization/`SEQUENCE_UNPROVABLE` test family for every sequence-policy mode;
+- canonical data-authority tests for required-feed untrusted, severe unresolved contradiction, untrusted clock/time-sensitive state, required sequence-unprovable and Module 29 resource starvation;
+- S1C lifecycle tests for `ELIGIBLE -> INELIGIBLE`, `ELIGIBLE -> UNKNOWN`, snapshot generation/version change, retired source generation and cache invalidation/lease behavior;
 - Module 29 admission/resource-starvation integration tests;
 - deterministic fixtures/replay tests with no live network;
 - `LIVE/PAPER/SHADOW/REPLAY` namespace isolation tests where applicable;
