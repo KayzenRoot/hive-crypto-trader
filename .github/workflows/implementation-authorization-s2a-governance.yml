@@ -163,10 +163,48 @@ jobs:
               "S2A_MTF_KNOWLEDGE_TIME=MAX_CONSTITUENT_KNOWLEDGE_TIME",
               "S2A_MTF_LINEAGE=ORDERED_CONSTITUENT_CANDLE_FINGERPRINTS",
               "S2A_MTF_MARKET_TRUTH_AUTHORITY=NONE_DERIVED_ANALYTICAL_EVIDENCE_ONLY",
+              "S2A_RECURSIVE_STATE_VERSION=S2A_ACCUMULATOR_STATE_V1",
+              "S2A_RECURSIVE_UPDATE_CONTEXT=DECIMAL_PRECISION_76_ROUND_HALF_EVEN",
+              "S2A_RECURSIVE_NEXT_STATE=CANONICAL_SCALE_18_ONLY",
+              "S2A_RECURSIVE_HIDDEN_STATE=FORBIDDEN",
+              "S2A_RESUME_REPLAY_PARITY=BIT_FOR_BIT",
+              "S2A_EMA_STATE=PREVIOUS_EMA_CANONICAL_SMA_N_SEED",
+              "S2A_ATR_STATE=PREVIOUS_ATR_CANONICAL_MEAN_FIRST_N_TR_SEED",
+              "S2A_RSI_STATE=AVG_GAIN_AVG_LOSS_CANONICAL_WILDER",
+              "S2A_REQUIRED_SAMPLE_CARDINALITY_VERSION=S2A_SAMPLE_CARDINALITY_V1",
+              "S2A_RET_REQUIRED_INPUTS=2_CLOSED_CLOSES",
+              "S2A_RET_FIRST_VALID_INDEX=2",
+              "S2A_SMA_REQUIRED_INPUTS=N_CLOSED_SAMPLES",
+              "S2A_SMA_FIRST_VALID_INDEX=N",
+              "S2A_EMA_REQUIRED_INPUTS=N_CLOSED_SAMPLES",
+              "S2A_EMA_FIRST_VALID_INDEX=N_SEED_SMA_N",
+              "S2A_ROC_REQUIRED_INPUTS=N_PLUS_1_CLOSED_CLOSES",
+              "S2A_ROC_FIRST_VALID_INDEX=N_PLUS_1",
+              "S2A_RSI_REQUIRED_INPUTS=N_PLUS_1_CLOSED_CLOSES_N_DELTAS",
+              "S2A_RSI_FIRST_VALID_INDEX=N_PLUS_1",
+              "S2A_TR_REQUIRED_INPUTS=1_CLOSED_OHLC_BAR_PRIOR_CLOSE_OPTIONAL",
+              "S2A_TR_FIRST_VALID_INDEX=1",
+              "S2A_ATR_REQUIRED_INPUTS=N_TR_VALUES_FROM_N_CLOSED_BARS",
+              "S2A_ATR_FIRST_VALID_INDEX=N",
+              "S2A_VSMA_REQUIRED_INPUTS=N_CLOSED_NATIVE_Q_SAMPLES",
+              "S2A_VSMA_FIRST_VALID_INDEX=N",
+              "S2A_MTF_VALIDITY_WARMUP=PRE_CLOSE_OR_EXPECTED_CLOSE_BOUNDARY_NOT_YET_OCCURRED",
+              "S2A_MTF_VALIDITY_UNKNOWN=BOUNDARY_PASSED_REQUIRED_CLOSED_CONSTITUENT_UNAVAILABLE",
+              "S2A_MTF_VALIDITY_INVALID=STRUCTURAL_OR_PROVENANCE_CONTRADICTION",
+              "S2A_MTF_VALIDITY_DEGRADED=COMPLETE_COHERENT_UPSTREAM_DEGRADED",
+              "S2A_MTF_VALIDITY_VALID=COMPLETE_CONTIGUOUS_5_OR_15_CLOSED_ADMISSIBLE",
+              "S2A_MTF_EVENT_TIME=MAX_CONSTITUENT_EVENT_TIME",
+              "S2A_MTF_WALL_RECEIVE_TIME=MAX_CONSTITUENT_WALL_RECEIVE_TIME",
+              "S2A_MTF_PROVENANCE=DERIVED_ANALYTICAL_V1",
           )
           for document in (candidate, authorization, implementation):
               for marker in required_new_contract:
                   assert marker in document, marker
+          assert "Status: `PENDING_INDEPENDENT_HIGH_ASSURANCE_REVIEW`" in candidate
+          assert "Status: `PENDING_INDEPENDENT_HIGH_ASSURANCE_REVIEW`" in authorization
+          assert "Status: `PENDING_SEPARATE_AUTHORIZATION_CHECKPOINT`" in implementation
+          assert "INVALID/UNKNOWN" not in combined
+          assert "WARMUP/UNKNOWN" not in combined
           for feature_id in ("F-RET-001", "F-SMA-001", "F-EMA-001", "F-ROC-001", "F-RSI-001", "F-TR-001", "F-ATR-001", "F-VSMA-001"):
               assert combined.count(feature_id) >= 2, feature_id
           assert "BLOCKED_BY_PREREQUISITE" in candidate + authorization
@@ -195,6 +233,9 @@ jobs:
           echo "h007GovernanceState=PASS_PENDING_METADATA_HANDOFF"
           echo "h008FeatureAlgorithmContract=PASS"
           echo "h009MultiTimeframeContract=PASS"
+          echo "h010RecursiveState=PASS_CANONICAL_SCALE_18"
+          echo "h011SampleCardinality=PASS"
+          echo "h012MtfValidityTimeProvenance=PASS"
           echo "implementationAuthorized=false"
           echo "productionCredentials=false"
           echo "productionDeployment=false"

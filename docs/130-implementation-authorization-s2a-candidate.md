@@ -147,7 +147,7 @@ Serialization is base-10 with no exponent, no leading plus, canonical zero and d
 - `knowledge_time` is the point-in-time admissibility boundary; an input learned after the evaluation boundary is forbidden even when its event time is earlier.
 - A window identity includes source, contract, environment, generation, timeframe/version, start/end, ordered inputs, sample count, required warmup, definition/version and replay-fidelity identity.
 - Mixed contract/environment/generation/timeframe version fails closed.
-- 5m/15m alignment may consume only complete CLOSED constituent 1m windows whose `knowledge_time` is admissible by the higher-timeframe boundary; open/incomplete windows remain `WARMUP`/`UNKNOWN`.
+- 5m/15m alignment may consume only complete CLOSED constituent 1m windows whose `knowledge_time` is admissible by the higher-timeframe boundary; before the higher-timeframe close, an incomplete window is `WARMUP`, and after that boundary an unavailable required constituent is `UNKNOWN`.
 - Corrections create new immutable input lineage and new feature fingerprints; earlier point-in-time results remain reproducible.
 
 ## H009 deterministic 5m/15m analytical alignment contract
@@ -168,11 +168,108 @@ S2A may derive an `AlignedWindowEvidence` (or a semantically equivalent name) on
 
 `S2A_MTF_MARKET_TRUTH_AUTHORITY=NONE_DERIVED_ANALYTICAL_EVIDENCE_ONLY`
 
-5m windows require exactly 5 contiguous CLOSED 1m constituents and 15m windows exactly 15. Window boundaries are UTC Unix-epoch aligned half-open `[start,end)`. Missing, duplicate, open, overlapping, out-of-order or non-contiguous constituents fail closed. Every constituent must match `source_id`, `contract_id`, environment, generation, timeframe version, provenance compatibility and quantity unit/source-contract identity; any mismatch is `INVALID` or `UNKNOWN` under the typed failure contract and never partial aggregation.
+5m windows require exactly 5 contiguous CLOSED 1m constituents and 15m windows exactly 15. Window boundaries are UTC Unix-epoch aligned half-open `[start,end)`. Before the higher-timeframe close, not-yet-occurred expected close boundaries are `WARMUP`; after the boundary, an unavailable expected CLOSED constituent is `UNKNOWN`. Duplicate, overlapping, out-of-order, non-contiguous, geometrically impossible or identity-incompatible constituents are `INVALID` under the typed failure contract and never partial aggregation. Every constituent must match `source_id`, `contract_id`, environment, generation, timeframe version, provenance compatibility and quantity unit/source-contract identity.
 
 Derived OHLCV is exact: open is the first constituent open, high is the maximum high, low is the minimum low, close is the last constituent close, and volume is the sum of constituent native `q` values only when unit/version identity matches. No base-asset normalization is introduced. Lineage is the exact ordered tuple of constituent `CandleBar` fingerprints; any correction/revision, insert/delete/reorder, generation change or value change produces a different aligned-window fingerprint.
 
-Derived `knowledge_time` is the maximum constituent `knowledge_time`. Admissibility at an evaluation boundary requires every constituent `knowledge_time <= boundary`. Derived event evidence must not precede the latest constituent event evidence, while the window end remains the close-boundary identity. Feature calculation may consume the window only after completion and admissibility; an incomplete current higher-timeframe window remains `WARMUP` or `UNKNOWN`, never zero-filled or forward-filled. The STRESS benchmark must exercise valid complete windows and missing, corrected and mixed-generation adversarial windows.
+Derived `knowledge_time` is the maximum constituent `knowledge_time`. Admissibility at an evaluation boundary requires every constituent `knowledge_time <= boundary`. Derived event evidence must not precede the latest constituent event evidence, while the window end remains the close-boundary identity. Feature calculation may consume the window only after completion and admissibility; before the close an incomplete current higher-timeframe window is `WARMUP`, while after the close an unavailable required constituent is `UNKNOWN`, never zero-filled or forward-filled. Structural or provenance contradictions are `INVALID`; complete coherent inputs under explicitly degraded upstream fidelity are `DEGRADED`; exactly complete contiguous CLOSED admissible inputs are `VALID`. The STRESS benchmark must exercise valid complete windows and missing, corrected and mixed-generation adversarial windows.
+
+## H010 canonical recursive accumulator state
+
+`S2A_RECURSIVE_STATE_VERSION=S2A_ACCUMULATOR_STATE_V1`
+
+`S2A_RECURSIVE_UPDATE_CONTEXT=DECIMAL_PRECISION_76_ROUND_HALF_EVEN`
+
+`S2A_RECURSIVE_NEXT_STATE=CANONICAL_SCALE_18_ONLY`
+
+`S2A_RECURSIVE_HIDDEN_STATE=FORBIDDEN`
+
+`S2A_RESUME_REPLAY_PARITY=BIT_FOR_BIT`
+
+Arithmetic inside one recursive update uses Decimal context precision 76 and `ROUND_HALF_EVEN`. At the end of every recursive update, every accumulator component is canonicalized to `FEATURE_DECIMAL_MAX_SCALE=18` using `ROUND_HALF_EVEN`, with precision `<=38` and scale `<=18`. Those canonical components are the only state consumed by the next update; no hidden unquantized Decimal state may influence a later output. Restart, serialized-state resume, fixture replay and incremental streaming therefore use the same state transition.
+
+`S2A_EMA_STATE=PREVIOUS_EMA_CANONICAL_SMA_N_SEED`: the EMA component is `previous_ema`; the seed at sample `N` is the canonicalized `SMA(N)`.
+
+`S2A_ATR_STATE=PREVIOUS_ATR_CANONICAL_MEAN_FIRST_N_TR_SEED`: the ATR component is `previous_atr`; the seed at TR sample `N` is the canonicalized arithmetic mean of the first `N` TR values.
+
+`S2A_RSI_STATE=AVG_GAIN_AVG_LOSS_CANONICAL_WILDER`: RSI components are `avg_gain` and `avg_loss`; both are seeded from the mean of the first `N` deltas, canonicalized, and canonicalized again after each Wilder recurrence before the next step. RSI output is computed from the newly canonical averages and canonicalized to scale 18.
+
+Accumulator state identity/fingerprint binds algorithm version, feature ID/version, `N`, source field, timeframe/version, Decimal policy, previous-state fingerprint, current input fingerprint/ordered lineage, canonical components and evaluation boundary. A caller may not inject arbitrary components without definition/version/lineage validation; mixed algorithm version, `N`, timeframe, generation or environment fails closed. Multi-step golden vectors must prove resume-from-serialized-state equals full replay bit-for-bit.
+
+## H011 exact sample cardinality and first-valid output
+
+`S2A_REQUIRED_SAMPLE_CARDINALITY_VERSION=S2A_SAMPLE_CARDINALITY_V1`
+
+The required input cardinality and lookback convention are behaviorally material `FeatureDefinition`/`FeatureVersion` identity. Before the exact boundary, validity is `WARMUP` unless a stronger structural or trust failure applies.
+
+| Feature | Required admissible inputs | First VALID output (1-based sequence) |
+|---|---|---|
+| `F-RET-001` | 2 CLOSED closes | 2nd close |
+| `F-SMA-001` | N CLOSED source samples | Nth sample |
+| `F-EMA-001` | N CLOSED source samples | Nth sample, seed `SMA(N)` |
+| `F-ROC-001` | N+1 CLOSED closes because denominator is `close[t-N]` | (N+1)th close |
+| `F-RSI-001` | N+1 CLOSED closes = N deltas | (N+1)th close |
+| `F-TR-001` | 1 CLOSED OHLC bar; prior close optional | 1st bar |
+| `F-ATR-001` | N TR values from N CLOSED bars | Nth bar/TR |
+| `F-VSMA-001` | N CLOSED native-q samples | Nth sample |
+
+`S2A_RET_REQUIRED_INPUTS=2_CLOSED_CLOSES`
+
+`S2A_RET_FIRST_VALID_INDEX=2`
+
+`S2A_SMA_REQUIRED_INPUTS=N_CLOSED_SAMPLES`
+
+`S2A_SMA_FIRST_VALID_INDEX=N`
+
+`S2A_EMA_REQUIRED_INPUTS=N_CLOSED_SAMPLES`
+
+`S2A_EMA_FIRST_VALID_INDEX=N_SEED_SMA_N`
+
+`S2A_ROC_REQUIRED_INPUTS=N_PLUS_1_CLOSED_CLOSES`
+
+`S2A_ROC_FIRST_VALID_INDEX=N_PLUS_1`
+
+`S2A_RSI_REQUIRED_INPUTS=N_PLUS_1_CLOSED_CLOSES_N_DELTAS`
+
+`S2A_RSI_FIRST_VALID_INDEX=N_PLUS_1`
+
+`S2A_TR_REQUIRED_INPUTS=1_CLOSED_OHLC_BAR_PRIOR_CLOSE_OPTIONAL`
+
+`S2A_TR_FIRST_VALID_INDEX=1`
+
+`S2A_ATR_REQUIRED_INPUTS=N_TR_VALUES_FROM_N_CLOSED_BARS`
+
+`S2A_ATR_FIRST_VALID_INDEX=N`
+
+`S2A_VSMA_REQUIRED_INPUTS=N_CLOSED_NATIVE_Q_SAMPLES`
+
+`S2A_VSMA_FIRST_VALID_INDEX=N`
+
+ROC explicitly rejects the off-by-one interpretation that uses only `N` closes for `close[t-N]`. Golden vectors assert the final `WARMUP` observation and the immediately following first `VALID` observation for every feature.
+
+## H012 exact MTF validity, time and provenance semantics
+
+`S2A_MTF_VALIDITY_WARMUP=PRE_CLOSE_OR_EXPECTED_CLOSE_BOUNDARY_NOT_YET_OCCURRED`
+
+`S2A_MTF_VALIDITY_UNKNOWN=BOUNDARY_PASSED_REQUIRED_CLOSED_CONSTITUENT_UNAVAILABLE`
+
+`S2A_MTF_VALIDITY_INVALID=STRUCTURAL_OR_PROVENANCE_CONTRADICTION`
+
+`S2A_MTF_VALIDITY_DEGRADED=COMPLETE_COHERENT_UPSTREAM_DEGRADED`
+
+`S2A_MTF_VALIDITY_VALID=COMPLETE_CONTIGUOUS_5_OR_15_CLOSED_ADMISSIBLE`
+
+`WARMUP` applies when the evaluation boundary has not reached the higher-timeframe window close, or the current window is legitimately incomplete because expected constituent close boundaries have not yet occurred. `UNKNOWN` applies after the higher-timeframe boundary when one or more expected CLOSED constituents are unavailable because of missing data, GAP, RESYNC_REQUIRED, SEQUENCE_UNPROVABLE, CLOCK_UNTRUSTED, stale/unprovable source evidence or unavailable required value. `INVALID` applies to duplicate/overlapping/out-of-order constituents, impossible interval geometry, mixed source/contract/environment/generation/timeframe version, incompatible quantity unit/source-contract identity, malformed OHLC or contradictory structural/provenance identity. `DEGRADED` applies only when all required constituent values are structurally coherent and complete but upstream evidence is explicitly computable with degraded fidelity under an already-governed S1E/S1F state; it never masks `UNKNOWN` or `INVALID`. `VALID` requires exactly 5 or 15 complete contiguous CLOSED admissible constituents with all structural and trust requirements satisfied. An objectively known stronger `INVALID` or `UNKNOWN` condition dominates `WARMUP`.
+
+`S2A_MTF_EVENT_TIME=MAX_CONSTITUENT_EVENT_TIME`
+
+`S2A_MTF_WALL_RECEIVE_TIME=MAX_CONSTITUENT_WALL_RECEIVE_TIME`
+
+`S2A_MTF_PROVENANCE=DERIVED_ANALYTICAL_V1`
+
+The existing `S2A_MTF_KNOWLEDGE_TIME=MAX_CONSTITUENT_KNOWLEDGE_TIME` remains normative. `window_start` and `window_end` remain the epoch-aligned analytical interval identity and are separate from `event_time`. Aligned evidence is admissible at boundary `B` only when `knowledge_time <= B` and every constituent is individually admissible at `B`.
+
+No provider event or provider provenance identity may be fabricated for a derived window. The derived provenance/fingerprint binds algorithm version, target timeframe/version, source/contract/environment/generation, the exact ordered constituent `CandleBar` fingerprints, constituent provenance fingerprints, quantity-unit/source-contract identity, window start/end, event time and knowledge time. The aligned-window fingerprint is the canonical hash of that complete material; any constituent correction, revision, reorder, time, provenance or unit mutation changes it. A feature consuming aligned evidence must retain both the aligned-window fingerprint and the ordered constituent manifest for audit/replay, and must recompute/content-bind any caller-supplied aligned fingerprint.
 
 ## S1E/S1F authority-axis separation
 
