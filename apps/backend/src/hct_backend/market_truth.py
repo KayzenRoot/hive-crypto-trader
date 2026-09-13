@@ -18,6 +18,7 @@ from typing import Final
 
 from hct_backend.contracts import Environment, EnvironmentScopedId, IdentityKind, StableId
 from hct_backend.market_universe import UniverseEligibilityState, UniverseEntry, UniverseSnapshot
+from hct_backend.quota_governor import AdmissionDecision, AdmissionOutcome, AdmissionReason
 
 _HASH_PATTERN: Final = re.compile(r"^[0-9a-f]{64}$")
 _TOKEN_PATTERN: Final = re.compile(r"^[A-Za-z0-9._:/-]{1,128}$")
@@ -131,6 +132,9 @@ class ResourceDisposition(StrEnum):
     DEGRADED = "DEGRADED"
     DENIED = "DENIED"
     UNKNOWN = "UNKNOWN"
+
+
+_CONTINUITY_ATTESTATION: Final = object()
 
 
 def _positive(value: int, label: str) -> None:
@@ -351,11 +355,66 @@ class SequenceObservation:
             raise MarketTruthInputError("observation visibility is invalid")
 
 
+@dataclass(frozen=True, slots=True, init=False)
+class SequenceContinuityState:
+    """Evaluator-issued continuity state carried across accepted observations."""
+
+    source_id: StableId
+    generation: GenerationRef
+    capability_fingerprint: str
+    capability_policy_version: int
+    last_event_fingerprint: str
+    last_update_id: int | None
+    synchronized: bool
+    valid: bool
+    _attestation: object
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        raise MarketTruthInputError("SequenceContinuityState must be issued by evaluate_sequence")
+
+    @classmethod
+    def _from_evaluator(
+        cls,
+        *,
+        capability: ChannelCapability,
+        observation: SequenceObservation,
+        synchronized: bool,
+        valid: bool,
+    ) -> SequenceContinuityState:
+        instance = object.__new__(cls)
+        object.__setattr__(instance, "source_id", capability.source_id)
+        object.__setattr__(instance, "generation", observation.generation)
+        object.__setattr__(instance, "capability_fingerprint", capability.fingerprint)
+        object.__setattr__(instance, "capability_policy_version", capability.policy_version)
+        object.__setattr__(instance, "last_event_fingerprint", observation.event_fingerprint)
+        object.__setattr__(instance, "last_update_id", observation.update_id)
+        object.__setattr__(instance, "synchronized", synchronized)
+        object.__setattr__(instance, "valid", valid)
+        object.__setattr__(instance, "_attestation", _CONTINUITY_ATTESTATION)
+        return instance
+
+    def _is_attested(self) -> bool:
+        return self._attestation is _CONTINUITY_ATTESTATION
+
+    def matches(self, capability: ChannelCapability, previous: SequenceObservation | None) -> bool:
+        return (
+            self._is_attested()
+            and self.source_id == capability.source_id
+            and self.capability_fingerprint == capability.fingerprint
+            and self.capability_policy_version == capability.policy_version
+            and previous is not None
+            and self.generation == previous.generation
+            and self.last_event_fingerprint == previous.event_fingerprint
+            and self.last_update_id == previous.update_id
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class SequenceEvaluation:
     result: SequenceResultKind
     synchronized: bool
     reason: QualityReason | None = None
+    continuity: SequenceContinuityState | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.result, SequenceResultKind):
@@ -364,6 +423,13 @@ class SequenceEvaluation:
             raise MarketTruthInputError("synchronization flag must be boolean")
         if self.reason is not None and not isinstance(self.reason, QualityReason):
             raise MarketTruthInputError("invalid sequence reason")
+        if self.continuity is not None:
+            if not isinstance(self.continuity, SequenceContinuityState):
+                raise MarketTruthInputError("invalid sequence continuity")
+            if not self.continuity._is_attested():
+                raise MarketTruthConsistencyError("sequence continuity is not evaluator-issued")
+            if self.continuity.synchronized != self.synchronized:
+                raise MarketTruthConsistencyError("sequence continuity does not match evaluation")
         expected_reason: QualityReason | None
         if self.result is SequenceResultKind.ACCEPT:
             expected_reason = QualityReason.UNSYNCHRONIZED if not self.synchronized else None
@@ -412,8 +478,9 @@ def evaluate_sequence(
     capability: ChannelCapability,
     previous: SequenceObservation | None,
     current: SequenceObservation,
+    continuity: SequenceContinuityState | None = None,
 ) -> SequenceEvaluation:
-    """Evaluate one normalized observation with deterministic finite semantics."""
+    """Evaluate one observation while carrying evaluator-issued continuity state."""
 
     _validate_observation_capability(capability, current)
     if previous is not None:
@@ -428,92 +495,159 @@ def evaluate_sequence(
             or previous.visibility is not current.visibility
         ):
             raise MarketTruthConsistencyError("sequence observations have mixed identity")
+    if continuity is not None and not continuity.matches(capability, previous):
+        raise MarketTruthConsistencyError("sequence continuity does not match prior observation")
+
+    def evaluated(
+        result: SequenceResultKind,
+        synchronized: bool,
+        reason: QualityReason | None,
+        *,
+        valid: bool,
+        preserve_continuity: bool = False,
+    ) -> SequenceEvaluation:
+        if preserve_continuity and continuity is not None:
+            next_continuity = continuity
+        else:
+            source_observation = current if valid or previous is None else previous
+            next_continuity = SequenceContinuityState._from_evaluator(
+                capability=capability,
+                observation=source_observation,
+                synchronized=synchronized,
+                valid=valid,
+            )
+        return SequenceEvaluation(result, synchronized, reason, next_continuity)
+
     if current.generation.retired:
-        return SequenceEvaluation(
-            SequenceResultKind.RESYNC_REQUIRED, False, QualityReason.RETIRED_GENERATION
+        return evaluated(
+            SequenceResultKind.RESYNC_REQUIRED,
+            False,
+            QualityReason.RETIRED_GENERATION,
+            valid=False,
         )
     if current.generation.source_id != capability.source_id:
         raise MarketTruthConsistencyError("observation and capability source differ")
     if previous is not None and not previous.generation.accepts(current.generation):
-        return SequenceEvaluation(
-            SequenceResultKind.RESYNC_REQUIRED, False, QualityReason.RETIRED_GENERATION
+        return evaluated(
+            SequenceResultKind.RESYNC_REQUIRED,
+            False,
+            QualityReason.RETIRED_GENERATION,
+            valid=False,
         )
     if capability.mode is SequenceMode.NO_PROVABLE_SEQUENCE:
-        return SequenceEvaluation(
-            SequenceResultKind.SEQUENCE_UNPROVABLE, False, QualityReason.SEQUENCE_UNPROVABLE
+        return evaluated(
+            SequenceResultKind.SEQUENCE_UNPROVABLE,
+            False,
+            QualityReason.SEQUENCE_UNPROVABLE,
+            valid=False,
         )
     if previous is not None and previous.event_fingerprint == current.event_fingerprint:
-        return SequenceEvaluation(
-            SequenceResultKind.DUPLICATE, previous.is_snapshot, QualityReason.DUPLICATE
+        synchronized = continuity.synchronized if continuity is not None else False
+        return evaluated(
+            SequenceResultKind.DUPLICATE,
+            synchronized,
+            QualityReason.DUPLICATE,
+            valid=True,
+            preserve_continuity=True,
         )
     if capability.mode is SequenceMode.SNAPSHOT_ONLY:
         if not current.is_snapshot:
-            return SequenceEvaluation(
-                SequenceResultKind.SEQUENCE_UNPROVABLE, False, QualityReason.SEQUENCE_UNPROVABLE
+            return evaluated(
+                SequenceResultKind.SEQUENCE_UNPROVABLE,
+                False,
+                QualityReason.SEQUENCE_UNPROVABLE,
+                valid=False,
             )
         if previous is not None and current.observed_at < previous.observed_at:
-            return SequenceEvaluation(
-                SequenceResultKind.OUT_OF_ORDER, False, QualityReason.OUT_OF_ORDER
+            return evaluated(
+                SequenceResultKind.OUT_OF_ORDER,
+                False,
+                QualityReason.OUT_OF_ORDER,
+                valid=False,
             )
-        return SequenceEvaluation(SequenceResultKind.ACCEPT, True)
+        return evaluated(SequenceResultKind.ACCEPT, True, None, valid=True)
     if capability.mode is SequenceMode.TIMESTAMP_ORDERED_WITH_LIMITS:
         if previous is not None:
             assert capability.timestamp_limit_ms is not None
             age_ms = int((previous.observed_at - current.observed_at).total_seconds() * 1000)
             if age_ms > capability.timestamp_limit_ms:
-                return SequenceEvaluation(
-                    SequenceResultKind.OUT_OF_ORDER, False, QualityReason.OUT_OF_ORDER
+                return evaluated(
+                    SequenceResultKind.OUT_OF_ORDER,
+                    False,
+                    QualityReason.OUT_OF_ORDER,
+                    valid=False,
                 )
         if not current.is_snapshot:
-            return SequenceEvaluation(
+            return evaluated(
                 SequenceResultKind.SEQUENCE_UNPROVABLE,
                 False,
                 QualityReason.SEQUENCE_UNPROVABLE,
+                valid=False,
             )
-        return SequenceEvaluation(SequenceResultKind.ACCEPT, True)
+        return evaluated(SequenceResultKind.ACCEPT, True, None, valid=True)
     if current.update_id is None:
-        return SequenceEvaluation(
-            SequenceResultKind.SEQUENCE_UNPROVABLE, False, QualityReason.SEQUENCE_UNPROVABLE
+        return evaluated(
+            SequenceResultKind.SEQUENCE_UNPROVABLE,
+            False,
+            QualityReason.SEQUENCE_UNPROVABLE,
+            valid=False,
         )
     if previous is None:
-        return SequenceEvaluation(
+        synchronized = current.is_snapshot
+        return evaluated(
             SequenceResultKind.ACCEPT,
-            current.is_snapshot,
-            None if current.is_snapshot else QualityReason.UNSYNCHRONIZED,
+            synchronized,
+            None if synchronized else QualityReason.UNSYNCHRONIZED,
+            valid=True,
         )
     if previous.update_id is None:
-        return SequenceEvaluation(
-            SequenceResultKind.SEQUENCE_UNPROVABLE, False, QualityReason.SEQUENCE_UNPROVABLE
+        return evaluated(
+            SequenceResultKind.SEQUENCE_UNPROVABLE,
+            False,
+            QualityReason.SEQUENCE_UNPROVABLE,
+            valid=False,
         )
     if current.update_id < previous.update_id:
-        return SequenceEvaluation(
-            SequenceResultKind.OUT_OF_ORDER, False, QualityReason.OUT_OF_ORDER
+        return evaluated(
+            SequenceResultKind.OUT_OF_ORDER,
+            False,
+            QualityReason.OUT_OF_ORDER,
+            valid=False,
         )
     if current.update_id == previous.update_id:
-        return SequenceEvaluation(
-            SequenceResultKind.DUPLICATE, previous.is_snapshot, QualityReason.DUPLICATE
+        synchronized = continuity.synchronized if continuity is not None else False
+        return evaluated(
+            SequenceResultKind.DUPLICATE,
+            synchronized,
+            QualityReason.DUPLICATE,
+            valid=True,
+            preserve_continuity=True,
         )
+    if current.is_snapshot:
+        return evaluated(SequenceResultKind.ACCEPT, True, None, valid=True)
     if (
         capability.mode is SequenceMode.STRICT_SEQUENCE
         and current.update_id > previous.update_id + 1
     ):
-        return SequenceEvaluation(SequenceResultKind.GAP, False, QualityReason.GAP)
+        return evaluated(SequenceResultKind.GAP, False, QualityReason.GAP, valid=False)
     if (
         capability.mode is SequenceMode.MONOTONIC_UPDATE_ID
         and current.update_id > previous.update_id + 1
     ):
         if capability.contiguous_proof:
-            return SequenceEvaluation(SequenceResultKind.GAP, False, QualityReason.GAP)
-        return SequenceEvaluation(
+            return evaluated(SequenceResultKind.GAP, False, QualityReason.GAP, valid=False)
+        return evaluated(
             SequenceResultKind.SEQUENCE_UNPROVABLE,
             False,
             QualityReason.SEQUENCE_UNPROVABLE,
+            valid=False,
         )
-    synchronized = current.is_snapshot or previous.is_snapshot
-    return SequenceEvaluation(
+    synchronized = continuity.synchronized if continuity is not None and continuity.valid else False
+    return evaluated(
         SequenceResultKind.ACCEPT,
         synchronized,
         None if synchronized else QualityReason.UNSYNCHRONIZED,
+        valid=True,
     )
 
 
@@ -537,10 +671,8 @@ def _validate_observation_capability(
         raise MarketTruthConsistencyError("observation capability fingerprint differs")
     if observation.capability_policy_version != capability.policy_version:
         raise MarketTruthConsistencyError("observation capability policy differs")
-    if capability.visibility is ChannelVisibility.PRIVATE and (
-        observation.visibility is ChannelVisibility.PUBLIC
-    ):
-        raise MarketTruthConsistencyError("public observation cannot use private capability")
+    if observation.visibility is not capability.visibility:
+        raise MarketTruthConsistencyError("observation and capability visibility differ")
 
 
 @dataclass(frozen=True, slots=True)
@@ -635,19 +767,55 @@ class NormalizedMarketEvent:
         )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class ResourceAdmissionEvidence:
-    """Read-only Module 29 seam; it constrains work without owning truth."""
+    """Read-only Module 29 seam bound to one canonical admission decision."""
 
     disposition: ResourceDisposition
-    reason: str
-    snapshot_fingerprint: str
+    admission_fingerprint: str
+    admission_outcome: AdmissionOutcome
+    admission_reason: AdmissionReason
 
-    def __post_init__(self) -> None:
-        if not isinstance(self.disposition, ResourceDisposition):
-            raise MarketTruthInputError("invalid resource disposition")
-        _token(self.reason, "resource reason")
-        _fingerprint(self.snapshot_fingerprint, "resource snapshot")
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        raise MarketTruthInputError(
+            "ResourceAdmissionEvidence must be derived from AdmissionDecision"
+        )
+
+    @classmethod
+    def from_admission(cls, decision: AdmissionDecision) -> ResourceAdmissionEvidence:
+        if not isinstance(decision, AdmissionDecision):
+            raise MarketTruthInputError("canonical Module 29 admission decision is required")
+        disposition = {
+            AdmissionOutcome.ADMIT: ResourceDisposition.AVAILABLE,
+            AdmissionOutcome.DEFER: ResourceDisposition.DEGRADED,
+            AdmissionOutcome.SHED: ResourceDisposition.DENIED,
+            AdmissionOutcome.CIRCUIT_OPEN: ResourceDisposition.DENIED,
+            AdmissionOutcome.UNKNOWN: ResourceDisposition.UNKNOWN,
+        }[decision.outcome]
+        instance = object.__new__(cls)
+        object.__setattr__(instance, "disposition", disposition)
+        object.__setattr__(instance, "admission_fingerprint", decision.fingerprint)
+        object.__setattr__(instance, "admission_outcome", decision.outcome)
+        object.__setattr__(instance, "admission_reason", decision.reason)
+        return instance
+
+    @property
+    def decision_fingerprint(self) -> str:
+        return self.admission_fingerprint
+
+    @property
+    def outcome(self) -> AdmissionOutcome:
+        return self.admission_outcome
+
+    @property
+    def reason(self) -> AdmissionReason:
+        return self.admission_reason
+
+    @property
+    def snapshot_fingerprint(self) -> str:
+        """Compatibility alias exposing only canonical decision provenance."""
+
+        return self.admission_fingerprint
 
 
 @dataclass(frozen=True, slots=True)
@@ -873,15 +1041,67 @@ def derive_data_authority(assessment: QualityAssessment) -> DataAuthorityDecisio
     )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class SynchronizationProof:
+    """Evaluator-issued synchronization proof; caller-selected verification is forbidden."""
+
     source_id: StableId
     generation: GenerationRef
     mode: SequenceMode
     snapshot_fingerprint: str
+    capability_fingerprint: str
+    capability_policy_version: int
     verified: bool
 
-    def __post_init__(self) -> None:
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        raise MarketTruthInputError(
+            "SynchronizationProof must be derived from successful sequence evidence"
+        )
+
+    @classmethod
+    def from_sequence_evaluation(
+        cls,
+        *,
+        capability: ChannelCapability,
+        generation: GenerationRef,
+        snapshot_fingerprint: str,
+        evaluation: SequenceEvaluation,
+    ) -> SynchronizationProof:
+        if not isinstance(capability, ChannelCapability):
+            raise MarketTruthInputError("channel capability is required")
+        _generation(generation)
+        _fingerprint(snapshot_fingerprint, "proof snapshot")
+        if not isinstance(evaluation, SequenceEvaluation):
+            raise MarketTruthInputError("sequence evaluation is required")
+        continuity = evaluation.continuity
+        if (
+            evaluation.result is not SequenceResultKind.ACCEPT
+            or not evaluation.synchronized
+            or continuity is None
+            or not continuity.valid
+            or not continuity.synchronized
+            or not continuity._is_attested()
+            or continuity.source_id != capability.source_id
+            or continuity.generation != generation
+            or continuity.capability_fingerprint != capability.fingerprint
+            or continuity.capability_policy_version != capability.policy_version
+            or continuity.last_event_fingerprint != snapshot_fingerprint
+        ):
+            raise MarketTruthConsistencyError(
+                "synchronization proof requires evaluator-issued matching evidence"
+            )
+        instance = object.__new__(cls)
+        object.__setattr__(instance, "source_id", capability.source_id)
+        object.__setattr__(instance, "generation", generation)
+        object.__setattr__(instance, "mode", capability.mode)
+        object.__setattr__(instance, "snapshot_fingerprint", snapshot_fingerprint)
+        object.__setattr__(instance, "capability_fingerprint", capability.fingerprint)
+        object.__setattr__(instance, "capability_policy_version", capability.policy_version)
+        object.__setattr__(instance, "verified", True)
+        instance._validate_material()
+        return instance
+
+    def _validate_material(self) -> None:
         _stable(self.source_id, IdentityKind.EXCHANGE, "proof source")
         _generation(self.generation)
         if self.source_id != self.generation.source_id:
@@ -889,8 +1109,33 @@ class SynchronizationProof:
         if not isinstance(self.mode, SequenceMode):
             raise MarketTruthInputError("proof mode is invalid")
         _fingerprint(self.snapshot_fingerprint, "proof snapshot")
+        _fingerprint(self.capability_fingerprint, "proof capability")
+        _positive(self.capability_policy_version, "proof capability policy version")
         if not isinstance(self.verified, bool):
             raise MarketTruthInputError("proof verification must be boolean")
+        if not self.verified:
+            raise MarketTruthConsistencyError("synchronization proof must be verified")
+
+
+_MARKET_TRUTH_DEGRADATION_REASONS: Final = frozenset(
+    {
+        QualityReason.STALE,
+        QualityReason.DUPLICATE,
+        QualityReason.CLOCK_DRIFT,
+        QualityReason.CLOCK_JUMP,
+        QualityReason.CLOCK_UNTRUSTED,
+        QualityReason.GAP,
+        QualityReason.OUT_OF_ORDER,
+        QualityReason.SEQUENCE_UNPROVABLE,
+        QualityReason.UNSYNCHRONIZED,
+        QualityReason.EXPIRED,
+        QualityReason.SCHEMA_QUARANTINED,
+        QualityReason.MISSING_PROVENANCE,
+        QualityReason.MISSING_GENERATION,
+        QualityReason.CROSS_CHANNEL_CONTRADICTION,
+        QualityReason.RETIRED_GENERATION,
+    }
+)
 
 
 @dataclass(frozen=True, slots=True, init=False)
@@ -1011,6 +1256,8 @@ class MarketStateSnapshot:
     data_authority: DataAuthorityDecision
     synchronized: bool
     synchronization_proof: SynchronizationProof | None
+    capability_fingerprint: str
+    capability_policy_version: int
     lifecycle_restriction: LifecycleRestriction = LifecycleRestriction.NONE
 
     def __post_init__(self) -> None:
@@ -1025,6 +1272,8 @@ class MarketStateSnapshot:
             raise MarketTruthConsistencyError("state source and generation differ")
         _positive(self.source_version, "state source version")
         _fingerprint(self.provenance_fingerprint, "state provenance")
+        _fingerprint(self.capability_fingerprint, "state capability")
+        _positive(self.capability_policy_version, "state capability policy version")
         if not self.event_fingerprints or any(
             not _HASH_PATTERN.fullmatch(item) for item in self.event_fingerprints
         ):
@@ -1041,17 +1290,23 @@ class MarketStateSnapshot:
         if self.synchronization_proof is not None:
             if self.synchronization_proof.generation != self.generation:
                 raise MarketTruthConsistencyError("state proof generation differs")
+            if self.synchronization_proof.source_id != self.source_id:
+                raise MarketTruthConsistencyError("state proof source differs")
+            if self.synchronization_proof.capability_fingerprint != self.capability_fingerprint:
+                raise MarketTruthConsistencyError("state proof capability differs")
+            if (
+                self.synchronization_proof.capability_policy_version
+                != self.capability_policy_version
+            ):
+                raise MarketTruthConsistencyError("state proof capability policy differs")
         if self.trust is MarketStateTrust.TRUSTED and (
             not self.synchronized
             or self.synchronization_proof is None
             or not self.synchronization_proof.verified
-            or self.data_authority.state
-            in {
-                DataAuthorityState.NO_NEW_EXPOSURE,
-                DataAuthorityState.REDUCE_ONLY,
-                DataAuthorityState.RECONCILIATION_ONLY,
-                DataAuthorityState.EMERGENCY,
-            }
+            or any(
+                reason in _MARKET_TRUTH_DEGRADATION_REASONS
+                for reason in self.data_authority.reasons
+            )
         ):
             raise MarketTruthConsistencyError(
                 "trusted state lacks independent synchronization or quality proof"
@@ -1073,6 +1328,8 @@ class MarketStateSnapshot:
                 "trust": self.trust.value,
                 "authority": self.data_authority.state.value,
                 "synchronized": self.synchronized,
+                "capability": self.capability_fingerprint,
+                "capability_policy_version": self.capability_policy_version,
                 "proof": self.synchronization_proof.snapshot_fingerprint
                 if self.synchronization_proof
                 else None,
@@ -1141,7 +1398,7 @@ class ProjectionLease:
         )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class ProjectionEnvelope:
     """Cache projection metadata; it cannot originate or upgrade authority."""
 
@@ -1154,7 +1411,35 @@ class ProjectionEnvelope:
     lease: ProjectionLease
     lifecycle_restriction: LifecycleRestriction
 
-    def __post_init__(self) -> None:
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        raise MarketTruthInputError("ProjectionEnvelope must be created by project_state")
+
+    @classmethod
+    def _from_material(
+        cls,
+        *,
+        source_id: StableId,
+        generation: GenerationRef,
+        state_fingerprint: str,
+        provenance_fingerprint: str,
+        trust: MarketStateTrust,
+        data_authority: DataAuthorityState,
+        lease: ProjectionLease,
+        lifecycle_restriction: LifecycleRestriction,
+    ) -> ProjectionEnvelope:
+        instance = object.__new__(cls)
+        object.__setattr__(instance, "source_id", source_id)
+        object.__setattr__(instance, "generation", generation)
+        object.__setattr__(instance, "state_fingerprint", state_fingerprint)
+        object.__setattr__(instance, "provenance_fingerprint", provenance_fingerprint)
+        object.__setattr__(instance, "trust", trust)
+        object.__setattr__(instance, "data_authority", data_authority)
+        object.__setattr__(instance, "lease", lease)
+        object.__setattr__(instance, "lifecycle_restriction", lifecycle_restriction)
+        instance._validate_material()
+        return instance
+
+    def _validate_material(self) -> None:
         _stable(self.source_id, IdentityKind.EXCHANGE, "projection source")
         if self.source_id != self.generation.source_id:
             raise MarketTruthConsistencyError("projection source differs from generation")
@@ -1178,7 +1463,7 @@ def project_state(
 ) -> ProjectionEnvelope:
     """Create a projection from authoritative state; no reverse constructor exists."""
 
-    return ProjectionEnvelope(
+    return ProjectionEnvelope._from_material(
         source_id=state.source_id,
         generation=state.generation,
         state_fingerprint=state.fingerprint,
@@ -1191,9 +1476,23 @@ def project_state(
 
 
 def invalidate_projection(projection: ProjectionEnvelope, reason: str) -> ProjectionEnvelope:
+    if not isinstance(projection, ProjectionEnvelope):
+        raise MarketTruthInputError("projection is required")
     _token(reason, "projection invalidation reason")
-    return replace(
-        projection, lease=replace(projection.lease, invalidated=True, invalidation_reason=reason)
+    return ProjectionEnvelope._from_material(
+        source_id=projection.source_id,
+        generation=projection.generation,
+        state_fingerprint=projection.state_fingerprint,
+        provenance_fingerprint=projection.provenance_fingerprint,
+        trust=projection.trust,
+        data_authority=projection.data_authority,
+        lease=ProjectionLease(
+            projection.lease.issued_elapsed_ms,
+            projection.lease.ttl_ms,
+            invalidated=True,
+            invalidation_reason=reason,
+        ),
+        lifecycle_restriction=projection.lifecycle_restriction,
     )
 
 
@@ -1236,10 +1535,18 @@ def replay_sequence(
         raise MarketTruthConsistencyError("replay inputs have mixed identity")
 
     previous: SequenceObservation | None = None
+    continuity: SequenceContinuityState | None = None
     results: list[SequenceEvaluation] = []
     for current in observations:
-        result = evaluate_sequence(capability, previous, current)
+        result = evaluate_sequence(capability, previous, current, continuity)
         results.append(result)
         if result.result is SequenceResultKind.ACCEPT:
             previous = current
+            continuity = result.continuity
+        elif previous is not None and result.continuity is not None:
+            continuity = (
+                result.continuity if result.continuity.matches(capability, previous) else None
+            )
+        else:
+            continuity = None
     return tuple(results)

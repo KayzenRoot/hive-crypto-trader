@@ -35,6 +35,33 @@ generation or synchronization evidence controls trust and data authority.
 - Resource denial/unknown is restrictive evidence and cannot mark data fresh or
   promote trust.
 
+## H007-H010 correction boundary
+
+Sequence continuity is evaluator-issued typed state. A synchronization point
+may be carried only through that state across accepted contiguous deltas;
+gaps, out-of-order, unprovable sequence, retired generation and context
+changes invalidate it. A later explicit valid snapshot is the deterministic
+resynchronization point. Sequence modes that cannot prove continuity never
+invent it.
+
+Synchronization proofs, cache projections and resource evidence do not have
+permissive public constructors. Synchronization proofs are derived from an
+evaluator-issued successful observation and bind source, generation, capability
+fingerprint and policy version. `project_state` is the only projection path;
+invalidation preserves source authority material and only tightens freshness.
+Module 29 resource evidence is derived only from a canonical
+`AdmissionDecision` from ADR-0048. The bounded mapping is `ADMIT` to
+`AVAILABLE`, `DEFER` to `DEGRADED`, `SHED`/`CIRCUIT_OPEN` to `DENIED` and
+`UNKNOWN` to `UNKNOWN`, preserving the decision fingerprint and typed outcome
+and reason.
+
+`TRUSTED` Market-State requires clean market-truth reasons, evaluator-issued
+matching synchronization proof, coherent provenance and a non-retired current
+generation. `RESOURCE_DEGRADED` alone remains a separate restrictive resource
+axis and may coexist with otherwise trusted market truth. Resource evidence,
+projections and lifecycle restrictions cannot upgrade stale, gapped,
+contradictory, expired or otherwise untrusted market data.
+
 ## Explicit non-scope
 
 No socket, WebSocket, endpoint, venue DTO, network client, credential, private

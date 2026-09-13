@@ -29,6 +29,7 @@ from hct_backend.market_truth import (
     MarketTruthConsistencyError,
     MarketTruthInputError,
     NormalizedMarketEvent,
+    ProjectionEnvelope,
     ProjectionLease,
     QualityAssessment,
     QualityReason,
@@ -54,6 +55,7 @@ from hct_backend.market_universe import (
     UniverseReasonCode,
     recompute_universe,
 )
+from hct_backend.quota_governor import AdmissionDecision, AdmissionOutcome, AdmissionReason
 
 NOW = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
 SOURCE = StableId(kind=IdentityKind.EXCHANGE, value="exchange-reference")
@@ -161,7 +163,19 @@ def event(
 def resource(
     disposition: ResourceDisposition = ResourceDisposition.AVAILABLE,
 ) -> ResourceAdmissionEvidence:
-    return ResourceAdmissionEvidence(disposition, "fixture-state", SNAPSHOT)
+    canonical = {
+        ResourceDisposition.AVAILABLE: (AdmissionOutcome.ADMIT, AdmissionReason.ADMITTED),
+        ResourceDisposition.DEGRADED: (AdmissionOutcome.DEFER, AdmissionReason.QUEUE_FULL),
+        ResourceDisposition.DENIED: (AdmissionOutcome.SHED, AdmissionReason.QUEUE_FULL),
+        ResourceDisposition.UNKNOWN: (
+            AdmissionOutcome.UNKNOWN,
+            AdmissionReason.UNKNOWN_BUDGET,
+        ),
+    }[disposition]
+    decision = AdmissionDecision.create(
+        outcome=canonical[0], reason=canonical[1], material={"fixture": disposition.value}
+    )
+    return ResourceAdmissionEvidence.from_admission(decision)
 
 
 def assessment(
@@ -277,8 +291,16 @@ def state(
     lifecycle: LifecycleRestriction = LifecycleRestriction.NONE,
 ) -> MarketStateSnapshot:
     current_generation = gen or generation()
-    current_proof = proof or SynchronizationProof(
-        SOURCE, current_generation, SequenceMode.STRICT_SEQUENCE, SNAPSHOT, True
+    current_capability = capability(SequenceMode.STRICT_SEQUENCE)
+    sync_observation = observation(
+        99, update_id=99, snapshot=True, gen=current_generation, cap=current_capability
+    )
+    sync_evaluation = evaluate_sequence(current_capability, None, sync_observation)
+    current_proof = proof or SynchronizationProof.from_sequence_evaluation(
+        capability=current_capability,
+        generation=current_generation,
+        snapshot_fingerprint=sync_observation.event_fingerprint,
+        evaluation=sync_evaluation,
     )
     return MarketStateSnapshot(
         contract_id=CONTRACT,
@@ -287,11 +309,13 @@ def state(
         source_id=SOURCE,
         source_version=1,
         provenance_fingerprint=PROVENANCE,
-        event_fingerprints=(PAYLOAD,),
+        event_fingerprints=(sync_observation.event_fingerprint,),
         trust=trust,
         data_authority=authority or decision(),
         synchronized=synchronized,
         synchronization_proof=current_proof,
+        capability_fingerprint=current_capability.fingerprint,
+        capability_policy_version=current_capability.policy_version,
         lifecycle_restriction=lifecycle,
     )
 
@@ -392,6 +416,95 @@ def test_unproven_sequence_cannot_create_authority_and_snapshot_recovers() -> No
     recovered = evaluate_sequence(cap, first_delta, snapshot)
     assert recovered.result is SequenceResultKind.ACCEPT
     assert recovered.synchronized
+
+
+def test_h007_snapshot_multi_delta_continuity_persists_and_replay_matches() -> None:
+    cap = capability(SequenceMode.STRICT_SEQUENCE)
+    observations = tuple(
+        observation(
+            number,
+            update_id=update_id,
+            snapshot=number == 10,
+            cap=cap,
+        )
+        for number, update_id in ((10, 10), (11, 11), (12, 12), (13, 13))
+    )
+    previous: SequenceObservation | None = None
+    continuity = None
+    direct: list[SequenceEvaluation] = []
+    for current in observations:
+        result = evaluate_sequence(cap, previous, current, continuity)
+        direct.append(result)
+        assert result.synchronized
+        previous = current
+        continuity = result.continuity
+    replay = replay_sequence(
+        cap,
+        tuple(
+            event(number, update_id=update_id, snapshot=number == 10, cap=cap)
+            for number, update_id in ((10, 10), (11, 11), (12, 12), (13, 13))
+        ),
+    )
+    assert all(result.synchronized for result in replay)
+    assert [result.result for result in replay] == [result.result for result in direct]
+
+
+def test_h007_gap_clears_continuity_until_explicit_snapshot_resync() -> None:
+    cap = capability(SequenceMode.STRICT_SEQUENCE)
+    snapshot = observation(10, update_id=10, snapshot=True, cap=cap)
+    delta = observation(11, update_id=11, cap=cap)
+    gap = observation(13, update_id=13, cap=cap)
+    next_delta = observation(12, update_id=12, cap=cap)
+    resync = observation(20, update_id=20, snapshot=True, cap=cap)
+
+    first = evaluate_sequence(cap, None, snapshot)
+    second = evaluate_sequence(cap, snapshot, delta, first.continuity)
+    broken = evaluate_sequence(cap, delta, gap, second.continuity)
+    assert second.synchronized
+    assert broken.result is SequenceResultKind.GAP
+    assert not broken.synchronized
+    after_gap = evaluate_sequence(cap, delta, next_delta, broken.continuity)
+    assert after_gap.result is SequenceResultKind.ACCEPT
+    assert not after_gap.synchronized
+    recovered = evaluate_sequence(cap, next_delta, resync, after_gap.continuity)
+    assert recovered.result is SequenceResultKind.ACCEPT
+    assert recovered.synchronized
+
+
+def test_h007_monotonic_continuity_and_unproven_jump_are_fail_closed() -> None:
+    proven = capability(SequenceMode.MONOTONIC_UPDATE_ID, contiguous=True)
+    first = observation(10, update_id=10, snapshot=True, cap=proven)
+    first_result = evaluate_sequence(proven, None, first)
+    second_result = evaluate_sequence(
+        proven, first, observation(11, update_id=11, cap=proven), first_result.continuity
+    )
+    third_result = evaluate_sequence(
+        proven,
+        observation(11, update_id=11, cap=proven),
+        observation(12, update_id=12, cap=proven),
+        second_result.continuity,
+    )
+    assert third_result.synchronized
+    jumped = evaluate_sequence(
+        proven,
+        observation(12, update_id=12, cap=proven),
+        observation(14, update_id=14, cap=proven),
+        third_result.continuity,
+    )
+    assert jumped.result is SequenceResultKind.GAP
+    assert not jumped.synchronized
+
+    unproven = capability(SequenceMode.MONOTONIC_UPDATE_ID)
+    unproven_first = observation(10, update_id=10, snapshot=True, cap=unproven)
+    unproven_state = evaluate_sequence(unproven, None, unproven_first)
+    unproven_jump = evaluate_sequence(
+        unproven,
+        unproven_first,
+        observation(12, update_id=12, cap=unproven),
+        unproven_state.continuity,
+    )
+    assert unproven_jump.result is SequenceResultKind.SEQUENCE_UNPROVABLE
+    assert not unproven_jump.synchronized
 
 
 def test_timestamp_ordering_bounds_lateness_without_inventing_gaps() -> None:
@@ -601,13 +714,14 @@ def test_data_authority_direct_construction_is_rejected() -> None:
 
 
 def test_trusted_state_requires_verified_synchronization_and_quality() -> None:
-    proof = SynchronizationProof(SOURCE, generation(), SequenceMode.STRICT_SEQUENCE, SNAPSHOT, True)
-    assert state(proof=proof).trust is MarketStateTrust.TRUSTED
+    assert state().trust is MarketStateTrust.TRUSTED
+    with pytest.raises(MarketTruthInputError):
+        SynchronizationProof(SOURCE, generation(), SequenceMode.STRICT_SEQUENCE, SNAPSHOT, True)
     with pytest.raises(MarketTruthConsistencyError):
         state(synchronized=False, proof=None)
     with pytest.raises(MarketTruthConsistencyError):
         state(authority=decision(DataAuthorityState.NO_NEW_EXPOSURE))
-    with pytest.raises(MarketTruthConsistencyError):
+    with pytest.raises(MarketTruthInputError):
         SynchronizationProof(
             StableId(kind=IdentityKind.EXCHANGE, value="other"),
             generation(),
@@ -615,6 +729,130 @@ def test_trusted_state_requires_verified_synchronization_and_quality() -> None:
             SNAPSHOT,
             True,
         )
+
+
+@pytest.mark.parametrize(
+    "assessment_kwargs",
+    [
+        {"age_ms": 101},
+        {
+            "sequence": SequenceEvaluation(
+                SequenceResultKind.DUPLICATE, True, QualityReason.DUPLICATE
+            )
+        },
+        {"clock": ClockHealth.DRIFT},
+    ],
+)
+def test_h008_market_truth_degradation_cannot_be_trusted(
+    assessment_kwargs: dict[str, object],
+) -> None:
+    authority = derive_data_authority(assessment(**assessment_kwargs))  # type: ignore[arg-type]
+    assert any(
+        reason in authority.reasons
+        for reason in (QualityReason.STALE, QualityReason.DUPLICATE, QualityReason.CLOCK_DRIFT)
+    )
+    with pytest.raises(MarketTruthConsistencyError):
+        state(authority=authority)
+
+
+def test_h008_resource_only_degradation_can_coexist_with_trusted_market_data() -> None:
+    authority = derive_data_authority(assessment(disposition=ResourceDisposition.DEGRADED))
+    trusted = state(authority=authority)
+    assert trusted.trust is MarketStateTrust.TRUSTED
+    assert QualityReason.RESOURCE_DEGRADED in authority.reasons
+
+
+def test_h008_factory_proof_binds_generation_and_capability_context() -> None:
+    cap = capability(SequenceMode.STRICT_SEQUENCE)
+    current = observation(1, update_id=1, snapshot=True, cap=cap)
+    evaluation = evaluate_sequence(cap, None, current)
+    proof = SynchronizationProof.from_sequence_evaluation(
+        capability=cap,
+        generation=current.generation,
+        snapshot_fingerprint=current.event_fingerprint,
+        evaluation=evaluation,
+    )
+    assert proof.verified
+    with pytest.raises(MarketTruthConsistencyError):
+        state(gen=generation(2), proof=proof)
+
+
+def test_h009_projection_constructor_and_upgrade_paths_are_closed() -> None:
+    with pytest.raises(MarketTruthInputError):
+        ProjectionEnvelope(
+            SOURCE,
+            generation(),
+            SNAPSHOT,
+            PROVENANCE,
+            MarketStateTrust.TRUSTED,
+            DataAuthorityState.ALLOW_NEW_EXPOSURE,
+            ProjectionLease(1, 10),
+            LifecycleRestriction.NONE,
+        )
+    projection = project_state(state(), issued_elapsed_ms=1, ttl_ms=10)
+    assert projection.state_fingerprint == state().fingerprint
+    assert projection.trust is MarketStateTrust.TRUSTED
+    with pytest.raises(MarketTruthInputError):
+        replace(projection, trust=MarketStateTrust.TRUSTED)
+    invalidated = invalidate_projection(projection, "expired-fixture")
+    assert invalidated.trust is projection.trust
+    assert invalidated.data_authority is projection.data_authority
+    assert invalidated.state_fingerprint == projection.state_fingerprint
+    assert not invalidated.fresh_at(1)
+
+
+@pytest.mark.parametrize(
+    "outcome,reason,expected",
+    [
+        (AdmissionOutcome.ADMIT, AdmissionReason.ADMITTED, ResourceDisposition.AVAILABLE),
+        (AdmissionOutcome.DEFER, AdmissionReason.QUEUE_FULL, ResourceDisposition.DEGRADED),
+        (AdmissionOutcome.SHED, AdmissionReason.QUEUE_FULL, ResourceDisposition.DENIED),
+        (AdmissionOutcome.CIRCUIT_OPEN, AdmissionReason.CIRCUIT_OPEN, ResourceDisposition.DENIED),
+        (AdmissionOutcome.UNKNOWN, AdmissionReason.UNKNOWN_BUDGET, ResourceDisposition.UNKNOWN),
+    ],
+)
+def test_h010_canonical_governor_evidence_mapping(
+    outcome: AdmissionOutcome, reason: AdmissionReason, expected: ResourceDisposition
+) -> None:
+    decision_value = AdmissionDecision.create(
+        outcome=outcome, reason=reason, material={"h010": outcome.value}
+    )
+    evidence = ResourceAdmissionEvidence.from_admission(decision_value)
+    assert evidence.disposition is expected
+    assert evidence.admission_fingerprint == decision_value.fingerprint
+    assert evidence.admission_outcome is outcome
+    assert evidence.admission_reason is reason
+
+
+def test_h010_resource_evidence_direct_and_lookalike_construction_are_rejected() -> None:
+    with pytest.raises(MarketTruthInputError):
+        ResourceAdmissionEvidence(ResourceDisposition.AVAILABLE, "arbitrary", SNAPSHOT)
+
+    class LookalikeAdmission:
+        outcome = AdmissionOutcome.ADMIT
+        reason = AdmissionReason.ADMITTED
+        fingerprint = SNAPSHOT
+
+    with pytest.raises(MarketTruthInputError):
+        ResourceAdmissionEvidence.from_admission(LookalikeAdmission())  # type: ignore[arg-type]
+
+
+def test_h010_available_resource_cannot_upgrade_market_truth_restriction() -> None:
+    gap = SequenceEvaluation(SequenceResultKind.GAP, False, QualityReason.GAP)
+    expired = derive_data_authority(
+        assessment(age_ms=201, disposition=ResourceDisposition.AVAILABLE)
+    )
+    emergency = derive_data_authority(
+        assessment(schema_valid=False, disposition=ResourceDisposition.AVAILABLE)
+    )
+    for authority in (
+        derive_data_authority(assessment(sequence=gap, disposition=ResourceDisposition.AVAILABLE)),
+        expired,
+        emergency,
+    ):
+        assert authority.state is not DataAuthorityState.ALLOW_NEW_EXPOSURE
+        with pytest.raises(MarketTruthConsistencyError):
+            state(authority=authority)
 
 
 def test_market_state_fingerprint_includes_generation_trust_and_lifecycle() -> None:
@@ -716,7 +954,11 @@ def test_projection_has_lease_invalidation_and_no_reverse_authority_path() -> No
 
 def test_replay_is_deterministic_and_only_advances_on_accepted_evidence() -> None:
     cap = capability(SequenceMode.STRICT_SEQUENCE)
-    events = (event(1, update_id=1), event(2, update_id=3), event(3, update_id=2))
+    events = (
+        event(1, update_id=1, snapshot=True),
+        event(2, update_id=3, snapshot=False),
+        event(3, update_id=2, snapshot=False),
+    )
     first = replay_sequence(cap, events)
     second = replay_sequence(cap, events)
     assert first == second

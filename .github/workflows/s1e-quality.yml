@@ -96,6 +96,7 @@ jobs:
 
       - name: Validate backend, contracts, static analysis, build and audit
         run: |
+          uv run --project apps/backend pytest -q apps/backend/tests/test_market_truth.py -k 'h007 or h008 or h009 or h010'
           uv run --project apps/backend python scripts/generate_contracts.py --check
           uv run --project apps/backend python scripts/validate_contract_parity.py
           uv run --project apps/backend pytest --cov=hct_backend --cov-report=term-missing --cov-fail-under=90 apps/backend/tests

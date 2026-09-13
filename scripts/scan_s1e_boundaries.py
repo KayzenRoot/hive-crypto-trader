@@ -32,6 +32,7 @@ ALLOWED_PRODUCTION_IMPORTS = frozenset(
         "typing",
         "hct_backend.contracts",
         "hct_backend.market_universe",
+        "hct_backend.quota_governor",
     }
 )
 FORBIDDEN_IMPORT_ROOTS = frozenset(
