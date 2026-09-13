@@ -92,7 +92,7 @@ jobs:
           authorization = Path("work-orders/HCT-IMPL-AUTH-0008.md").read_text()
           implementation = Path("work-orders/HCT-IMP-0008-S1E.md").read_text()
           workflow = Path(".github/workflows/implementation-authorization-s1e-governance.yml").read_text()
-          required_sections = (
+          authorization_sections = (
               "OBJECTIVE",
               "CONTEXT",
               "SCOPE",
@@ -107,7 +107,24 @@ jobs:
               "REVIEW FORMAT",
               "STOP CONDITION",
           )
-          for section in required_sections:
+          implementation_sections = (
+              "OBJECTIVE",
+              "CONTEXT",
+              "SCOPE",
+              "OUT OF SCOPE",
+              "FILES/SOURCES TO READ",
+              "REQUIREMENTS",
+              "ARCHITECTURE RULES",
+              "CONSTRAINTS",
+              "ACCEPTANCE CRITERIA",
+              "TESTS",
+              "DELIVERABLES",
+              "REVIEW FORMAT",
+              "STOP CONDITION",
+          )
+          for section in authorization_sections:
+              assert f"## {section}" in authorization, section
+          for section in implementation_sections:
               assert f"## {section}" in implementation, section
           for marker in (
               "HCT-IMPL-AUTH-0008",
