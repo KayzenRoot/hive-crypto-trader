@@ -39,6 +39,8 @@ If separately authorized after independent review and a dedicated checkpoint, th
 - `ReferencePriceEvidence` with typed kind `MARK`, `INDEX` or `FAIR`, exact value and provenance, plus `FundingEvidence` with rate/value, applicable time/boundary and provenance;
 - capability state `SUPPORTED`, `UNSUPPORTED` or `UNKNOWN` per family/channel. Full analytical microstructure remains future; raw order-book value contracts are necessary now;
 - every value object is typed, immutable, versioned and content-fingerprinted. A display string, opaque payload fingerprint or ordinary uncanonicalized float is not a substitute for a typed value.
+- provider-native quantities are typed with `QuantityUnit` including `CONTRACTS_PROVIDER_NATIVE_V1`; `TradeTick.data.v`, order-book second-element contract volume, locked-schema ticker volume fields and `CandleBar.q` cannot silently become base-asset quantity;
+- `CandleBar.a` is a distinct `ProviderTransactionAmount`, not `Quantity`; its denomination remains source-bound until a higher governed contract proves it.
 
 ### Numeric determinism
 
@@ -236,6 +238,66 @@ The official REST depth note and WS depth tip use inconsistent English labels fo
 
 The MEXC kline payload has no explicit final/closed boolean. A bar remains `OPEN` while updates remain admissible. V1 `CLOSED` requires the interval boundary to have passed and either a later kline window for the same contract/interval/generation or a deterministic post-boundary REST confirmation from `GET /api/v1/contract/kline/{symbol}`. The REST request must use the canonical provider interval and both expected `start`/`end` epoch-second bounds; the response `time` array must exactly identify the expected contract/interval/window. MEXC permits at most 2000 points per request; confirmation is bounded to the exact bar/window where practical. A response for another interval, window or contract cannot close the bar. If exact identity cannot be proven, finality remains `OPEN`/`UNKNOWN`; late corrections create immutable revisions with `knowledge_time` and predecessor lineage.
 
+## H013-H014 EXECUTABILITY LOCK
+
+The current PR remains governance-only. A later separately authorized S1F implementation may change exactly the two runtime dependency files below for the frozen transport delta and unavoidable deterministic resolver entries; this candidate does not mutate them.
+
+`S1F_RUNTIME_WS_CLIENT=websockets==17.1`
+
+`S1F_RUNTIME_HTTP_CLIENT=httpx==0.28.1`
+
+`S1F_RUNTIME_DEPENDENCY_ALLOWLIST=apps/backend/pyproject.toml;apps/backend/uv.lock`
+
+`S1F_RUNTIME_DEPENDENCY_DELTA=httpx==0.28.1:dev_to_runtime;websockets==17.1:add_direct_runtime`
+
+`S1F_RUNTIME_TRANSITIVE_LOCK=unavoidable_deterministic_entries_only`
+
+`S1F_RUNTIME_UNRELATED_DEPENDENCY_DRIFT=STOP_DEPENDENCY_DRIFT`
+
+`S1F_RUNTIME_NO_OTHER_DIRECT_DEPENDENCIES=true`
+
+`S1F_RUNTIME_WS_API=websockets.asyncio.client`
+
+`S1F_RUNTIME_RECONNECT_OWNERSHIP=HCT_BOUNDED_RETRY_BACKOFF_CIRCUIT;NO_INFINITE_LIBRARY_MANAGED_ITERATOR`
+
+`S1F_RUNTIME_SESSION_CONNECTION=one_physical_connection_per_HCT_session_generation;retire_before_replacement_publication`
+
+`S1F_RUNTIME_PROXY_POLICY=explicit_direct_transport;ambient_proxy_not_silent`
+
+`S1F_RUNTIME_PROVIDER_PING=application_level_MEXC_ping_authoritative;library_ping_frames_not_substitute`
+
+`S1F_RUNTIME_QUEUE_POLICY=explicit_bounded_inbound_queue;Module29_backpressure;no_unbounded_receive_queue`
+
+`S1F_RUNTIME_HTTP_POLICY=explicit_timeouts_connection_limits_retries;retries_not_bypass_Module29_or_duplicate_session_policy`
+
+`S1F_RUNTIME_EVIDENCE=pyproject_diff;uv_lock_diff;dependency_graph_delta;package_licenses;pip_audit;exact_hashes_versions`
+
+`S1F_QUANTITY_UNIT_KIND=QuantityUnit:CONTRACTS_PROVIDER_NATIVE_V1`
+
+`S1F_TRADE_QUANTITY_UNIT=TradeTick.data.v->quantity_value;quantity_unit=CONTRACTS_PROVIDER_NATIVE_V1`
+
+`S1F_BOOK_QUANTITY_UNIT=BookLevel.second_element_contract_volume->quantity_value;quantity_unit=CONTRACTS_PROVIDER_NATIVE_V1;third_element=order_count`
+
+`S1F_TICKER_VOLUME_UNITS=TickerState.volume24,holdVol->CONTRACTS_PROVIDER_NATIVE_V1_when_locked_schema_contract_volume`
+
+`S1F_CANDLE_VOLUME_UNIT=CandleBar.q->CONTRACTS_PROVIDER_NATIVE_V1`
+
+`S1F_CANDLE_AMOUNT_TYPE=CandleBar.a->ProviderTransactionAmount;distinct_from_Quantity`
+
+`S1F_QUANTITY_FINGERPRINT=value;unit_kind;source_contract_identity_version`
+
+`S1F_NO_IMPLICIT_BASE_CONVERSION=UNKNOWN_OR_UNSUPPORTED_without_governed_unit_conversion_contract`
+
+`S1F_UNIT_CONVERSION_CONTRACT=requires_contractSize;reference_version;deterministic_Decimal`
+
+`S1F_CROSS_CONTRACT_NORMALIZED_VOLUME=UNSUPPORTED_UNTIL_CONVERSION_CONTRACT`
+
+`S1F_MIXED_QUANTITY_UNITS=FAIL_CLOSED`
+
+Use the modern `websockets.asyncio.client` API. HCT owns bounded retry/backoff/circuit policy and must not use an infinite library-managed reconnect iterator. One physical connection maps to one session generation and the old generation retires before replacement publication. Explicit direct transport must not silently use an ambient proxy. Application-level MEXC ping policy remains authoritative; library ping frames are not a substitute. Inbound queue/buffer limits are explicit and bounded through Module 29, with no unbounded receive queue. REST timeouts, connection limits and retries are explicit and cannot bypass Module 29 or duplicate the bounded session policy.
+
+Trade volume `10` contracts must never be read or serialized as `10 BTC`, `10 ETH` or another base-asset quantity. The depth example `[411.8,10,1]` means quantity value `10` with unit `CONTRACTS_PROVIDER_NATIVE_V1` and order count `1`. A quantity-unit change changes the fingerprint; `CandleBar.q` and `CandleBar.a` cannot alias. A consumer requesting `BASE_ASSET` quantity without a governed conversion contract returns `UNKNOWN`/`UNSUPPORTED`; mixed units in one canonical series/window fail closed.
+
 ### Parser and fixture reproducibility contract
 
 `S1F_MEXC_DECIMAL_PARSE=LEXICAL_PROVIDER_TOKEN_TO_DECIMAL_NO_BINARY_FLOAT`
@@ -327,7 +389,8 @@ Minimum traceability locators include `R05::Transport and feed requirements::B1-
 
 - planning/governance-only diff: exactly one candidate document, two Work Orders and one pull-request-only workflow;
 - exact canonical base and exact-head CI are mandatory;
-- no product/runtime code, dependency lock, frozen-source rewrite, checkpoint edit or PR #69 mutation;
+- the current PR changes no product/runtime code or dependency files; a future separately authorized implementation may change only `apps/backend/pyproject.toml` and `apps/backend/uv.lock` for the frozen H013 delta plus unavoidable deterministic transitive lock entries;
+- unrelated direct dependency upgrade/downgrade is `STOP_DEPENDENCY_DRIFT` unless separately proven unavoidable and governed;
 - only the official MEXC source lock may define adapter protocol facts; unsupported fields remain `UNSUPPORTED`/`UNKNOWN`;
 - numeric policy is exactly `DECIMAL_TEXT_V1`, precision 38, scale 18, integer digits 20, no binary float, no raw rounding and no arbitrary quantization;
 - benchmark mode and profiles are exactly `BASELINE_ESTABLISHMENT_V1`, `S1F-CONTRACT-MICRO-V1`, `S1F-NOMINAL-MULTICHANNEL-V1` and `S1F-STRESS-BACKPRESSURE-V1` as frozen below;
@@ -345,10 +408,14 @@ Minimum traceability locators include `R05::Transport and feed requirements::B1-
 8. Exact traceability covers source hierarchy, R05/R06/R07/R11 locators, decisions, ADR-0049, DoD and frozen baseline/change-control rules.
 9. Negative tests prove no credentials, private APIs, trading, Risk/OMS/Execution, persistence, deployment, checkpoint or live authority.
 10. Exact-head governance CI proves the four-file allowlist, base/CP0030 lock and planning-only boundary.
+11. H013 freezes the exact runtime dependency delta, future file allowlist, WebSocket ownership, provider ping ownership, bounded queue/HTTP policy and evidence bundle requirements.
+12. H014 freezes provider-native quantity/amount units, typed fingerprint material, distinct candle amount semantics, no implicit base conversion and mixed-unit fail-closed behavior.
 
 ## TESTS AND BENCHMARK EVIDENCE
 
-Required future tests include public session generation/reconnect/retirement, staged resubscription, retry/backoff/circuit and Module 29 admission; provider fixture schema validation/quarantine; exact Decimal parse/serialization/equality/fingerprint; float/NaN/Infinity/malformed/overflow/scale/invariant rejection; all value-family constructors and capability states; order-book snapshot/delta ordering, duplicate/gap/out-of-order/generation rollover/resync; half-open interval, UTC epoch, OPEN/CLOSED finality and immutable revisions; ordered lineage mutation properties; S1E axis matrix; LIVE/PAPER/SHADOW/REPLAY non-aliasing; negative capability; and deterministic benchmark fixtures.
+Required future tests include public session generation/reconnect/retirement, staged resubscription, retry/backoff/circuit and Module 29 admission; provider fixture schema validation/quarantine; exact Decimal parse/serialization/equality/fingerprint; float/NaN/Infinity/malformed/overflow/scale/invariant rejection; all value-family constructors and capability states; provider-native `QuantityUnit` for trade, book, ticker and candle volume; distinct `ProviderTransactionAmount`; unit-bearing fingerprint changes; no implicit contracts-to-base conversion; mixed-unit fail-closed behavior; order-book snapshot/delta ordering, duplicate/gap/out-of-order/generation rollover/resync; half-open interval, UTC epoch, OPEN/CLOSED finality and immutable revisions; ordered lineage mutation properties; S1E axis matrix; LIVE/PAPER/SHADOW/REPLAY non-aliasing; negative capability; and deterministic benchmark fixtures.
+
+H013 evidence must include the exact `pyproject.toml` and `uv.lock` diff, dependency graph delta, package licenses, `pip-audit` result and exact package hashes/versions. The resolver must not silently upgrade or downgrade unrelated direct dependencies.
 
 Benchmark method must bind `docs/06-test-benchmark-plan.md` with `S1F_BENCHMARK_MODE=BASELINE_ESTABLISHMENT_V1`. Freeze these deterministic profiles: `S1F-CONTRACT-MICRO-V1` = 1 symbol, ticker 64/deal 256/depth 128/depth-full 32/kline 32, total 512 messages, depth 5, 60-second replay; `S1F-NOMINAL-MULTICHANNEL-V1` = 8 symbols, ticker 1024/deal 4096/depth 2048/depth-full 512/kline 512, total 8192 messages, depth 20, 900-second replay; `S1F-STRESS-BACKPRESSURE-V1` = 32 symbols, ticker 8192/deal 32768/depth 16384/depth-full 4096/kline 4096, total 65536 messages, depth 20, queue capacity 4096 and 3600-second replay. Mandatory measurements are normalization throughput, per-event/value-state update latency distribution, replay throughput, peak/steady memory and queue depth/age. Acceptance is correctness, bounded completion, no unbounded memory/queue growth and complete baseline publication; no product SLO is asserted. Evidence records code/build/dependency/runtime, fixture/config/policy versions, seed, hardware/environment, benchmark tool, raw artifact/hash and limitations. Future regression thresholds are proposals until a later governed decision/checkpoint. No uncontrolled live network is used in CI.
 
@@ -363,7 +430,7 @@ Benchmark method must bind `docs/06-test-benchmark-plan.md` with `S1F_BENCHMARK_
 
 ## REVIEW FORMAT
 
-The independent review must report: `repositorySync`, `sourceMatch`, `blockedCandidateId`, `blockedCandidatePr`, `blockedCandidateHead`, `blockedCandidateMarked`, `blockerB001Confirmed`, `normalizedEventCarriesTypedValues`, `marketStateCarriesTypedValues`, `existingCanonicalValuePlaneSearch`, `canonicalMain`, `checkpoint`, `checkpointFailClosed`, `prerequisiteAuthorizationId`, `prerequisiteImplementationId`, `prerequisiteScopeName`, `capabilityClassification`, `typedValueKinds`, `canonicalNumericPolicy`, `orderedInputLineage`, `intervalSemantics`, `s1eAxisSeparation`, `docs06Bound`, `benchmarkMethodDefined`, `exactTraceability`, `governanceOnlyDiff`, `newIssue`, `newBranch`, `newPr`, `newCandidateHead`, `exactHeadRun`, `exactHeadJob`, `exactHeadConclusion`, `criticalAuthorFindings`, `highAuthorFindings`, `implementationAuthorized`, `productionCredentials`, `productionDeployment`, `limitedLive`, `liveTrading`, `stopConditionRespected`.
+The independent review must report: `repositorySync`, `sourceMatch`, `blockedCandidateId`, `blockedCandidatePr`, `blockedCandidateHead`, `blockedCandidateMarked`, `blockerB001Confirmed`, `normalizedEventCarriesTypedValues`, `marketStateCarriesTypedValues`, `existingCanonicalValuePlaneSearch`, `canonicalMain`, `checkpoint`, `checkpointFailClosed`, `prerequisiteAuthorizationId`, `prerequisiteImplementationId`, `prerequisiteScopeName`, `capabilityClassification`, `typedValueKinds`, `canonicalNumericPolicy`, `orderedInputLineage`, `intervalSemantics`, `s1eAxisSeparation`, `docs06Bound`, `benchmarkMethodDefined`, `exactTraceability`, `h001h012Preserved`, `h013RuntimeDependencyPolicy`, `runtimeWsClient`, `runtimeHttpClient`, `pyprojectFutureChangeAuthorized`, `uvLockFutureChangeAuthorized`, `unrelatedDependencyDriftForbidden`, `websocketReconnectOwnership`, `providerPingOwnership`, `boundedQueuePolicy`, `h014QuantityUnitsFrozen`, `tradeQuantityUnit`, `bookQuantityUnit`, `tickerVolumeUnit`, `candleVolumeUnit`, `candleAmountDistinct`, `noImplicitBaseConversion`, `mixedUnitFailClosed`, `governanceOnlyDiff`, `newIssue`, `newBranch`, `newPr`, `newCandidateHead`, `exactHeadRun`, `exactHeadJob`, `exactHeadConclusion`, `criticalAuthorFindings`, `highAuthorFindings`, `implementationAuthorized`, `productionCredentials`, `productionDeployment`, `limitedLive`, `liveTrading`, `stopConditionRespected`.
 
 ## AUTHORIZATION FIREWALL
 

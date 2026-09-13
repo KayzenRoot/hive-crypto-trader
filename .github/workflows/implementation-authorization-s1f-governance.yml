@@ -185,7 +185,33 @@ jobs:
               "S1F_PROFILE_NOMINAL_MULTICHANNEL_V1=symbols=8;ticker=1024;deal=4096;depth=2048;depth-full=512;kline=512;total=8192;depth-levels=20;replay-seconds=900",
               "S1F_PROFILE_STRESS_BACKPRESSURE_V1=symbols=32;ticker=8192;deal=32768;depth=16384;depth-full=4096;kline=4096;total=65536;depth-levels=20;queue-capacity=4096;replay-seconds=3600",
               "S1F_BENCHMARK_MEASUREMENTS=normalization_throughput;value_state_latency_distribution;replay_throughput;peak_steady_memory;queue_depth_age",
-          )
+              "S1F_RUNTIME_WS_CLIENT=websockets==17.1",
+              "S1F_RUNTIME_HTTP_CLIENT=httpx==0.28.1",
+              "S1F_RUNTIME_DEPENDENCY_ALLOWLIST=apps/backend/pyproject.toml;apps/backend/uv.lock",
+              "S1F_RUNTIME_DEPENDENCY_DELTA=httpx==0.28.1:dev_to_runtime;websockets==17.1:add_direct_runtime",
+              "S1F_RUNTIME_TRANSITIVE_LOCK=unavoidable_deterministic_entries_only",
+              "S1F_RUNTIME_UNRELATED_DEPENDENCY_DRIFT=STOP_DEPENDENCY_DRIFT",
+              "S1F_RUNTIME_NO_OTHER_DIRECT_DEPENDENCIES=true",
+              "S1F_RUNTIME_WS_API=websockets.asyncio.client",
+              "S1F_RUNTIME_RECONNECT_OWNERSHIP=HCT_BOUNDED_RETRY_BACKOFF_CIRCUIT;NO_INFINITE_LIBRARY_MANAGED_ITERATOR",
+              "S1F_RUNTIME_SESSION_CONNECTION=one_physical_connection_per_HCT_session_generation;retire_before_replacement_publication",
+              "S1F_RUNTIME_PROXY_POLICY=explicit_direct_transport;ambient_proxy_not_silent",
+              "S1F_RUNTIME_PROVIDER_PING=application_level_MEXC_ping_authoritative;library_ping_frames_not_substitute",
+              "S1F_RUNTIME_QUEUE_POLICY=explicit_bounded_inbound_queue;Module29_backpressure;no_unbounded_receive_queue",
+              "S1F_RUNTIME_HTTP_POLICY=explicit_timeouts_connection_limits_retries;retries_not_bypass_Module29_or_duplicate_session_policy",
+              "S1F_RUNTIME_EVIDENCE=pyproject_diff;uv_lock_diff;dependency_graph_delta;package_licenses;pip_audit;exact_hashes_versions",
+              "S1F_QUANTITY_UNIT_KIND=QuantityUnit:CONTRACTS_PROVIDER_NATIVE_V1",
+              "S1F_TRADE_QUANTITY_UNIT=TradeTick.data.v->quantity_value;quantity_unit=CONTRACTS_PROVIDER_NATIVE_V1",
+              "S1F_BOOK_QUANTITY_UNIT=BookLevel.second_element_contract_volume->quantity_value;quantity_unit=CONTRACTS_PROVIDER_NATIVE_V1;third_element=order_count",
+              "S1F_TICKER_VOLUME_UNITS=TickerState.volume24,holdVol->CONTRACTS_PROVIDER_NATIVE_V1_when_locked_schema_contract_volume",
+              "S1F_CANDLE_VOLUME_UNIT=CandleBar.q->CONTRACTS_PROVIDER_NATIVE_V1",
+              "S1F_CANDLE_AMOUNT_TYPE=CandleBar.a->ProviderTransactionAmount;distinct_from_Quantity",
+              "S1F_QUANTITY_FINGERPRINT=value;unit_kind;source_contract_identity_version",
+              "S1F_NO_IMPLICIT_BASE_CONVERSION=UNKNOWN_OR_UNSUPPORTED_without_governed_unit_conversion_contract",
+              "S1F_UNIT_CONVERSION_CONTRACT=requires_contractSize;reference_version;deterministic_Decimal",
+              "S1F_CROSS_CONTRACT_NORMALIZED_VOLUME=UNSUPPORTED_UNTIL_CONVERSION_CONTRACT",
+              "S1F_MIXED_QUANTITY_UNITS=FAIL_CLOSED",
+           )
           for decision in exact_decisions:
               assert decision in combined, decision
           assert "https://mexcdevelop.github.io/apidocs/contract_v1_en/" in implementation
@@ -236,12 +262,51 @@ jobs:
                   "If exact identity cannot be proven, finality remains `OPEN`/`UNKNOWN`",
                   "S1F_MEXC_DECIMAL_PARSE=LEXICAL_PROVIDER_TOKEN_TO_DECIMAL_NO_BINARY_FLOAT",
                   "S1F_MEXC_FIXTURE_MANIFEST=source_url;retrieved;source_sha256;normalized_schema_version;fixture_hashes",
+                  "S1F_RUNTIME_WS_CLIENT=websockets==17.1",
+                  "S1F_RUNTIME_HTTP_CLIENT=httpx==0.28.1",
+                  "S1F_RUNTIME_DEPENDENCY_ALLOWLIST=apps/backend/pyproject.toml;apps/backend/uv.lock",
+                  "S1F_RUNTIME_DEPENDENCY_DELTA=httpx==0.28.1:dev_to_runtime;websockets==17.1:add_direct_runtime",
+                  "S1F_RUNTIME_TRANSITIVE_LOCK=unavoidable_deterministic_entries_only",
+                  "S1F_RUNTIME_UNRELATED_DEPENDENCY_DRIFT=STOP_DEPENDENCY_DRIFT",
+                  "S1F_RUNTIME_NO_OTHER_DIRECT_DEPENDENCIES=true",
+                  "S1F_RUNTIME_WS_API=websockets.asyncio.client",
+                  "S1F_RUNTIME_RECONNECT_OWNERSHIP=HCT_BOUNDED_RETRY_BACKOFF_CIRCUIT;NO_INFINITE_LIBRARY_MANAGED_ITERATOR",
+                  "S1F_RUNTIME_SESSION_CONNECTION=one_physical_connection_per_HCT_session_generation;retire_before_replacement_publication",
+                  "S1F_RUNTIME_PROXY_POLICY=explicit_direct_transport;ambient_proxy_not_silent",
+                  "S1F_RUNTIME_PROVIDER_PING=application_level_MEXC_ping_authoritative;library_ping_frames_not_substitute",
+                  "S1F_RUNTIME_QUEUE_POLICY=explicit_bounded_inbound_queue;Module29_backpressure;no_unbounded_receive_queue",
+                  "S1F_RUNTIME_HTTP_POLICY=explicit_timeouts_connection_limits_retries;retries_not_bypass_Module29_or_duplicate_session_policy",
+                  "S1F_RUNTIME_EVIDENCE=pyproject_diff;uv_lock_diff;dependency_graph_delta;package_licenses;pip_audit;exact_hashes_versions",
+                  "S1F_QUANTITY_UNIT_KIND=QuantityUnit:CONTRACTS_PROVIDER_NATIVE_V1",
+                  "S1F_TRADE_QUANTITY_UNIT=TradeTick.data.v->quantity_value;quantity_unit=CONTRACTS_PROVIDER_NATIVE_V1",
+                  "S1F_BOOK_QUANTITY_UNIT=BookLevel.second_element_contract_volume->quantity_value;quantity_unit=CONTRACTS_PROVIDER_NATIVE_V1;third_element=order_count",
+                  "S1F_TICKER_VOLUME_UNITS=TickerState.volume24,holdVol->CONTRACTS_PROVIDER_NATIVE_V1_when_locked_schema_contract_volume",
+                  "S1F_CANDLE_VOLUME_UNIT=CandleBar.q->CONTRACTS_PROVIDER_NATIVE_V1",
+                  "S1F_CANDLE_AMOUNT_TYPE=CandleBar.a->ProviderTransactionAmount;distinct_from_Quantity",
+                  "S1F_QUANTITY_FINGERPRINT=value;unit_kind;source_contract_identity_version",
+                  "S1F_NO_IMPLICIT_BASE_CONVERSION=UNKNOWN_OR_UNSUPPORTED_without_governed_unit_conversion_contract",
+                  "S1F_UNIT_CONVERSION_CONTRACT=requires_contractSize;reference_version;deterministic_Decimal",
+                  "S1F_CROSS_CONTRACT_NORMALIZED_VOLUME=UNSUPPORTED_UNTIL_CONVERSION_CONTRACT",
+                  "S1F_MIXED_QUANTITY_UNITS=FAIL_CLOSED",
+                  "QuantityUnit",
+                  "ProviderTransactionAmount",
+                  "Trade volume `10` contracts must never be read or serialized as `10 BTC`, `10 ETH` or another base-asset quantity",
+                  "A consumer requesting `BASE_ASSET` quantity without a governed conversion contract returns `UNKNOWN`/`UNSUPPORTED`",
+                  "mixed units in one canonical series/window fail closed",
+                  "Use the modern `websockets.asyncio.client` API",
+                  "HCT owns bounded retry/backoff/circuit policy",
+                  "Application-level MEXC ping policy remains authoritative",
+                  "no unbounded receive queue",
               ):
                   assert matrix_fragment in document, matrix_fragment
           assert candidate.count("S1F_MEXC_PUBLIC_CHANNELS=sub.tickers,sub.ticker,sub.deal,sub.depth,sub.depth.full,sub.kline") >= 1
           assert implementation.count("S1F_MEXC_PUBLIC_CHANNELS=sub.tickers,sub.ticker,sub.deal,sub.depth,sub.depth.full,sub.kline") >= 1
           assert "explicit final/closed boolean" in candidate
           assert "never auto-detect seconds versus milliseconds" in implementation
+          assert "apps/backend/pyproject.toml" in candidate and "apps/backend/uv.lock" in candidate
+          assert "apps/backend/pyproject.toml" in implementation and "apps/backend/uv.lock" in implementation
+          for forbidden in ("dependency locks are out of scope", "dependency-lock mutation is categorically out of scope", "no dependency-lock changes"):
+              assert forbidden not in combined.lower(), forbidden
           assert "Decimal or" not in combined
           assert "equivalent fixed-point" not in combined
           assert "implementation discretion" not in combined
@@ -273,6 +338,8 @@ jobs:
           echo "h004ValueFamilyManifest=PASS"
           echo "h005BenchmarkProfiles=PASS"
           echo "h006SemanticAssertions=PASS"
+          echo "h013RuntimeDependencyPolicy=PASS"
+          echo "h014QuantityUnitsFrozen=PASS"
           echo "orderedInputLineage=PASS"
           echo "s1eAxisSeparation=PASS"
           echo "docs06Bound=PASS"
