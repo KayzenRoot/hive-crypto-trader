@@ -3,7 +3,7 @@
 Status: `AUTHOR_PREFLIGHT`
 Risk: `HIGH_ASSURANCE`
 
-Functional correction head: `d0fc7a43a7ca1e94bae3efca0b2007b84b8a0270`
+Functional correction heads: `d0fc7a43a7ca1e94bae3efca0b2007b84b8a0270`, followed by CI-lint correction `ae3949514e1bd6163b5abbe9ba0e0e32177dac94`.
 
 This bundle records the author-side correction handoff for IMP-H001 through IMP-H007. Independent review remains required; this status is not approval.
 
@@ -101,9 +101,9 @@ Package license evidence from the locked environment: `httpx 0.28.1 BSD-3-Clause
 - negative capability scanner: PASS, four S1F source files, no private/authenticated endpoint, credentials, persistence, mutation, unauthorized URL or infinite reconnect iterator;
 - frontend regression: typecheck PASS, 13 tests PASS, ESLint PASS, generated contract format PASS, Vite build PASS, `npm ci` audit reported 0 vulnerabilities.
 
-`S1F_BENCHMARK_MODE=BASELINE_ESTABLISHMENT_V1` ran the exact three profiles with seed `0`, synthetic pinned multichannel fixtures, no live network, normalization/replay throughput, per-event latency distribution, peak/steady memory and bounded queue depth/age. Artifacts are `evidence/benchmarks-s1f-micro.json`, `evidence/benchmarks-s1f-nominal.json` and `evidence/benchmarks-s1f-stress.json`; each reports `correctness=PASS` and `bounded_completion=true`. Artifact SHA-256 values are `micro=5b80981ac8cd5e7a1e5d6bed50a45ff6bfde650161d64a99dc2405ed7027b34a`, `nominal=79e47ea38e045672de080e1b09c8370bb4bb27cdebfccc6b1c9ed0332ceaeaae`, and `stress=4cdf8aa2b1f34374d67b9612a7045abd4ce0c074d342fea01e8f49ed2af3d0c8`.
+`S1F_BENCHMARK_MODE=BASELINE_ESTABLISHMENT_V1` ran the exact three profiles with seed `0`, synthetic pinned multichannel fixtures, no live network, normalization/replay throughput, per-event latency distribution, peak/steady memory and bounded queue depth/age. Artifacts are `evidence/benchmarks-s1f-micro.json`, `evidence/benchmarks-s1f-nominal.json` and `evidence/benchmarks-s1f-stress.json`; each reports `correctness=PASS` and `bounded_completion=true`. Artifact SHA-256 values are `micro=fa9b4c293ed2e021d68572b378b92153e76f67fb1528e633db24de08a1bcc280`, `nominal=cb322fe5a659c6fbe20da7dee0378c09a62979a03ef8da45b871acf828085da2`, and `stress=5f8ec9a9ee48468ce4f84a504687502b32a746f3ccb6aba717ae0a31cc845cd8`.
 
-The micro profile produced/admitted/consumed `512/512/512` with `0` drops; nominal produced/admitted/consumed `8192/8192/8192` with `0` drops; stress produced `65536`, admitted/consumed `12287`, and deterministically dropped `53249` at bounded queue capacity `4096`, with maximum depth `4096` and measured maximum queue age `44034.7228 ms`. This is bounded backpressure evidence, not a product SLO. No product SLO is asserted.
+The micro profile produced/admitted/consumed `512/512/512` with `0` drops and maximum queue age `0.117 ms`; nominal produced/admitted/consumed `8192/8192/8192` with `0` drops and maximum queue age `0.2179 ms`; stress produced `65536`, admitted/consumed `12287`, and deterministically dropped `53249` at bounded queue capacity `4096`, with maximum depth `4096` and measured maximum queue age `44062.4342 ms`. This is bounded backpressure evidence, not a product SLO. No product SLO is asserted.
 
 ## IMP-H001 through IMP-H007 correction closure
 
