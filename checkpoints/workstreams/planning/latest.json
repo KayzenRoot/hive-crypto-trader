@@ -9,7 +9,7 @@
   "planning_freeze_status": "PLANNING_FREEZE_APPROVED",
   "completed_increment": "HCT-IMP-0010-S1F",
   "implementation_pr": 73,
-  "approved_implementation_candidate_head_sha": "01b87c36dd27c76782727f1394404647806c1414",
+  "approved_candidate_head_sha": "01b87c36dd27c76782727f1394404647806c1414",
   "implementation_merge_sha": "b6acfb2466dc537c3aeb84c525be3e9663f51db2",
   "prior_checkpoint": "HCT-CP-0031",
   "implementation_issue": 72,
