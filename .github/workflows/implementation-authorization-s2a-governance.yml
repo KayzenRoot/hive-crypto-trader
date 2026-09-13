@@ -40,6 +40,7 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           import json
+          import os
           from pathlib import Path
 
           latest = json.loads(Path("checkpoints/workstreams/planning/latest.json").read_text())
@@ -82,13 +83,16 @@ jobs:
           authorization = Path("work-orders/HCT-IMPL-AUTH-0009.md").read_text()
           implementation = Path("work-orders/HCT-IMP-0009-S2A.md").read_text()
           workflow = Path(".github/workflows/implementation-authorization-s2a-governance.yml").read_text()
-          for text in (candidate, authorization, implementation):
+          candidate_sections = ("Objective", "Dependency proof", "Source lock", "Proposed responsibility", "Explicit exclusions", "Required proof obligations", "Authorization firewall", "Required independent review", "Stop condition")
+          for section in candidate_sections:
+              assert f"## {section}" in candidate or f"### {section}" in candidate, section
+          for text in (authorization, implementation):
               for section in ("OBJECTIVE", "CONTEXT", "SCOPE", "OUT OF SCOPE", "REQUIREMENTS", "ARCHITECTURE RULES", "CONSTRAINTS", "ACCEPTANCE CRITERIA", "TESTS", "DELIVERABLES", "REVIEW FORMAT", "STOP CONDITION"):
                   assert f"## {section}" in text or f"### {section}" in text, section
           for section in ("SOURCE LOCK", "FILES/SOURCES TO READ"):
               assert section in authorization or section in implementation, section
           for marker in (
-              "HCT-IMPL-AUTH-0009", "HCT-IMP-0009-S2A", "HCT-CP-0030", CANONICAL_BASE_SHA,
+              "HCT-IMPL-AUTH-0009", "HCT-IMP-0009-S2A", "HCT-CP-0030", os.environ["CANONICAL_BASE_SHA"],
               "Module 8", "Module 9", "V1_CORE", "V1_MINIMUM", "features/indicators/patterns",
               "HCT-IMP-0008-S1E", "Market-State", "DataAuthority", "read-only", "no-lookahead",
               "event time", "knowledge time", "WARMUP", "UNKNOWN", "INVALID", "DEGRADED",
