@@ -274,7 +274,7 @@ At minimum, provide:
 - equal normalized Channel Capability fingerprint tests and policy/version-change fingerprint tests;
 - one deterministic duplicate, late/out-of-order, gap and resynchronization/`SEQUENCE_UNPROVABLE` test family for every sequence-policy mode;
 - canonical data-authority tests for required-feed untrusted, severe unresolved contradiction, untrusted clock/time-sensitive state, required sequence-unprovable and Module 29 resource starvation;
-- S1C lifecycle/trust independence tests for `ELIGIBLE + TRUSTED`, `ELIGIBLE -> INELIGIBLE + TRUSTED`, `ELIGIBLE -> UNKNOWN + TRUSTED`, ineligible+stale, unknown+gap/`SEQUENCE_UNPROVABLE`, retired-generation late event and cache lifecycle restriction/lease behavior;
+- S1C lifecycle/trust independence tests for `ELIGIBLE + TRUSTED`, `ELIGIBLE -> INELIGIBLE + TRUSTED`, `ELIGIBLE -> UNKNOWN + TRUSTED`, ineligible+stale, unknown+gap/`SEQUENCE_UNPROVABLE`, retired-generation late event / retired source generation rejection and cache lifecycle restriction/lease behavior;
 - tests that lifecycle transitions cannot promote `DEGRADED`/`UNTRUSTED` Market-State to `TRUSTED`, and cannot blind reduce/close/protect/reconcile-compatible evidence paths;
 - Module 29 admission/resource-starvation integration tests;
 - deterministic fixtures/replay tests with no live network;
