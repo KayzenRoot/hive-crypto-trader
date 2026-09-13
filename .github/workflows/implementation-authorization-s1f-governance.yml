@@ -125,8 +125,33 @@ jobs:
               "S1F_MEXC_SOURCE_RETRIEVED=2026-09-13",
               "S1F_MEXC_SOURCE_SHA256=57ebc13fea788a1c568c8aeabfdf50acc0c9f5b5a882af4855837d53499940e",
               "S1F_MEXC_WS_URL=wss://contract.mexc.com/edge",
-              "S1F_MEXC_PUBLIC_CHANNELS=sub.tickers,sub.deal,sub.depth,sub.depth.full,sub.kline",
+              "S1F_MEXC_PUBLIC_CHANNELS=sub.tickers,sub.ticker,sub.deal,sub.depth,sub.depth.full,sub.kline",
               "S1F_MEXC_PING_POLICY=ping every 10-20 seconds; disconnect if no ping within 1 minute",
+              "S1F_MEXC_SOURCE_CONTRACT_VERSION=S1F_MEXC_SOURCE_CONTRACT_V1",
+              "S1F_MEXC_PRIMARY_SOURCE_MATRIX=TradeTick:sub.deal;TickerState:sub.ticker;BulkTicker:sub.tickers;CandleBar:sub.kline;OrderBookSnapshot:REST:/api/v1/contract/depth/{symbol};OrderBookDelta:sub.depth:compress=false;FullDepth:sub.depth.full;ReferencePriceEvidence:sub.ticker;FundingEvidence:sub.ticker",
+              "S1F_MEXC_TICKER_PRIMARY=WS sub.ticker -> push.ticker;data.lastPrice,bid1,ask1,volume24,holdVol,indexPrice,fairPrice,fundingRate,timestamp;outer.symbol,outer.ts",
+              "S1F_MEXC_REFERENCE_PRIMARY=WS sub.ticker;MARK=fairPrice;FAIR=fairPrice;INDEX=indexPrice;dedicated_channels=OPTIONAL_CORROBORATION",
+              "S1F_MEXC_FUNDING_PRIMARY=WS sub.ticker;fundingRate+timestamp;dedicated_channel=OPTIONAL_CORROBORATION",
+              "S1F_MEXC_NO_OTHER_PUBLIC_ENDPOINTS=GOVERNED_SOURCE_CONTRACT_CHANGE_REQUIRED",
+              "S1F_MEXC_WS_TS_UNIT=MILLISECONDS",
+              "S1F_MEXC_TICKER_TIMESTAMP_UNIT=MILLISECONDS",
+              "S1F_MEXC_KLINE_T_UNIT=SECONDS",
+              "S1F_MEXC_KLINE_T_MEANING=windowStart",
+              "S1F_MEXC_DEAL_T_UNIT=EPOCH_MILLISECONDS_STRICT_13_DIGIT_VALIDATOR",
+              "S1F_MEXC_DEAL_T_AUTODETECT=REJECTED",
+              "S1F_MEXC_DEPTH_SNAPSHOT_REST=GET /api/v1/contract/depth/{symbol}",
+              "S1F_MEXC_DEPTH_RECOVERY_REST=GET /api/v1/contract/depth_commits/{symbol}/{limit}",
+              "S1F_MEXC_DEPTH_SUBSCRIPTION=method=sub.depth;compress=false",
+              "S1F_MEXC_DEPTH_TUPLE=price,order_count,order_quantity",
+              "S1F_MEXC_DEPTH_QUANTITY=third_element_order_quantity",
+              "S1F_MEXC_DEPTH_VERSION_RULE=next_version=previous_version+1;else=GAP_RESYNC_REQUIRED",
+              "S1F_MEXC_DEPTH_ZERO_QUANTITY=REMOVE_LEVEL",
+              "S1F_MEXC_FULL_DEPTH_LIMITS=5,10,20",
+              "S1F_MEXC_FULL_DEPTH_IDENTITY=subscription_context_required",
+              "S1F_MEXC_CANDLE_CLOSE_PROOF=NEXT_WINDOW_OR_REST_CONFIRMATION",
+              "S1F_MEXC_KLINE_FINAL_FLAG=ABSENT;DO_NOT_FABRICATE",
+              "S1F_MEXC_DECIMAL_PARSE=LEXICAL_PROVIDER_TOKEN_TO_DECIMAL_NO_BINARY_FLOAT",
+              "S1F_MEXC_FIXTURE_MANIFEST=source_url;retrieved;source_sha256;normalized_schema_version;fixture_hashes",
               "S1F_NO_PRIVATE_CHANNELS=true",
               "S1F_DECODE_BOUNDARY=provider payload -> quarantine/schema validation -> canonical typed public value event",
               "S1F_SESSION_GENERATION=each connection/reconnection creates a generation; retired generations cannot publish",
@@ -156,6 +181,28 @@ jobs:
               assert decision in combined, decision
           assert "https://mexcdevelop.github.io/apidocs/contract_v1_en/" in implementation
           assert "57ebc13fea788a1c568c8aeabfdf50acc0c9f5b5a882af4855837d53499940e" in implementation
+          for document in (candidate, implementation):
+              assert "## NORMALIZED MEXC SOURCE CONTRACT" in document
+              for matrix_fragment in (
+                  "TradeTick", "WS `sub.deal` -> `push.deal`", "TickerState", "WS `sub.ticker` -> `push.ticker`",
+                  "Bulk ticker projection", "WS `sub.tickers` -> `push.tickers`", "CandleBar", "WS `sub.kline` -> `push.kline`",
+                  "OrderBookSnapshot", "GET /api/v1/contract/depth/{symbol}", "OrderBookDelta", "compress=false",
+                  "Bounded full-depth projection", "sub.depth.full", "ReferencePriceEvidence", "FundingEvidence",
+                  "OPTIONAL_CORROBORATION", "S1F_MEXC_SOURCE_CONTRACT_VERSION=S1F_MEXC_SOURCE_CONTRACT_V1",
+                  "S1F_MEXC_NO_OTHER_PUBLIC_ENDPOINTS=GOVERNED_SOURCE_CONTRACT_CHANGE_REQUIRED",
+                  "S1F_MEXC_DEPTH_RECOVERY_REST=GET /api/v1/contract/depth_commits/{symbol}/{limit}",
+                  "S1F_MEXC_DEPTH_TUPLE=price,order_count,order_quantity",
+                  "S1F_MEXC_DEPTH_VERSION_RULE=next_version=previous_version+1;else=GAP_RESYNC_REQUIRED",
+                  "S1F_MEXC_CANDLE_CLOSE_PROOF=NEXT_WINDOW_OR_REST_CONFIRMATION",
+                  "S1F_MEXC_KLINE_FINAL_FLAG=ABSENT;DO_NOT_FABRICATE",
+                  "S1F_MEXC_DECIMAL_PARSE=LEXICAL_PROVIDER_TOKEN_TO_DECIMAL_NO_BINARY_FLOAT",
+                  "S1F_MEXC_FIXTURE_MANIFEST=source_url;retrieved;source_sha256;normalized_schema_version;fixture_hashes",
+              ):
+                  assert matrix_fragment in document, matrix_fragment
+          assert candidate.count("S1F_MEXC_PUBLIC_CHANNELS=sub.tickers,sub.ticker,sub.deal,sub.depth,sub.depth.full,sub.kline") >= 1
+          assert implementation.count("S1F_MEXC_PUBLIC_CHANNELS=sub.tickers,sub.ticker,sub.deal,sub.depth,sub.depth.full,sub.kline") >= 1
+          assert "explicit final/closed boolean" in candidate
+          assert "never auto-detect seconds versus milliseconds" in implementation
           assert "Decimal or" not in combined
           assert "equivalent fixed-point" not in combined
           assert "implementation discretion" not in combined
