@@ -55,8 +55,8 @@ Exact hosted authorization evidence:
 
 Full approval/promotion record: `docs/128-s1e-implementation-authorization-and-checkpoint-promotion.md`.
 
-The authorized execution base for S1E is the post-merge canonical main:
-`main@5e633c45e1c57bfc1c6507206d0da8599a2d856d`.
+The authorized execution base for S1E is the post-promotion canonical main:
+`main@a736eacc621fda386d1ba4d14ecab9c8df9ff7e6`.
 
 ## S1D implementation completion provenance
 Implementation Issue: `#62`
@@ -168,7 +168,7 @@ Planning Freeze remains approved through `HCT-CP-0014`, with frozen source ident
 Historical S0A-S1A workflows contain old whole-tree/path/base assumptions and may fail when later authorized backend paths trigger them. This remains a separate CI-maintenance concern. S1D implementation evidence must execute required prior-stage regressions directly rather than treating those historical workflow statuses as substitute proof.
 
 ## Next necessary action
-Execute `HCT-IMP-0008-S1E` from a fresh Context Lock against `HCT-CP-0029` and the exact authorized execution base. Stop with the implementation PR OPEN and UNMERGED after exact-head implementation CI and author-side evidence for fresh independent HIGH_ASSURANCE review. Do not promote S1E completion, begin S1F/Stage 2, deploy, add credentials, activate limited-live or trade.
+Execute `HCT-IMP-0008-S1E` from a fresh Context Lock against `HCT-CP-0029` and `main@a736eacc621fda386d1ba4d14ecab9c8df9ff7e6`. Stop with the implementation PR OPEN and UNMERGED after exact-head implementation CI and author-side evidence for fresh independent HIGH_ASSURANCE review. Do not promote S1E completion, begin S1F/Stage 2, deploy, add credentials, activate limited-live or trade.
 
 ## Global chat and prompt delivery policy
 All HCT chats and executor/reviewer handoffs SHALL follow `docs/104-chat-delivery-and-prompt-artifact-policy.md`.

@@ -53,9 +53,9 @@ Authorization ceiling:
 
 `NON_TRADING_STAGE_1_MARKET_TRUTH_FOUNDATION_ONLY`
 
-The implementation tracking Issue is `#66`. Its authorized execution base is the post-merge canonical main:
+The implementation tracking Issue is `#66`. Its authorized execution base is the post-promotion canonical main:
 
-`main@5e633c45e1c57bfc1c6507206d0da8599a2d856d`
+`main@a736eacc621fda386d1ba4d14ecab9c8df9ff7e6`
 
 The authorized scope is limited to provider-neutral, deterministic, non-network foundations for Modules 4, 5, 7 and 30, with typed read-only seams for S1C lifecycle evidence and Module 29 resource/admission evidence. It includes normalized public event identity/provenance and fingerprints, finite Channel Capability/Sequence Policy modes, restrictive Data Quality/DataAuthority predicates, generation-scoped Market-State synchronization/trust, cache projections with freshness/invalidation and no-authority-upgrade, deterministic fixtures/replay, tests, evidence and negative-capability scanning.
 

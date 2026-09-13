@@ -13,7 +13,7 @@
   "implementation_pr": 63,
   "approved_implementation_candidate_head_sha": "ccb004215837d4070b3e15c87a6c64be75b3d81a",
   "implementation_merge_sha": "4f6d998dccc5fcdd0eeb26ba812055ebcc089a7b",
-  "authorized_execution_base_sha": "5e633c45e1c57bfc1c6507206d0da8599a2d856d",
+  "authorized_execution_base_sha": "a736eacc621fda386d1ba4d14ecab9c8df9ff7e6",
   "exact_head_ci_run": 34730581910,
   "exact_head_ci_check": "s1d-quality",
   "exact_head_ci_conclusion": "success",
@@ -50,5 +50,5 @@
   "production_deployment_authorized": false,
   "limited_live_authorized": false,
   "live_trading_authorized": false,
-  "next_necessary_action": "Execute HCT-IMP-0008-S1E from a fresh Context Lock against HCT-CP-0029 and authorized execution base main@5e633c45e1c57bfc1c6507206d0da8599a2d856d. Implement only the provider-neutral, non-network Market Truth Foundation defined by the approved Work Order. Stop with the implementation PR open and unmerged for fresh independent HIGH_ASSURANCE review. Credentials, private APIs, persistence, deployment, limited-live and live trading remain forbidden."
+  "next_necessary_action": "Execute HCT-IMP-0008-S1E from a fresh Context Lock against HCT-CP-0029 and authorized execution base main@a736eacc621fda386d1ba4d14ecab9c8df9ff7e6. Implement only the provider-neutral, non-network Market Truth Foundation defined by the approved Work Order. Stop with the implementation PR open and unmerged for fresh independent HIGH_ASSURANCE review. Credentials, private APIs, persistence, deployment, limited-live and live trading remain forbidden."
 }
