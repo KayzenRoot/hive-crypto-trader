@@ -1,0 +1,65 @@
+{
+  "mode": "BASELINE_ESTABLISHMENT_V1",
+  "profiles": [
+    {
+      "admitted_count": 12287,
+      "bounded_completion": true,
+      "consumed_count": 12287,
+      "consumer_model": "deterministic_one_frame_every_eight_produced_frames_with_final_drain",
+      "consumer_rate_per_second": 162.254179635714,
+      "correctness": "PASS",
+      "dropped_count": 53249,
+      "elapsed_seconds": 75.72686279999834,
+      "immutable_value_publication_latency_distribution": {
+        "max": 10406600,
+        "min": 199400,
+        "p50": 615500,
+        "p95": 5133500,
+        "p99": 6095100,
+        "unit": "nanoseconds"
+      },
+      "limitations": [
+        "synthetic pinned multichannel fixture stream",
+        "no product latency SLO asserted",
+        "no live network",
+        "stress profile intentionally sheds under a deterministic bounded consumer rate"
+      ],
+      "messages_decoded": 12287,
+      "messages_produced": 65536,
+      "normalization_latency_distribution": {
+        "max": 22126000,
+        "min": 432100,
+        "p50": 1325300,
+        "p95": 11508300,
+        "p99": 13830300,
+        "unit": "nanoseconds"
+      },
+      "normalization_throughput_per_second": 162.254179635714,
+      "parameters": {
+        "deal": 32768,
+        "depth": 16384,
+        "depth-full": 4096,
+        "depth-levels": 20,
+        "kline": 4096,
+        "queue-capacity": 4096,
+        "replay-seconds": 3600,
+        "symbols": 32,
+        "ticker": 8192,
+        "total": 65536
+      },
+      "peak_memory_bytes": 4235278,
+      "producer_model": "deterministic_one_frame_per_iteration",
+      "producer_rate_per_second": 865.4260532763208,
+      "profile": "S1F-STRESS-BACKPRESSURE-V1",
+      "queue_age_ms_max": 44062.4342,
+      "queue_age_samples": 12287,
+      "queue_capacity": 4096,
+      "queue_depth_max": 4096,
+      "queue_dropped": 53249,
+      "raw_artifact_hash": "6b8aed6af9d43271d098fe6058640d0ee47df53fc45aac2cff771ce9e8ada3ec",
+      "replay_throughput_per_second": 162.254179635714,
+      "seed": 0,
+      "steady_memory_bytes": 2109581
+    }
+  ]
+}
