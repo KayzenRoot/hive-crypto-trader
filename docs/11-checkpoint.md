@@ -1,15 +1,15 @@
 # Checkpoint
 
-Checkpoint ID: `HCT-CP-0029`
-Status: `IMPLEMENTATION_AUTHORIZED_S1E`
+Checkpoint ID: `HCT-CP-0030`
+Status: `S1E_IMPLEMENTATION_APPROVED_MERGED`
 Canonical branch: `main`
 Risk class: `HIGH_ASSURANCE`
 Functional product planning: `FROZEN`
 Planning Freeze checkpoint: `HCT-CP-0014 / PLANNING_FREEZE_APPROVED`
-Completed implementation slices: `HCT-IMP-0001-S0A`, `HCT-IMP-0002-S0B`, `HCT-IMP-0003-S0C`, `HCT-IMP-0004-S1A`, `HCT-IMP-0005-S1B`, `HCT-IMP-0006-S1C`, `HCT-IMP-0007-S1D`
-Current implementation authorization: `ACTIVE_FOR_HCT-IMP-0008-S1E`
-Implementation authorization scope: `[HCT-IMP-0008-S1E]`
-Implementation authorization ceiling: `NON_TRADING_STAGE_1_MARKET_TRUTH_FOUNDATION_ONLY`
+Completed implementation slices: `HCT-IMP-0001-S0A`, `HCT-IMP-0002-S0B`, `HCT-IMP-0003-S0C`, `HCT-IMP-0004-S1A`, `HCT-IMP-0005-S1B`, `HCT-IMP-0006-S1C`, `HCT-IMP-0007-S1D`, `HCT-IMP-0008-S1E`
+Current implementation authorization: `NONE_PENDING_NEXT_GOVERNED_AUTHORIZATION`
+Implementation authorization scope: `[]`
+Implementation authorization ceiling: `NONE_PENDING_NEXT_GOVERNED_AUTHORIZATION`
 
 ## Current canonical authority
 R12 Planning Freeze remains approved and authoritative. The frozen composite requirements baseline remains governed by `docs/99-r12-frozen-requirements-baseline.md`, `docs/100-r12-requirements-traceability-and-no-loss-proof.md`, the exact nine requirement source blobs recorded by that baseline, and `docs/101-r12-freeze-governance-change-control-and-deferred-decisions.md`.
@@ -21,9 +21,10 @@ Completed and independently approved implementation slices are:
 - `HCT-IMP-0004-S1A - Exchange Abstraction, Capability & Contract Reference Foundation`;
 - `HCT-IMP-0005-S1B - MEXC Public Reference Adapter & Capability/Rule Resolver`;
 - `HCT-IMP-0006-S1C - Market Universe Registry Foundation`;
-- `HCT-IMP-0007-S1D - Quota/WebSocket Backpressure Governor Foundation`.
+- `HCT-IMP-0007-S1D - Quota/WebSocket Backpressure Governor Foundation`;
+- `HCT-IMP-0008-S1E - Market Truth Foundation`.
 
-`HCT-CP-0028` records the approved and merged completion of `HCT-IMP-0007-S1D`. `HCT-CP-0029` now authorizes only the bounded S1E implementation slice below.
+`HCT-CP-0028` records the approved and merged completion of `HCT-IMP-0007-S1D`. `HCT-CP-0029` recorded the separate S1E implementation authorization. `HCT-CP-0030` records the approved and merged completion of `HCT-IMP-0008-S1E` and consumes that implementation authority.
 
 ## S1E implementation authorization provenance
 Authorization Issue: `#64`
@@ -57,6 +58,32 @@ Full approval/promotion record: `docs/128-s1e-implementation-authorization-and-c
 
 The authorized execution base for S1E is the post-promotion canonical main:
 `main@a736eacc621fda386d1ba4d14ecab9c8df9ff7e6`.
+
+## S1E implementation completion provenance
+Implementation Issue: `#66`
+Implementation PR: `#67`
+
+Exact approved implementation head:
+`8b4dad1b2aed31cac9c3db12a804a82cf74bf473`
+
+Governed implementation merge commit:
+`221fe0b59c86a1f8e7bae50cad4d97dabfd6c4b5`
+
+External HIGH_ASSURANCE review receipt supplied by the user: `APPROVED`; unresolved CRITICAL `0`; unresolved HIGH `0`. It is not Codex self-review and is not relabeled as a GitHub formal approval.
+
+Governance acceptance evidence:
+- PR #67 comment `5652926226`;
+- Issue #66 comment `5652926302`.
+
+Exact hosted implementation evidence:
+- workflow: `HCT-IMP-0008-S1E Market Truth Foundation`;
+- run: `34753235119`;
+- check/job: `s1e-quality / 103713189608`;
+- exact head: `8b4dad1b2aed31cac9c3db12a804a82cf74bf473`;
+- event: `pull_request`;
+- result: `completed / success`.
+
+Full approval/promotion record: `docs/129-s1e-implementation-approval-and-checkpoint-promotion.md`.
 
 ## S1D implementation completion provenance
 Implementation Issue: `#62`
@@ -111,9 +138,9 @@ This slice establishes control semantics only. It does not create a realtime tra
 
 ## Explicit authorization firewall
 Authoritative flags:
-- `implementation_authorized=true` only for `HCT-IMP-0008-S1E`
-- `implementation_authorization_scope=["HCT-IMP-0008-S1E"]`
-- `implementation_authorization_ceiling="NON_TRADING_STAGE_1_MARKET_TRUTH_FOUNDATION_ONLY"`
+- `implementation_authorized=false`
+- `implementation_authorization_scope=[]`
+- `implementation_authorization_ceiling="NONE_PENDING_NEXT_GOVERNED_AUTHORIZATION"`
 - `production_credentials_authorized=false`
 - `production_deployment_authorized=false`
 - `limited_live_authorized=false`
@@ -121,8 +148,8 @@ Authoritative flags:
 
 Unknown or ambiguous authority fails closed.
 
-## Authorization boundary
-The current authorization permits only the provider-neutral, deterministic, non-network S1E foundation: normalized public event identity/provenance, finite Channel Capability/Sequence Policy modes, restrictive Data Quality/DataAuthority predicates, generation-scoped Market-State synchronization/trust contracts, cache projections without authority upgrade, typed S1C lifecycle and Module 29 read-only seams, deterministic fixtures/replay, tests, evidence and negative-capability scanning.
+## Completed S1E boundary
+The approved and merged S1E increment provided only the provider-neutral, deterministic, non-network Market Truth Foundation described by `work-orders/HCT-IMP-0008-S1E.md`: normalized public event identity/provenance, finite Channel Capability/Sequence Policy modes, restrictive Data Quality/DataAuthority predicates, generation-scoped Market-State synchronization/trust contracts, cache projections without authority upgrade, typed S1C lifecycle and Module 29 read-only seams, deterministic fixtures/replay, tests, evidence and negative-capability scanning.
 
 The following remain blocked:
 - actual socket/WebSocket/network connection creation;
@@ -145,7 +172,7 @@ The following remain blocked:
 Frozen R11 Stage 1 orders:
 `Exchange Abstraction + MEXC adapter -> capability/rule resolver -> universe -> quota/WS governor -> market ingest/quality/Market-State/cache`.
 
-S1A, S1B, S1C and S1D are complete. S1E is authorized only for the bounded provider-neutral Market Truth Foundation described above. Actual realtime transport, venue I/O and production market-data truth remain future separately governed slices.
+S1A, S1B, S1C, S1D and S1E are complete. Actual realtime transport, venue I/O and production market-data truth remain future separately governed slices.
 
 ## Prior completion provenance
 S1D is completed under `HCT-CP-0028 / S1D_IMPLEMENTATION_APPROVED_MERGED`, approval record `docs/126-s1d-implementation-approval-and-checkpoint-promotion.md`.
@@ -168,7 +195,7 @@ Planning Freeze remains approved through `HCT-CP-0014`, with frozen source ident
 Historical S0A-S1A workflows contain old whole-tree/path/base assumptions and may fail when later authorized backend paths trigger them. This remains a separate CI-maintenance concern. S1D implementation evidence must execute required prior-stage regressions directly rather than treating those historical workflow statuses as substitute proof.
 
 ## Next necessary action
-Execute `HCT-IMP-0008-S1E` from a fresh Context Lock against `HCT-CP-0029` and `main@a736eacc621fda386d1ba4d14ecab9c8df9ff7e6`. Stop with the implementation PR OPEN and UNMERGED after exact-head implementation CI and author-side evidence for fresh independent HIGH_ASSURANCE review. Do not promote S1E completion, begin S1F/Stage 2, deploy, add credentials, activate limited-live or trade.
+Prepare only a governance-only HIGH_ASSURANCE authorization candidate for the smallest necessary next dependency identified by the frozen R11 Stage-2 order. Do not authorize or implement it from `HCT-CP-0030`; a fresh Context Lock, independent review and separate authorization checkpoint are mandatory. Do not deploy, add credentials, activate limited-live or trade.
 
 ## Global chat and prompt delivery policy
 All HCT chats and executor/reviewer handoffs SHALL follow `docs/104-chat-delivery-and-prompt-artifact-policy.md`.
