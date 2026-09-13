@@ -56,7 +56,21 @@ Frozen requirement blob identities are:
 
 `docs/06-test-benchmark-plan.md` is an additional mandatory source lock (`29401ce8fe1616f9390a317bae62d3a157addaa5`) because H002 exposed its omission from S2A.
 
-Official MEXC public source lock: `https://mexcdevelop.github.io/apidocs/contract_v1_en/`, retrieved `2026-09-13`, raw response SHA-256 `57ebc13fea788a1c568c8aeabfdf50acc0c9f5b5a882af4855837d53499940e`. Bound sections are Native WS connection address `wss://contract.mexc.com/edge`; ping/pong and disconnect if no ping within one minute; public `sub.tickers`, `sub.ticker`, `sub.deal`, `sub.depth`, `sub.depth.full`, `sub.kline`; and REST depth snapshot/version maintenance. Evidence uses URL/date/raw-response SHA-256 and deterministic pinned fixtures/fakes; CI does not fetch the network.
+Official MEXC public source lock: `https://mexcdevelop.github.io/apidocs/contract_v1_en/`, retrieved `2026-09-13`, raw response SHA-256 `57ebc13fea788a1c568c8aeabfdf50acc0c9f5b5a882af4855837d53499940e3`. Bound sections are Native WS connection address `wss://contract.mexc.com/edge`; ping/pong and disconnect if no ping within one minute; public `sub.tickers`, `sub.ticker`, `sub.deal`, `sub.depth`, `sub.depth.full`, `sub.kline`; and authorized REST depth snapshot/version/kline close confirmation. Evidence uses URL/date/raw-response SHA-256 and deterministic pinned fixtures/fakes; CI does not fetch the network.
+
+`S1F_MEXC_SOURCE_URL=https://mexcdevelop.github.io/apidocs/contract_v1_en/`
+
+`S1F_MEXC_SOURCE_RETRIEVED=2026-09-13`
+
+`S1F_MEXC_SOURCE_SHA256=57ebc13fea788a1c568c8aeabfdf50acc0c9f5b5a882af4855837d53499940e3`
+
+`S1F_MEXC_SOURCE_CONTRACT_VERSION=S1F_MEXC_SOURCE_CONTRACT_V1`
+
+`S1F_MEXC_PUBLIC_CHANNELS=sub.tickers,sub.ticker,sub.deal,sub.depth,sub.depth.full,sub.kline`
+
+`S1F_MEXC_AUTHORIZED_PUBLIC_REST=GET /api/v1/contract/depth/{symbol};GET /api/v1/contract/depth_commits/{symbol}/{limit};GET /api/v1/contract/kline/{symbol}`
+
+`S1F_MEXC_NO_OTHER_PUBLIC_ENDPOINTS=ONLY_AUTHORIZED_REST_SET_OR_FUTURE_GOVERNED_SOURCE_CONTRACT_CHANGE_REQUIRED`
 
 The H007-H009 source-contract correction is mandatory: `docs/131-implementation-authorization-s1f-candidate.md` and `work-orders/HCT-IMP-0010-S1F.md` must contain the complete `S1F_MEXC_SOURCE_CONTRACT_V1` normalized provider matrix, field/unit/depth/finality semantics, optional-corroboration classifications, and the future fixture/source-evidence manifest requirement. A hash is provenance, not a reconstructable snapshot; incompatible payloads quarantine/fail closed and require a governed source-contract change.
 

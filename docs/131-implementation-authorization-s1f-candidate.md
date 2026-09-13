@@ -73,7 +73,7 @@ The contract must preserve a truth-validity matrix covering at least `TRUSTED+RE
 
 ### Public ingest boundary
 
-Public unauthenticated realtime session ingest is `NECESSARY` for S1F. The future implementation includes one provider-neutral session/transport interface and the V1 concrete MEXC Futures public realtime adapter. The official source lock is the current MEXC Contract API page at `https://mexcdevelop.github.io/apidocs/contract_v1_en/`, retrieved `2026-09-13`, raw HTML SHA-256 `57ebc13fea788a1c568c8aeabfdf50acc0c9f5b5a882af4855837d53499940e`. Relevant official sections are Native WS connection address (`wss://contract.mexc.com/edge`), ping/pong and one-minute disconnect rule, Public Channels `sub.tickers`, `sub.ticker`, `sub.deal`, `sub.depth`, `sub.depth.full` and `sub.kline`, and depth maintenance by REST snapshot/version followed by WS updates. The raw response is retained in the review evidence cache under the URL/date/SHA-256 convention; CI uses pinned fixtures/fakes and never fetches this URL.
+Public unauthenticated realtime session ingest is `NECESSARY` for S1F. The future implementation includes one provider-neutral session/transport interface and the V1 concrete MEXC Futures public realtime adapter. The official source lock is the current MEXC Contract API page at `https://mexcdevelop.github.io/apidocs/contract_v1_en/`, retrieved `2026-09-13`, raw HTML SHA-256 `57ebc13fea788a1c568c8aeabfdf50acc0c9f5b5a882af4855837d53499940e3`. Relevant official sections are Native WS connection address (`wss://contract.mexc.com/edge`), ping/pong and one-minute disconnect rule, Public Channels `sub.tickers`, `sub.ticker`, `sub.deal`, `sub.depth`, `sub.depth.full` and `sub.kline`, and depth maintenance by REST snapshot/version followed by WS updates. The raw response is retained in the review evidence cache under the URL/date/SHA-256 convention; CI uses pinned fixtures/fakes and never fetches this URL.
 
 The adapter is public-only and decodes provider payloads through quarantine/schema validation into canonical typed events; provider DTOs never become canonical truth. Session generation is created on each connection/reconnection and retired before the replacement can publish. Reconnect uses bounded retry budget, exponential backoff with bounded jitter and circuit state; staged resubscription is deterministic and duplicate intent is idempotent. Module 29 admission/backpressure is consumed before public messages enter normalization. Private/account/order/position/balance streams are forbidden. Transport loss, gap and resync evidence flows to S1E quality/Market-State owners.
 
@@ -85,7 +85,7 @@ The adapter is public-only and decodes provider payloads through quarantine/sche
 
 `S1F_MEXC_SOURCE_RETRIEVED=2026-09-13`
 
-`S1F_MEXC_SOURCE_SHA256=57ebc13fea788a1c568c8aeabfdf50acc0c9f5b5a882af4855837d53499940e`
+`S1F_MEXC_SOURCE_SHA256=57ebc13fea788a1c568c8aeabfdf50acc0c9f5b5a882af4855837d53499940e3`
 
 `S1F_MEXC_WS_URL=wss://contract.mexc.com/edge`
 
@@ -154,14 +154,15 @@ This normalized contract is the implementation and audit source for the V1 publi
 | `TradeTick` | WS `sub.deal` -> `push.deal` | `data.p` price; `data.v` volume; `data.T` direction; `data.t` transaction time; outer `symbol`; outer `ts`; `O` and `M` remain provider metadata unless separately mapped. |
 | `TickerState` | WS `sub.ticker` -> `push.ticker` | `data.lastPrice`, `bid1`, `ask1`, `volume24`, `holdVol`, `indexPrice`, `fairPrice`, `fundingRate`, `timestamp`; outer `symbol`; outer `ts`. |
 | Bulk ticker projection | WS `sub.tickers` -> `push.tickers` | `symbol`, `lastPrice`, `volume24`, `riseFallRate`, `fairPrice`, outer `ts`; partial capability only and not a substitute for `TickerState` bid/ask or funding fields. |
-| `CandleBar` | WS `sub.kline` -> `push.kline` | `data.o`, `h`, `l`, `c`, `q`, `a`, `interval`, `t` window start, `symbol`; outer `ts`; `t` is seconds. |
-| `OrderBookSnapshot` | REST `GET /api/v1/contract/depth/{symbol}` | `asks`, `bids`, `version`, `timestamp`; each V1 level must satisfy `[price, order_count, order_quantity]`. |
-| `OrderBookDelta` | WS `sub.depth` -> `push.depth` with `compress=false` | `asks`, `bids`, `version`, outer `symbol`, outer `ts`; uncompressed incremental continuity is required. |
-| Bounded full-depth projection | WS `sub.depth.full` -> `push.depth` | subscription limit exactly `5`, `10` or `20`; explicit subscription-context identity; same level shape as `push.depth`; never inferred as an incremental delta from channel name alone. |
+| `CandleBar` | WS `sub.kline` -> `push.kline` | `data.o`, `h`, `l`, `c`, `q`, `a`, `interval`, `t` window start, `symbol`; outer `ts`; `t` is seconds. REST close proof is separately governed by `GET /api/v1/contract/kline/{symbol}`. |
+| `OrderBookSnapshot` | REST `GET /api/v1/contract/depth/{symbol}` | `asks`, `bids`, `version`, `timestamp`; each V1 level must satisfy `[price, contract_volume, order_count]`. |
+| `OrderBookDelta` | WS `sub.depth` -> `push.depth` with `compress=false` | `asks`, `bids`, `version`, outer `symbol`, outer `ts`; uncompressed incremental continuity is required; each level is `[price, contract_volume, order_count]`. |
+| Bounded full-depth projection | WS `sub.depth.full` -> `push.depth` | subscription limit exactly `5`, `10` or `20`; explicit subscription-context identity; same `[price, contract_volume, order_count]` shape as `push.depth`; never inferred as an incremental delta from channel name alone. |
+| Candle close-proof evidence | REST `GET /api/v1/contract/kline/{symbol}` | `interval` is the canonical provider interval; `start` and `end` are epoch seconds; response `time` array is the provider window identity; max 2000 points per request. |
 | `ReferencePriceEvidence` | Primary: WS `sub.ticker` fields | `MARK` and `FAIR` use `data.fairPrice`; `INDEX` uses `data.indexPrice`; dedicated `sub.index.price` and `sub.fair.price` are `OPTIONAL_CORROBORATION` only. |
 | `FundingEvidence` | Primary: WS `sub.ticker` field | `data.fundingRate` plus `data.timestamp`; dedicated `sub.funding.rate` is `OPTIONAL_CORROBORATION` only. |
 
-`S1F_MEXC_PRIMARY_SOURCE_MATRIX=TradeTick:sub.deal;TickerState:sub.ticker;BulkTicker:sub.tickers;CandleBar:sub.kline;OrderBookSnapshot:REST:/api/v1/contract/depth/{symbol};OrderBookDelta:sub.depth:compress=false;FullDepth:sub.depth.full;ReferencePriceEvidence:sub.ticker;FundingEvidence:sub.ticker`
+`S1F_MEXC_PRIMARY_SOURCE_MATRIX=TradeTick:sub.deal;TickerState:sub.ticker;BulkTicker:sub.tickers;CandleBar:sub.kline;CandleCloseProof:REST:/api/v1/contract/kline/{symbol};OrderBookSnapshot:REST:/api/v1/contract/depth/{symbol};OrderBookDelta:sub.depth:compress=false;FullDepth:sub.depth.full;ReferencePriceEvidence:sub.ticker;FundingEvidence:sub.ticker`
 
 `S1F_MEXC_PUBLIC_CHANNELS=sub.tickers,sub.ticker,sub.deal,sub.depth,sub.depth.full,sub.kline`
 
@@ -171,7 +172,9 @@ This normalized contract is the implementation and audit source for the V1 publi
 
 `S1F_MEXC_FUNDING_PRIMARY=WS sub.ticker;fundingRate+timestamp;dedicated_channel=OPTIONAL_CORROBORATION`
 
-`S1F_MEXC_NO_OTHER_PUBLIC_ENDPOINTS=GOVERNED_SOURCE_CONTRACT_CHANGE_REQUIRED`
+`S1F_MEXC_AUTHORIZED_PUBLIC_REST=GET /api/v1/contract/depth/{symbol};GET /api/v1/contract/depth_commits/{symbol}/{limit};GET /api/v1/contract/kline/{symbol}`
+
+`S1F_MEXC_NO_OTHER_PUBLIC_ENDPOINTS=ONLY_AUTHORIZED_REST_SET_OR_FUTURE_GOVERNED_SOURCE_CONTRACT_CHANGE_REQUIRED`
 
 Dedicated `sub.funding.rate`, `sub.index.price` and `sub.fair.price` are not required for V1 because `sub.ticker` is the declared primary source; if used later, they remain explicit `OPTIONAL_CORROBORATION` and never become hidden dependencies. No other public MEXC endpoint or channel is authorized by S1F unless added through a future governed source-contract change.
 
@@ -199,25 +202,39 @@ Outer WS `ts` and `sub.ticker.data.timestamp` are provider timestamps in epoch m
 
 `S1F_MEXC_DEPTH_SUBSCRIPTION=method=sub.depth;compress=false`
 
-`S1F_MEXC_DEPTH_TUPLE=price,order_count,order_quantity`
+`S1F_MEXC_DEPTH_TUPLE=price,contract_volume,order_count`
 
-`S1F_MEXC_DEPTH_QUANTITY=third_element_order_quantity`
+`S1F_MEXC_DEPTH_QUANTITY=second_element_contract_volume`
+
+`S1F_MEXC_DEPTH_ORDER_COUNT=third_element_order_count`
+
+`S1F_MEXC_DEPTH_PINNED_EXAMPLE=[411.8,10,1]=>price=411.8;quantity=10;order_count=1`
 
 `S1F_MEXC_DEPTH_VERSION_RULE=next_version=previous_version+1;else=GAP_RESYNC_REQUIRED`
 
-`S1F_MEXC_DEPTH_ZERO_QUANTITY=REMOVE_LEVEL`
+`S1F_MEXC_DEPTH_ZERO_QUANTITY=REMOVE_LEVEL_WHEN_SECOND_ELEMENT_ZERO`
 
 `S1F_MEXC_FULL_DEPTH_LIMITS=5,10,20`
 
 `S1F_MEXC_FULL_DEPTH_IDENTITY=subscription_context_required`
 
-The third depth tuple element is canonical executable quantity; the second is `order_count` metadata and is never quantity. Incremental depth uses `compress=false`; a new event must be exactly the previous version plus one. A gap or discontinuity is `GAP_RESYNC_REQUIRED` and reinitializes from the documented REST recovery path. Quantity zero removes the price level. Full-depth updates use the same `push.depth` shape and require subscription-intent identity.
+The official REST depth note and WS depth tip use inconsistent English labels for the second and third tuple elements. The REST example `[411.8,10,1]` describes `10` as contract volume at the price and `1` as order quantity/count, while the WS tip describes the same positions with different wording. S1F resolves the discrepancy by the semantic example, not by field-name guessing: the canonical tuple is `[price, contract_volume, order_count]`, `BookLevel.quantity` is the second element, and the third element remains provider order-count metadata. Incremental depth uses `compress=false`; a new event must be exactly the previous version plus one. A gap or discontinuity is `GAP_RESYNC_REQUIRED` and reinitializes from the documented REST recovery path. Zero second-element contract volume removes the price level; the order-count field never keys deletion. Full-depth updates use the same `push.depth` shape and require subscription-intent identity.
 
 `S1F_MEXC_CANDLE_CLOSE_PROOF=NEXT_WINDOW_OR_REST_CONFIRMATION`
 
 `S1F_MEXC_KLINE_FINAL_FLAG=ABSENT;DO_NOT_FABRICATE`
 
-The MEXC kline payload has no explicit final/closed boolean. A bar remains `OPEN` while updates remain admissible. V1 `CLOSED` requires the interval boundary to have passed and either a later kline window for the same contract/interval/generation or deterministic post-boundary REST kline confirmation. Without that proof finality remains `OPEN`/`UNKNOWN`; late corrections create immutable revisions with `knowledge_time` and predecessor lineage.
+`S1F_MEXC_KLINE_REST=GET /api/v1/contract/kline/{symbol}`
+
+`S1F_MEXC_KLINE_REST_INTERVAL=canonical_provider_interval;default=Min1`
+
+`S1F_MEXC_KLINE_REST_START_END=epoch_seconds`
+
+`S1F_MEXC_KLINE_REST_LIMIT=maximum_2000_points_per_request`
+
+`S1F_MEXC_KLINE_REST_CLOSE_IDENTITY=contract_symbol;interval;expected_window_start;expected_window_end;returned_time_array`
+
+The MEXC kline payload has no explicit final/closed boolean. A bar remains `OPEN` while updates remain admissible. V1 `CLOSED` requires the interval boundary to have passed and either a later kline window for the same contract/interval/generation or a deterministic post-boundary REST confirmation from `GET /api/v1/contract/kline/{symbol}`. The REST request must use the canonical provider interval and both expected `start`/`end` epoch-second bounds; the response `time` array must exactly identify the expected contract/interval/window. MEXC permits at most 2000 points per request; confirmation is bounded to the exact bar/window where practical. A response for another interval, window or contract cannot close the bar. If exact identity cannot be proven, finality remains `OPEN`/`UNKNOWN`; late corrections create immutable revisions with `knowledge_time` and predecessor lineage.
 
 ### Parser and fixture reproducibility contract
 
@@ -290,8 +307,9 @@ Minimum traceability locators include `R05::Transport and feed requirements::B1-
 
 - URL: `https://mexcdevelop.github.io/apidocs/contract_v1_en/`;
 - retrieved: `2026-09-13`;
-- raw response SHA-256: `57ebc13fea788a1c568c8aeabfdf50acc0c9f5b5a882af4855837d53499940e`;
-- protocol facts bound: `wss://contract.mexc.com/edge`, `ping`/`pong`, one-minute disconnect without ping, public `sub.tickers`, `sub.deal`, `sub.depth`, `sub.depth.full`, `sub.kline`, REST depth snapshot/version maintenance;
+- raw response SHA-256: `57ebc13fea788a1c568c8aeabfdf50acc0c9f5b5a882af4855837d53499940e3`;
+- source-contract version: `S1F_MEXC_SOURCE_CONTRACT_V1`;
+- protocol facts bound: `wss://contract.mexc.com/edge`, `ping`/`pong`, one-minute disconnect without ping, public `sub.tickers`, `sub.ticker`, `sub.deal`, `sub.depth`, `sub.depth.full`, `sub.kline`, and authorized REST `GET /api/v1/contract/depth/{symbol}`, `GET /api/v1/contract/depth_commits/{symbol}/{limit}`, `GET /api/v1/contract/kline/{symbol}`;
 - evidence convention: raw URL response hash plus retrieval date is authoritative for protocol truth; deterministic CI uses pinned fixtures/fakes and does not make live network calls.
 
 ## ARCHITECTURE RULES

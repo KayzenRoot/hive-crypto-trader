@@ -95,6 +95,7 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           import os
+          import re
           from pathlib import Path
 
           candidate = Path("docs/131-implementation-authorization-s1f-candidate.md").read_text()
@@ -123,16 +124,17 @@ jobs:
               "S1F_TRANSPORT_MODE=NECESSARY_PUBLIC_UNAUTHENTICATED",
               "S1F_MEXC_SOURCE_URL=https://mexcdevelop.github.io/apidocs/contract_v1_en/",
               "S1F_MEXC_SOURCE_RETRIEVED=2026-09-13",
-              "S1F_MEXC_SOURCE_SHA256=57ebc13fea788a1c568c8aeabfdf50acc0c9f5b5a882af4855837d53499940e",
+              "S1F_MEXC_SOURCE_SHA256=57ebc13fea788a1c568c8aeabfdf50acc0c9f5b5a882af4855837d53499940e3",
               "S1F_MEXC_WS_URL=wss://contract.mexc.com/edge",
               "S1F_MEXC_PUBLIC_CHANNELS=sub.tickers,sub.ticker,sub.deal,sub.depth,sub.depth.full,sub.kline",
               "S1F_MEXC_PING_POLICY=ping every 10-20 seconds; disconnect if no ping within 1 minute",
               "S1F_MEXC_SOURCE_CONTRACT_VERSION=S1F_MEXC_SOURCE_CONTRACT_V1",
-              "S1F_MEXC_PRIMARY_SOURCE_MATRIX=TradeTick:sub.deal;TickerState:sub.ticker;BulkTicker:sub.tickers;CandleBar:sub.kline;OrderBookSnapshot:REST:/api/v1/contract/depth/{symbol};OrderBookDelta:sub.depth:compress=false;FullDepth:sub.depth.full;ReferencePriceEvidence:sub.ticker;FundingEvidence:sub.ticker",
+              "S1F_MEXC_PRIMARY_SOURCE_MATRIX=TradeTick:sub.deal;TickerState:sub.ticker;BulkTicker:sub.tickers;CandleBar:sub.kline;CandleCloseProof:REST:/api/v1/contract/kline/{symbol};OrderBookSnapshot:REST:/api/v1/contract/depth/{symbol};OrderBookDelta:sub.depth:compress=false;FullDepth:sub.depth.full;ReferencePriceEvidence:sub.ticker;FundingEvidence:sub.ticker",
               "S1F_MEXC_TICKER_PRIMARY=WS sub.ticker -> push.ticker;data.lastPrice,bid1,ask1,volume24,holdVol,indexPrice,fairPrice,fundingRate,timestamp;outer.symbol,outer.ts",
               "S1F_MEXC_REFERENCE_PRIMARY=WS sub.ticker;MARK=fairPrice;FAIR=fairPrice;INDEX=indexPrice;dedicated_channels=OPTIONAL_CORROBORATION",
               "S1F_MEXC_FUNDING_PRIMARY=WS sub.ticker;fundingRate+timestamp;dedicated_channel=OPTIONAL_CORROBORATION",
-              "S1F_MEXC_NO_OTHER_PUBLIC_ENDPOINTS=GOVERNED_SOURCE_CONTRACT_CHANGE_REQUIRED",
+              "S1F_MEXC_AUTHORIZED_PUBLIC_REST=GET /api/v1/contract/depth/{symbol};GET /api/v1/contract/depth_commits/{symbol}/{limit};GET /api/v1/contract/kline/{symbol}",
+              "S1F_MEXC_NO_OTHER_PUBLIC_ENDPOINTS=ONLY_AUTHORIZED_REST_SET_OR_FUTURE_GOVERNED_SOURCE_CONTRACT_CHANGE_REQUIRED",
               "S1F_MEXC_WS_TS_UNIT=MILLISECONDS",
               "S1F_MEXC_TICKER_TIMESTAMP_UNIT=MILLISECONDS",
               "S1F_MEXC_KLINE_T_UNIT=SECONDS",
@@ -142,14 +144,21 @@ jobs:
               "S1F_MEXC_DEPTH_SNAPSHOT_REST=GET /api/v1/contract/depth/{symbol}",
               "S1F_MEXC_DEPTH_RECOVERY_REST=GET /api/v1/contract/depth_commits/{symbol}/{limit}",
               "S1F_MEXC_DEPTH_SUBSCRIPTION=method=sub.depth;compress=false",
-              "S1F_MEXC_DEPTH_TUPLE=price,order_count,order_quantity",
-              "S1F_MEXC_DEPTH_QUANTITY=third_element_order_quantity",
+              "S1F_MEXC_DEPTH_TUPLE=price,contract_volume,order_count",
+              "S1F_MEXC_DEPTH_QUANTITY=second_element_contract_volume",
+              "S1F_MEXC_DEPTH_ORDER_COUNT=third_element_order_count",
+              "S1F_MEXC_DEPTH_PINNED_EXAMPLE=[411.8,10,1]=>price=411.8;quantity=10;order_count=1",
               "S1F_MEXC_DEPTH_VERSION_RULE=next_version=previous_version+1;else=GAP_RESYNC_REQUIRED",
-              "S1F_MEXC_DEPTH_ZERO_QUANTITY=REMOVE_LEVEL",
+              "S1F_MEXC_DEPTH_ZERO_QUANTITY=REMOVE_LEVEL_WHEN_SECOND_ELEMENT_ZERO",
               "S1F_MEXC_FULL_DEPTH_LIMITS=5,10,20",
               "S1F_MEXC_FULL_DEPTH_IDENTITY=subscription_context_required",
               "S1F_MEXC_CANDLE_CLOSE_PROOF=NEXT_WINDOW_OR_REST_CONFIRMATION",
               "S1F_MEXC_KLINE_FINAL_FLAG=ABSENT;DO_NOT_FABRICATE",
+              "S1F_MEXC_KLINE_REST=GET /api/v1/contract/kline/{symbol}",
+              "S1F_MEXC_KLINE_REST_INTERVAL=canonical_provider_interval;default=Min1",
+              "S1F_MEXC_KLINE_REST_START_END=epoch_seconds",
+              "S1F_MEXC_KLINE_REST_LIMIT=maximum_2000_points_per_request",
+              "S1F_MEXC_KLINE_REST_CLOSE_IDENTITY=contract_symbol;interval;expected_window_start;expected_window_end;returned_time_array",
               "S1F_MEXC_DECIMAL_PARSE=LEXICAL_PROVIDER_TOKEN_TO_DECIMAL_NO_BINARY_FLOAT",
               "S1F_MEXC_FIXTURE_MANIFEST=source_url;retrieved;source_sha256;normalized_schema_version;fixture_hashes",
               "S1F_NO_PRIVATE_CHANNELS=true",
@@ -180,21 +189,51 @@ jobs:
           for decision in exact_decisions:
               assert decision in combined, decision
           assert "https://mexcdevelop.github.io/apidocs/contract_v1_en/" in implementation
-          assert "57ebc13fea788a1c568c8aeabfdf50acc0c9f5b5a882af4855837d53499940e" in implementation
+          source_sha = "57ebc13fea788a1c568c8aeabfdf50acc0c9f5b5a882af4855837d53499940e3"
+          assert re.fullmatch(r"[0-9a-f]{64}", source_sha)
+          artifacts = (candidate, authorization, implementation, workflow)
+          metadata = (
+              "S1F_MEXC_SOURCE_URL=https://mexcdevelop.github.io/apidocs/contract_v1_en/",
+              "S1F_MEXC_SOURCE_RETRIEVED=2026-09-13",
+              f"S1F_MEXC_SOURCE_SHA256={source_sha}",
+              "S1F_MEXC_SOURCE_CONTRACT_VERSION=S1F_MEXC_SOURCE_CONTRACT_V1",
+              "S1F_MEXC_PUBLIC_CHANNELS=sub.tickers,sub.ticker,sub.deal,sub.depth,sub.depth.full,sub.kline",
+              "S1F_MEXC_AUTHORIZED_PUBLIC_REST=GET /api/v1/contract/depth/{symbol};GET /api/v1/contract/depth_commits/{symbol}/{limit};GET /api/v1/contract/kline/{symbol}",
+          )
+          for artifact in artifacts:
+              for marker in metadata:
+                  assert artifact.count(marker) >= 1, marker
+              hashes = re.findall(r"S1F_MEXC_SOURCE_SHA256=([0-9a-f]+)", artifact)
+              assert hashes and all(re.fullmatch(r"[0-9a-f]{64}", value) for value in hashes), hashes
           for document in (candidate, implementation):
               assert "## NORMALIZED MEXC SOURCE CONTRACT" in document
               for matrix_fragment in (
                   "TradeTick", "WS `sub.deal` -> `push.deal`", "TickerState", "WS `sub.ticker` -> `push.ticker`",
                   "Bulk ticker projection", "WS `sub.tickers` -> `push.tickers`", "CandleBar", "WS `sub.kline` -> `push.kline`",
+                  "Candle close-proof evidence", "interval", "start` and `end` are epoch seconds", "response `time` array",
                   "OrderBookSnapshot", "GET /api/v1/contract/depth/{symbol}", "OrderBookDelta", "compress=false",
                   "Bounded full-depth projection", "sub.depth.full", "ReferencePriceEvidence", "FundingEvidence",
                   "OPTIONAL_CORROBORATION", "S1F_MEXC_SOURCE_CONTRACT_VERSION=S1F_MEXC_SOURCE_CONTRACT_V1",
-                  "S1F_MEXC_NO_OTHER_PUBLIC_ENDPOINTS=GOVERNED_SOURCE_CONTRACT_CHANGE_REQUIRED",
+                  "S1F_MEXC_NO_OTHER_PUBLIC_ENDPOINTS=ONLY_AUTHORIZED_REST_SET_OR_FUTURE_GOVERNED_SOURCE_CONTRACT_CHANGE_REQUIRED",
                   "S1F_MEXC_DEPTH_RECOVERY_REST=GET /api/v1/contract/depth_commits/{symbol}/{limit}",
-                  "S1F_MEXC_DEPTH_TUPLE=price,order_count,order_quantity",
+                  "S1F_MEXC_DEPTH_TUPLE=price,contract_volume,order_count",
+                  "S1F_MEXC_DEPTH_QUANTITY=second_element_contract_volume",
+                  "S1F_MEXC_DEPTH_ORDER_COUNT=third_element_order_count",
+                  "S1F_MEXC_DEPTH_PINNED_EXAMPLE=[411.8,10,1]=>price=411.8;quantity=10;order_count=1",
                   "S1F_MEXC_DEPTH_VERSION_RULE=next_version=previous_version+1;else=GAP_RESYNC_REQUIRED",
+                  "S1F_MEXC_DEPTH_ZERO_QUANTITY=REMOVE_LEVEL_WHEN_SECOND_ELEMENT_ZERO",
                   "S1F_MEXC_CANDLE_CLOSE_PROOF=NEXT_WINDOW_OR_REST_CONFIRMATION",
                   "S1F_MEXC_KLINE_FINAL_FLAG=ABSENT;DO_NOT_FABRICATE",
+                  "S1F_MEXC_KLINE_REST=GET /api/v1/contract/kline/{symbol}",
+                  "S1F_MEXC_KLINE_REST_INTERVAL=canonical_provider_interval;default=Min1",
+                  "S1F_MEXC_KLINE_REST_START_END=epoch_seconds",
+                  "S1F_MEXC_KLINE_REST_LIMIT=maximum_2000_points_per_request",
+                  "S1F_MEXC_KLINE_REST_CLOSE_IDENTITY=contract_symbol;interval;expected_window_start;expected_window_end;returned_time_array",
+                  "canonical tuple is `[price, contract_volume, order_count]`",
+                  "`BookLevel.quantity` is the second element",
+                  "order-count field never keys deletion",
+                  "A response for another interval, window or contract cannot close the bar",
+                  "If exact identity cannot be proven, finality remains `OPEN`/`UNKNOWN`",
                   "S1F_MEXC_DECIMAL_PARSE=LEXICAL_PROVIDER_TOKEN_TO_DECIMAL_NO_BINARY_FLOAT",
                   "S1F_MEXC_FIXTURE_MANIFEST=source_url;retrieved;source_sha256;normalized_schema_version;fixture_hashes",
               ):
