@@ -5,10 +5,11 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 
-_HASH_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+from hct_backend.contracts import IdentityKind, StableId
+
 _TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9._:/-]{1,128}$")
 
 
@@ -114,12 +115,6 @@ def _text(value: str, label: str) -> str:
 def _hash(value: object) -> str:
     encoded = json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
-
-
-def _fingerprint(value: str, label: str) -> str:
-    if not isinstance(value, str) or not _HASH_PATTERN.fullmatch(value):
-        raise GovernorInputError(f"{label} must be a lowercase SHA-256 fingerprint")
-    return value
 
 
 @dataclass(frozen=True, slots=True)
@@ -279,6 +274,34 @@ class CircuitSnapshot:
             raise GovernorConsistencyError("open circuit requires opened time")
         if self.opened_at_ms is not None:
             _non_negative(self.opened_at_ms, "circuit opened time")
+        if self.state is CircuitState.CLOSED:
+            if self.opened_at_ms is not None or self.probe_in_flight:
+                raise GovernorConsistencyError("closed circuit cannot carry open or probe state")
+            if self.failure_count >= self.failure_threshold:
+                raise GovernorConsistencyError("closed circuit cannot reach failure threshold")
+        elif self.state is CircuitState.OPEN:
+            if self.probe_in_flight:
+                raise GovernorConsistencyError("open circuit cannot carry an in-flight probe")
+            if self.failure_count < self.failure_threshold:
+                raise GovernorConsistencyError("open circuit requires failure threshold")
+        else:
+            if self.opened_at_ms is not None:
+                raise GovernorConsistencyError("half-open circuit cannot carry open time")
+            if self.failure_count < self.failure_threshold:
+                raise GovernorConsistencyError("half-open circuit requires failure threshold")
+
+    @property
+    def fingerprint(self) -> str:
+        return _hash(
+            {
+                "state": self.state.value,
+                "failure_count": self.failure_count,
+                "failure_threshold": self.failure_threshold,
+                "cooldown_ms": self.cooldown_ms,
+                "opened_at_ms": self.opened_at_ms,
+                "probe_in_flight": self.probe_in_flight,
+            }
+        )
 
     def transition(self, elapsed_ms: int) -> CircuitSnapshot:
         _non_negative(elapsed_ms, "circuit elapsed time")
@@ -289,7 +312,13 @@ class CircuitSnapshot:
             raise GovernorInputError("circuit time moved backwards")
         if elapsed_ms - self.opened_at_ms < self.cooldown_ms:
             return self
-        return replace(self, state=CircuitState.HALF_OPEN, probe_in_flight=False)
+        return replace(
+            self,
+            state=CircuitState.HALF_OPEN,
+            failure_count=self.failure_threshold,
+            opened_at_ms=None,
+            probe_in_flight=False,
+        )
 
     def begin_probe(self, elapsed_ms: int) -> CircuitSnapshot:
         transitioned = self.transition(elapsed_ms)
@@ -299,7 +328,11 @@ class CircuitSnapshot:
 
     def record_failure(self, elapsed_ms: int) -> CircuitSnapshot:
         _non_negative(elapsed_ms, "circuit elapsed time")
+        if self.state is CircuitState.OPEN:
+            raise GovernorConsistencyError("open circuit has no admitted failure transition")
         if self.state is CircuitState.HALF_OPEN:
+            if not self.probe_in_flight:
+                raise GovernorConsistencyError("half-open failure requires an in-flight probe")
             return replace(
                 self,
                 state=CircuitState.OPEN,
@@ -319,6 +352,8 @@ class CircuitSnapshot:
         return replace(self, failure_count=next_count)
 
     def record_success(self) -> CircuitSnapshot:
+        if self.state is not CircuitState.HALF_OPEN or not self.probe_in_flight:
+            raise GovernorConsistencyError("success requires an in-flight half-open probe")
         return replace(
             self,
             state=CircuitState.CLOSED,
@@ -363,7 +398,7 @@ class SubscriptionIntent:
     """Immutable planning intent; it contains no executable transport handle."""
 
     intent_id: str
-    contract_id: str
+    contract_id: StableId
     channel: str
     priority: PriorityClass
     generation: SessionGeneration
@@ -371,7 +406,11 @@ class SubscriptionIntent:
 
     def __post_init__(self) -> None:
         _text(self.intent_id, "intent id")
-        _text(self.contract_id, "contract id")
+        if (
+            not isinstance(self.contract_id, StableId)
+            or self.contract_id.kind is not IdentityKind.INSTRUMENT
+        ):
+            raise GovernorInputError("contract id must be an INSTRUMENT StableId")
         _text(self.channel, "channel")
         if not isinstance(self.priority, PriorityClass):
             raise GovernorInputError("invalid intent priority")
@@ -385,7 +424,7 @@ class SubscriptionIntent:
         return _hash(
             {
                 "intent_id": self.intent_id,
-                "contract_id": self.contract_id,
+                "contract_id": self.contract_id.as_text(),
                 "channel": self.channel,
                 "priority": self.priority.value,
                 "generation": self.generation.number,
@@ -472,18 +511,54 @@ class AdmissionDecision:
 
     outcome: AdmissionOutcome
     reason: AdmissionReason
-    fingerprint: str
+    fingerprint: str = field(init=False)
 
-    def __post_init__(self) -> None:
-        if not isinstance(self.outcome, AdmissionOutcome):
+    @classmethod
+    def create(
+        cls,
+        *,
+        outcome: AdmissionOutcome,
+        reason: AdmissionReason,
+        material: object,
+    ) -> AdmissionDecision:
+        if not isinstance(outcome, AdmissionOutcome):
             raise GovernorInputError("invalid admission outcome")
-        if not isinstance(self.reason, AdmissionReason):
+        if not isinstance(reason, AdmissionReason):
             raise GovernorInputError("invalid admission reason")
-        _fingerprint(self.fingerprint, "admission fingerprint")
-        if self.outcome is AdmissionOutcome.ADMIT and self.reason is not AdmissionReason.ADMITTED:
-            raise GovernorConsistencyError("admit outcome requires admitted reason")
-        if self.outcome is not AdmissionOutcome.ADMIT and self.reason is AdmissionReason.ADMITTED:
-            raise GovernorConsistencyError("admitted reason requires admit outcome")
+        allowed = {
+            AdmissionOutcome.ADMIT: frozenset({AdmissionReason.ADMITTED}),
+            AdmissionOutcome.DEFER: frozenset(
+                {
+                    AdmissionReason.STALE_GENERATION,
+                    AdmissionReason.RETRY_EXHAUSTED,
+                    AdmissionReason.QUEUE_FULL,
+                    AdmissionReason.PROTECTED_RESERVE,
+                    AdmissionReason.BUDGET_EXHAUSTED,
+                }
+            ),
+            AdmissionOutcome.SHED: frozenset(
+                {
+                    AdmissionReason.QUEUE_FULL,
+                    AdmissionReason.PROTECTED_RESERVE,
+                    AdmissionReason.BUDGET_EXHAUSTED,
+                }
+            ),
+            AdmissionOutcome.CIRCUIT_OPEN: frozenset(
+                {AdmissionReason.CIRCUIT_OPEN, AdmissionReason.PROBE_IN_FLIGHT}
+            ),
+            AdmissionOutcome.UNKNOWN: frozenset({AdmissionReason.UNKNOWN_BUDGET}),
+        }
+        if reason not in allowed[outcome]:
+            raise GovernorConsistencyError("outcome and reason are not an allowed pair")
+        instance = object.__new__(cls)
+        object.__setattr__(instance, "outcome", outcome)
+        object.__setattr__(instance, "reason", reason)
+        object.__setattr__(
+            instance,
+            "fingerprint",
+            _hash({"material": material, "outcome": outcome.value, "reason": reason.value}),
+        )
+        return instance
 
 
 class QuotaGovernor:
@@ -565,11 +640,11 @@ class QuotaGovernor:
                 AdmissionReason.CIRCUIT_OPEN,
             )
         if effective_circuit.state is CircuitState.HALF_OPEN and (
-            not request.is_probe or effective_circuit.probe_in_flight
+            not request.is_probe or not effective_circuit.probe_in_flight
         ):
             reason = (
                 AdmissionReason.PROBE_IN_FLIGHT
-                if effective_circuit.probe_in_flight
+                if effective_circuit.probe_in_flight and not request.is_probe
                 else AdmissionReason.CIRCUIT_OPEN
             )
             return QuotaGovernor._decision(
@@ -681,17 +756,14 @@ class QuotaGovernor:
         outcome: AdmissionOutcome,
         reason: AdmissionReason,
     ) -> AdmissionDecision:
-        fingerprint = _hash(
-            {
+        return AdmissionDecision.create(
+            outcome=outcome,
+            reason=reason,
+            material={
                 "request": request.fingerprint,
                 "budget": budget.fingerprint,
                 "queue": queue.fingerprint,
-                "circuit": {
-                    "state": circuit.state.value,
-                    "failure_count": circuit.failure_count,
-                    "opened_at_ms": circuit.opened_at_ms,
-                    "probe_in_flight": circuit.probe_in_flight,
-                },
+                "circuit": circuit.fingerprint,
                 "retry": {
                     "max_attempts": retry.max_attempts,
                     "used_attempts": retry.used_attempts,
@@ -703,8 +775,5 @@ class QuotaGovernor:
                     "retired": current_generation.retired,
                 },
                 "elapsed_ms": elapsed_ms,
-                "outcome": outcome.value,
-                "reason": reason.value,
-            }
+            },
         )
-        return AdmissionDecision(outcome=outcome, reason=reason, fingerprint=fingerprint)

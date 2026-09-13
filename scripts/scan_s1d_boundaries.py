@@ -26,10 +26,14 @@ ALLOWED_PRODUCTION_IMPORTS = frozenset(
         "dataclasses",
         "enum",
         "hashlib",
+        "hct_backend.contracts",
         "json",
         "re",
     }
 )
+ALLOWED_INTERNAL_IMPORTS = {
+    "hct_backend.contracts": frozenset({"IdentityKind", "StableId"}),
+}
 FORBIDDEN_IMPORT_ROOTS = frozenset(
     {
         "aiohttp",
@@ -66,6 +70,10 @@ FORBIDDEN_NAME_PATTERNS = (
 )
 FORBIDDEN_ROUTE_TERMS = re.compile(
     r"(?i)/(?:private|account|order|position|balance|trade|ticker|depth|kline|funding|open_interest)(?:/|$)"
+)
+FORBIDDEN_URL_HOST_LITERALS = re.compile(
+    r"(?i)(?:https?|wss?)://|"
+    r"(?<![A-Za-z0-9.-])(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}(?::[0-9]{1,5})?(?:/|$)"
 )
 SECRET_PATTERNS = (
     re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----"),
@@ -157,6 +165,16 @@ def scan_production_python(name: str, text: str) -> list[str]:
                     failures.append(f"forbidden import {module}: {name}")
                 if module not in ALLOWED_PRODUCTION_IMPORTS:
                     failures.append(f"unapproved production import {module}: {name}")
+                if (
+                    isinstance(node, ast.ImportFrom)
+                    and module in ALLOWED_INTERNAL_IMPORTS
+                ):
+                    imported = {alias.name for alias in node.names}
+                    unexpected = imported - ALLOWED_INTERNAL_IMPORTS[module]
+                    if unexpected or "*" in imported:
+                        failures.append(
+                            f"unapproved internal import symbols {sorted(unexpected or imported)}: {name}"
+                        )
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             if _forbidden_name(node.name):
                 failures.append(f"forbidden production symbol {node.name}: {name}")
@@ -188,8 +206,7 @@ def scan_production_python(name: str, text: str) -> list[str]:
             isinstance(node, ast.Constant)
             and isinstance(node.value, str)
             and (
-                "http://" in node.value
-                or "https://" in node.value
+                FORBIDDEN_URL_HOST_LITERALS.search(node.value)
                 or FORBIDDEN_ROUTE_TERMS.search(node.value)
             )
         ):

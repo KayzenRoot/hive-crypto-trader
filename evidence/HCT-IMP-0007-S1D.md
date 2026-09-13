@@ -46,29 +46,40 @@ The implementation provides immutable provider-neutral types for:
   explicit unknown capacity and SHA-256 policy fingerprints;
 - finite `PROTECTION`, `RECONCILIATION`, `NORMAL` and `RESEARCH` priority classes;
 - deterministic `ADMIT`, `DEFER`, `SHED`, `CIRCUIT_OPEN` and `UNKNOWN` outcomes with
-  reason codes and decision fingerprints;
+  an explicit allowed reason matrix and content-bound decision fingerprints;
 - bounded queue state with protected reserve enforcement for both quota units and
   queue capacity;
 - finite retry count and monotonic elapsed-time budgets;
-- pure `CLOSED`, `OPEN` and `HALF_OPEN` circuit transitions with one probe slot;
+- pure `CLOSED`, `OPEN` and `HALF_OPEN` circuit transitions with full material
+  fingerprints, fail-closed invariants and one explicitly reserved probe slot;
 - strictly increasing, explicitly retired session generations;
-- immutable requested/accepted/deferred subscription intents containing no
-  executable transport handle, callback or network payload.
+- immutable requested/accepted/deferred subscription intents bound to the frozen
+  `StableId(kind=INSTRUMENT)` identity and containing no executable transport
+  handle, callback or network payload.
 
 Unknown evidence never admits work. Stale or retired generations, exhausted
 retry state, open circuits, queue saturation and protected reserve conflicts are
-deterministically deferred or shed according to priority. No method performs I/O.
+deterministically deferred or shed according to priority. Contradictory circuit
+states, invalid probe recovery, contradictory outcome/reason pairs and
+caller-supplied fingerprints are rejected. No method performs I/O.
 
 The S1D scanner rejects production network/socket/WebSocket imports and calls,
-provider routes, endpoint/URL/host vocabulary, credentials/private concepts,
-market-ingest/trading/persistence/deployment/live surfaces, secrets and changed
-paths outside the authorized seven-file boundary.
+provider routes, `http://`, `https://`, `ws://`, `wss://` and generic domain/host
+literals, credentials/private concepts, market-ingest/trading/persistence/
+deployment/live surfaces, secrets and changed paths outside the authorized
+seven-file boundary. Only the exact HCT-owned canonical identity import required
+by S1D is permitted.
 
 ## Verification
 
-- Focused S1D tests: `19 passed`.
-- Full backend suite: `172 passed`, coverage `90.60%` (threshold `90%`).
-- Direct S0A/S0B/S0C/S1A/S1B/S1C plus S1D regressions: `165 passed`.
+- H001 circuit fingerprint mutation tests: `PASS`.
+- H002 circuit-state invariants and probe-recovery tests: `PASS`.
+- H003 content-bound evidence and outcome/reason matrix tests: `PASS`.
+- H004 canonical INSTRUMENT identity and negative tests: `PASS`.
+- H005 URL/host scanner negative tests: `PASS`.
+- Focused H001-H005/S1D tests: `23 passed`.
+- Full backend suite: `176 passed`, coverage `90.86%` (threshold `90%`).
+- Direct S0A/S0B/S0C/S1A/S1B/S1C plus S1D regressions: `169 passed`.
 - Contract generation reproducibility: `PASS`.
 - Contract schema parity: `PASS (10 schemas)`.
 - Ruff lint: `PASS`.

@@ -2,7 +2,9 @@ from dataclasses import FrozenInstanceError, replace
 
 import pytest
 
+from hct_backend.contracts import IdentityKind, StableId
 from hct_backend.quota_governor import (
+    AdmissionDecision,
     AdmissionOutcome,
     AdmissionReason,
     AdmissionRequest,
@@ -211,18 +213,66 @@ def test_circuit_transitions_closed_open_half_open_and_probe() -> None:
     assert (
         decide(request(), circuit=half_open, elapsed_ms=12).reason is AdmissionReason.CIRCUIT_OPEN
     )
-    probe = decide(request(is_probe=True), circuit=half_open, elapsed_ms=12)
-    assert probe.outcome is AdmissionOutcome.ADMIT
-    probing = half_open.begin_probe(12)
     assert (
-        decide(request(is_probe=True), circuit=probing, elapsed_ms=12).reason
-        is AdmissionReason.PROBE_IN_FLIGHT
+        decide(request(is_probe=True), circuit=half_open, elapsed_ms=12).reason
+        is AdmissionReason.CIRCUIT_OPEN
+    )
+    probing = half_open.begin_probe(12)
+    probe = decide(request(is_probe=True), circuit=probing, elapsed_ms=12)
+    assert probe.outcome is AdmissionOutcome.ADMIT
+    assert (
+        decide(request(), circuit=probing, elapsed_ms=12).reason is AdmissionReason.PROBE_IN_FLIGHT
     )
     assert probing.record_success().state is CircuitState.CLOSED
 
 
+def test_circuit_material_fingerprint_includes_policy_fields() -> None:
+    base = CircuitSnapshot()
+    changed_threshold = replace(base, failure_threshold=4)
+    changed_cooldown = replace(base, cooldown_ms=2_000)
+    assert base.fingerprint != changed_threshold.fingerprint
+    assert base.fingerprint != changed_cooldown.fingerprint
+    assert (
+        decide(request(), circuit=base).fingerprint
+        != decide(request(), circuit=changed_threshold).fingerprint
+    )
+    assert (
+        decide(request(), circuit=base).fingerprint
+        != decide(request(), circuit=changed_cooldown).fingerprint
+    )
+    assert base.fingerprint == replace(base).fingerprint
+
+
+def test_circuit_invariants_and_probe_transitions_fail_closed() -> None:
+    with pytest.raises(GovernorConsistencyError):
+        CircuitSnapshot(failure_count=3)
+    with pytest.raises(GovernorConsistencyError):
+        CircuitSnapshot(probe_in_flight=True)
+    with pytest.raises(GovernorConsistencyError):
+        CircuitSnapshot(state=CircuitState.OPEN, opened_at_ms=10)
+    with pytest.raises(GovernorConsistencyError):
+        CircuitSnapshot(
+            state=CircuitState.OPEN, opened_at_ms=10, failure_count=3, probe_in_flight=True
+        )
+    with pytest.raises(GovernorConsistencyError):
+        CircuitSnapshot(state=CircuitState.HALF_OPEN)
+
+    opened = CircuitSnapshot(state=CircuitState.OPEN, opened_at_ms=10, failure_count=3)
+    with pytest.raises(GovernorConsistencyError):
+        opened.record_success()
+    half_open = opened.transition(1_010)
+    with pytest.raises(GovernorConsistencyError):
+        half_open.record_success()
+    with pytest.raises(GovernorConsistencyError):
+        half_open.record_failure(1_010)
+    probing = half_open.begin_probe(1_010)
+    with pytest.raises(GovernorConsistencyError):
+        probing.begin_probe(1_010)
+    assert probing.record_failure(1_011).state is CircuitState.OPEN
+
+
 def test_circuit_time_rollback_is_rejected() -> None:
-    opened = CircuitSnapshot(state=CircuitState.OPEN, opened_at_ms=10)
+    opened = CircuitSnapshot(state=CircuitState.OPEN, opened_at_ms=10, failure_count=3)
     with pytest.raises(GovernorInputError):
         opened.transition(9)
 
@@ -248,7 +298,10 @@ def test_generation_rollover_and_retirement_reject_stale_control() -> None:
 def test_subscription_intent_is_immutable_and_non_executable() -> None:
     intent = SubscriptionIntent(
         intent_id="intent-1",
-        contract_id="btc-usdt-perpetual",
+        contract_id=StableId(
+            kind=IdentityKind.INSTRUMENT,
+            value="btc-usdt-perpetual",
+        ),
         channel="trades",
         priority=PriorityClass.NORMAL,
         generation=SessionGeneration(1),
@@ -259,6 +312,54 @@ def test_subscription_intent_is_immutable_and_non_executable() -> None:
         intent.state = IntentState.ACCEPTED  # type: ignore[misc]
     with pytest.raises(GovernorInputError):
         replace(intent, generation=SessionGeneration(1, retired=True))
+
+
+def test_subscription_intent_rejects_non_canonical_contract_identity() -> None:
+    with pytest.raises(GovernorInputError):
+        SubscriptionIntent(
+            intent_id="intent-plain",
+            contract_id="btc-usdt-perpetual",  # type: ignore[arg-type]
+            channel="trades",
+            priority=PriorityClass.NORMAL,
+            generation=SessionGeneration(1),
+        )
+    for kind in (
+        IdentityKind.EXCHANGE,
+        IdentityKind.REFERENCE_SNAPSHOT,
+        IdentityKind.UNIVERSE_SNAPSHOT,
+    ):
+        with pytest.raises(GovernorInputError):
+            SubscriptionIntent(
+                intent_id="intent-wrong-kind",
+                contract_id=StableId(kind=kind, value="wrong-domain"),
+                channel="trades",
+                priority=PriorityClass.NORMAL,
+                generation=SessionGeneration(1),
+            )
+
+
+def test_admission_evidence_is_content_bound_and_matrix_validated() -> None:
+    with pytest.raises(TypeError):
+        AdmissionDecision(  # type: ignore[call-arg]
+            outcome=AdmissionOutcome.ADMIT,
+            reason=AdmissionReason.ADMITTED,
+            fingerprint="0" * 64,
+        )
+    with pytest.raises(GovernorConsistencyError):
+        AdmissionDecision.create(
+            outcome=AdmissionOutcome.ADMIT,
+            reason=AdmissionReason.QUEUE_FULL,
+            material={"source": "test"},
+        )
+    with pytest.raises(GovernorConsistencyError):
+        AdmissionDecision.create(
+            outcome=AdmissionOutcome.UNKNOWN,
+            reason=AdmissionReason.BUDGET_EXHAUSTED,
+            material={"source": "test"},
+        )
+    first = decide(request())
+    changed = decide(request(units=2, priority=PriorityClass.PROTECTION))
+    assert first.fingerprint != changed.fingerprint
 
 
 def test_decisions_are_deterministic_for_equal_normalized_inputs() -> None:

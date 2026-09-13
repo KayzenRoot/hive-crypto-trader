@@ -13,7 +13,8 @@ def test_production_scan_allows_provider_neutral_control_state() -> None:
             "from dataclasses import dataclass\n"
             "from enum import StrEnum\n"
             "import hashlib\n"
-            "import json\n",
+            "import json\n"
+            "from hct_backend.contracts import IdentityKind, StableId\n",
         )
         == []
     )
@@ -30,6 +31,19 @@ def test_production_scan_rejects_network_provider_and_live_shapes() -> None:
     )
     assert scanner.scan_production_python(
         scanner.S1D_PRODUCTION_MODULE, 'url = "https://example.invalid"\n'
+    )
+    assert scanner.scan_production_python(
+        scanner.S1D_PRODUCTION_MODULE, 'neutral = "ws://example.invalid"\n'
+    )
+    assert scanner.scan_production_python(
+        scanner.S1D_PRODUCTION_MODULE, 'neutral = "wss://example.invalid/ws"\n'
+    )
+    assert scanner.scan_production_python(
+        scanner.S1D_PRODUCTION_MODULE, 'neutral = "contract.mexc.com"\n'
+    )
+    assert scanner.scan_production_python(
+        scanner.S1D_PRODUCTION_MODULE,
+        "from hct_backend.contracts import Environment\n",
     )
 
 

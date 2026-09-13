@@ -31,15 +31,28 @@ saturation, protected reserve exhaustion, exhausted budget and exhausted retry
 state defer protected work and shed research work. Every outcome carries a
 finite reason and a content fingerprint.
 
+Admission evidence has an explicit outcome/reason matrix: `ADMIT` only pairs
+with `ADMITTED`; `UNKNOWN` only pairs with `UNKNOWN_BUDGET`; `CIRCUIT_OPEN`
+only pairs with `CIRCUIT_OPEN` or `PROBE_IN_FLIGHT`; `DEFER` and `SHED` accept
+only their declared stale, retry, queue, reserve and budget reasons. The public
+factory recomputes the fingerprint from canonical material and does not accept
+a caller-supplied digest.
+
 ## Retry, circuit and session identity
 
 Retries are bounded by both attempts and monotonic elapsed time. Circuit state
-is a pure `CLOSED`/`OPEN`/`HALF_OPEN` state machine with a single probe slot;
-cooldown transition and time rollback are explicit. Session generations are
+is a pure `CLOSED`/`OPEN`/`HALF_OPEN` state machine with a single explicitly
+reserved probe slot. `CLOSED` cannot carry open time, a probe or a reached
+failure threshold; `OPEN` requires threshold evidence, open time and no probe;
+`HALF_OPEN` can close only after an in-flight probe succeeds and can reopen only
+after that probe fails. Direct contradictory construction and invalid recovery
+transitions are rejected. The circuit fingerprint covers state, failure count,
+failure threshold, cooldown, open time and probe state. Session generations are
 strictly increasing, stale or retired generations cannot admit work, and
-subscription intents bind to a live generation without an executable transport
-reference. Fingerprints cover all material policy, state, request and decision
-inputs so equal normalized inputs produce equal evidence.
+subscription intents bind a canonical `StableId(kind=INSTRUMENT)` to a live
+generation without an executable transport reference. Fingerprints cover all
+material policy, state, request and decision inputs so equal normalized inputs
+produce equal evidence.
 
 ## Explicit non-goals and authorization firewall
 
@@ -47,6 +60,9 @@ This ADR authorizes no network client, URL or endpoint, WebSocket or realtime
 ingest, venue subscribe/unsubscribe operation, reconnect I/O, credentials,
 private/account state, trading, Risk, OMS, Execution, persistence, frontend
 control, deployment, production credentials, limited-live or real-money
-trading. Planning freeze and implementation authorization do not authorize live
-trading. The S1D ceiling remains
+trading. The production boundary scanner also rejects `http://`, `https://`,
+`ws://`, `wss://` and domain/host literals, while allowing only the exact
+HCT-owned canonical identity import required by subscription intent validation.
+Planning freeze and implementation authorization do not authorize live trading.
+The S1D ceiling remains
 `NON_TRADING_STAGE_1_QUOTA_WS_BACKPRESSURE_GOVERNOR_FOUNDATION_ONLY`.
