@@ -74,11 +74,11 @@ by S1D is permitted.
 
 - H001 circuit fingerprint mutation tests: `PASS`.
 - H002 circuit-state invariants and probe-recovery tests: `PASS`.
-- H003 content-bound evidence and outcome/reason matrix tests: `PASS`.
+- H003 content-bound evidence, outcome/reason matrix and closed direct-constructor tests: `PASS`.
 - H004 canonical INSTRUMENT identity and negative tests: `PASS`.
 - H005 URL/host scanner negative tests: `PASS`.
 - Focused H001-H005/S1D tests: `23 passed`.
-- Full backend suite: `176 passed`, coverage `90.86%` (threshold `90%`).
+- Full backend suite: `176 passed`, coverage `90.87%` (threshold `90%`).
 - Direct S0A/S0B/S0C/S1A/S1B/S1C plus S1D regressions: `169 passed`.
 - Contract generation reproducibility: `PASS`.
 - Contract schema parity: `PASS (10 schemas)`.

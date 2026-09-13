@@ -340,6 +340,8 @@ def test_subscription_intent_rejects_non_canonical_contract_identity() -> None:
 
 def test_admission_evidence_is_content_bound_and_matrix_validated() -> None:
     with pytest.raises(TypeError):
+        AdmissionDecision()
+    with pytest.raises(TypeError):
         AdmissionDecision(  # type: ignore[call-arg]
             outcome=AdmissionOutcome.ADMIT,
             reason=AdmissionReason.ADMITTED,

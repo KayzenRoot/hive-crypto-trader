@@ -513,6 +513,9 @@ class AdmissionDecision:
     reason: AdmissionReason
     fingerprint: str = field(init=False)
 
+    def __init__(self) -> None:
+        raise TypeError("Use AdmissionDecision.create(...)")
+
     @classmethod
     def create(
         cls,
