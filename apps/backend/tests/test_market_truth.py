@@ -1,9 +1,20 @@
 from dataclasses import FrozenInstanceError, replace
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 import pytest
 
 from hct_backend.contracts import Environment, EnvironmentScopedId, IdentityKind, StableId
+from hct_backend.exchange_reference import (
+    CapabilityDeclaration,
+    CapabilityName,
+    CapabilitySnapshot,
+    CapabilityState,
+    ContractReference,
+    ContractType,
+    ExchangeDescriptor,
+    LifecycleClass,
+)
 from hct_backend.market_truth import (
     ActionClass,
     ChannelCapability,
@@ -38,7 +49,11 @@ from hct_backend.market_truth import (
     project_state,
     replay_sequence,
 )
-from hct_backend.market_universe import UniverseEligibilityState
+from hct_backend.market_universe import (
+    UniverseEligibilityState,
+    UniverseReasonCode,
+    recompute_universe,
+)
 
 NOW = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
 SOURCE = StableId(kind=IdentityKind.EXCHANGE, value="exchange-reference")
@@ -80,13 +95,27 @@ def observation(
     snapshot: bool = False,
     observed_at: datetime = NOW,
     gen: GenerationRef | None = None,
+    cap: ChannelCapability | None = None,
+    channel: str = "public-events",
+    contract: StableId = CONTRACT,
+    source: StableId = SOURCE,
+    schema_version: int = 1,
+    visibility: ChannelVisibility = ChannelVisibility.PUBLIC,
 ) -> SequenceObservation:
+    current_capability = cap or capability(SequenceMode.STRICT_SEQUENCE)
     return SequenceObservation(
         generation=gen or generation(),
         observed_at=observed_at,
         event_fingerprint=(str(number) * 64)[:64],
         update_id=update_id,
         is_snapshot=snapshot,
+        source_id=source,
+        channel=channel,
+        contract_id=contract,
+        schema_version=schema_version,
+        capability_fingerprint=current_capability.fingerprint,
+        capability_policy_version=current_capability.policy_version,
+        visibility=visibility,
     )
 
 
@@ -97,7 +126,13 @@ def event(
     snapshot: bool = True,
     gen: GenerationRef | None = None,
     event_environment: Environment = Environment.PAPER,
+    cap: ChannelCapability | None = None,
+    channel: str = "public-events",
+    contract: StableId = CONTRACT,
+    source: StableId = SOURCE,
+    schema_version: int = 1,
 ) -> NormalizedMarketEvent:
+    current_capability = cap or capability(SequenceMode.STRICT_SEQUENCE)
     current_generation = gen or generation()
     return NormalizedMarketEvent(
         event_id=EnvironmentScopedId(
@@ -106,16 +141,18 @@ def event(
             value=f"event-{number}",
         ),
         environment=event_environment,
-        source_id=SOURCE,
-        channel="public-events",
-        contract_id=CONTRACT,
-        schema_version=1,
+        source_id=source,
+        channel=channel,
+        contract_id=contract,
+        schema_version=schema_version,
         generation=current_generation,
         provenance_fingerprint=PROVENANCE,
         payload_fingerprint=PAYLOAD,
         event_time=NOW + timedelta(milliseconds=number),
         wall_receive_time=NOW + timedelta(milliseconds=number + 1),
         monotonic_elapsed_ms=number,
+        capability_fingerprint=current_capability.fingerprint,
+        capability_policy_version=current_capability.policy_version,
         update_id=update_id,
         is_snapshot=snapshot,
     )
@@ -159,7 +196,75 @@ def assessment(
 def decision(
     state: DataAuthorityState = DataAuthorityState.ALLOW_NEW_EXPOSURE,
 ) -> DataAuthorityDecision:
-    return DataAuthorityDecision(state, (QualityReason.FRESH_VALID,), tuple(ActionClass), 99)
+    assessments = {
+        DataAuthorityState.ALLOW_NEW_EXPOSURE: assessment(),
+        DataAuthorityState.DEGRADED_NEW_EXPOSURE: assessment(
+            disposition=ResourceDisposition.DEGRADED
+        ),
+        DataAuthorityState.NO_NEW_EXPOSURE: assessment(provenance_valid=False),
+        DataAuthorityState.REDUCE_ONLY: assessment(disposition=ResourceDisposition.DENIED),
+        DataAuthorityState.RECONCILIATION_ONLY: assessment(disposition=ResourceDisposition.UNKNOWN),
+        DataAuthorityState.EMERGENCY: assessment(schema_valid=False),
+    }
+    return derive_data_authority(assessments[state])
+
+
+def universe_snapshot(
+    *, lifecycle: LifecycleClass = LifecycleClass.ACTIVE, unknown_capability: bool = False
+) -> object:
+    exchange = StableId(kind=IdentityKind.EXCHANGE, value="venue-a")
+    descriptor = ExchangeDescriptor(
+        exchange_id=exchange,
+        display_name="Venue A",
+        reference_version=1,
+        source="declared-reference",
+        observed_at=NOW,
+        metadata=(("region", "global"),),
+    )
+    capability_state = CapabilityState.UNKNOWN if unknown_capability else CapabilityState.SUPPORTED
+    capabilities = CapabilitySnapshot(
+        snapshot_id=StableId(kind=IdentityKind.CAPABILITY_SNAPSHOT, value="cap-1"),
+        exchange_id=exchange,
+        version=1,
+        source="declared-reference",
+        observed_at=NOW,
+        declarations=tuple(
+            CapabilityDeclaration(
+                name, capability_state, None if unknown_capability else "catalogue"
+            )
+            for name in (
+                CapabilityName.EXCHANGE_DESCRIPTION,
+                CapabilityName.PUBLIC_REFERENCE,
+                CapabilityName.CONTRACT_REFERENCE,
+            )
+        ),
+    )
+    reference = ContractReference(
+        reference_id=StableId(kind=IdentityKind.REFERENCE_SNAPSHOT, value="ref-1"),
+        contract_id=CONTRACT,
+        exchange_id=exchange,
+        native_symbol="BTC_USDT",
+        lifecycle=lifecycle,
+        contract_type=ContractType.PERPETUAL,
+        price_increment=Decimal("0.10"),
+        quantity_increment=Decimal("0.001"),
+        source="declared-reference",
+        observed_at=NOW,
+        base_asset="BTC",
+        quote_asset="USDT",
+        settlement_asset="USDT",
+        price_precision=2,
+        quantity_precision=3,
+        min_quantity=Decimal("0.001"),
+        max_quantity=Decimal("100"),
+    )
+    return recompute_universe(
+        descriptor,
+        capabilities,
+        (reference,),
+        environment=Environment.PAPER,
+        recomputed_at=NOW,
+    )
 
 
 def state(
@@ -243,39 +348,76 @@ def test_strict_sequence_is_contiguous_and_fail_closed() -> None:
 def test_monotonic_update_id_only_calls_jumps_gaps_when_proven() -> None:
     unproven = capability(SequenceMode.MONOTONIC_UPDATE_ID)
     proven = capability(SequenceMode.MONOTONIC_UPDATE_ID, contiguous=True)
-    first = observation(1, update_id=10)
+    first = observation(1, update_id=10, cap=unproven)
     assert (
-        evaluate_sequence(unproven, first, observation(2, update_id=12)).result
-        is SequenceResultKind.ACCEPT
+        evaluate_sequence(unproven, first, observation(2, update_id=12, cap=unproven)).result
+        is SequenceResultKind.SEQUENCE_UNPROVABLE
     )
+    proven_first = observation(3, update_id=10, cap=proven)
     assert (
-        evaluate_sequence(proven, first, observation(3, update_id=12)).result
+        evaluate_sequence(proven, proven_first, observation(4, update_id=12, cap=proven)).result
         is SequenceResultKind.GAP
     )
     assert (
-        evaluate_sequence(unproven, first, observation(4)).result
+        evaluate_sequence(unproven, first, observation(5, cap=unproven)).result
         is SequenceResultKind.SEQUENCE_UNPROVABLE
     )
+
+
+def test_sequence_evaluation_rejects_contradictory_authoritative_material() -> None:
+    with pytest.raises(MarketTruthConsistencyError):
+        SequenceEvaluation(SequenceResultKind.GAP, True, QualityReason.GAP)
+    with pytest.raises(MarketTruthConsistencyError):
+        SequenceEvaluation(SequenceResultKind.ACCEPT, True, QualityReason.GAP)
+    with pytest.raises(MarketTruthConsistencyError):
+        SequenceEvaluation(
+            SequenceResultKind.SEQUENCE_UNPROVABLE,
+            True,
+            QualityReason.SEQUENCE_UNPROVABLE,
+        )
+
+
+def test_unproven_sequence_cannot_create_authority_and_snapshot_recovers() -> None:
+    cap = capability(SequenceMode.STRICT_SEQUENCE)
+    first_delta = observation(1, update_id=10, cap=cap)
+    unsynchronized = evaluate_sequence(cap, None, first_delta)
+    assert unsynchronized.result is SequenceResultKind.ACCEPT
+    assert not unsynchronized.synchronized
+    assert unsynchronized.reason is QualityReason.UNSYNCHRONIZED
+    assert (
+        derive_data_authority(assessment(sequence=unsynchronized)).state
+        is DataAuthorityState.NO_NEW_EXPOSURE
+    )
+    snapshot = observation(2, update_id=11, snapshot=True, cap=cap)
+    recovered = evaluate_sequence(cap, first_delta, snapshot)
+    assert recovered.result is SequenceResultKind.ACCEPT
+    assert recovered.synchronized
 
 
 def test_timestamp_ordering_bounds_lateness_without_inventing_gaps() -> None:
     cap = capability(SequenceMode.TIMESTAMP_ORDERED_WITH_LIMITS)
-    first = observation(1, observed_at=NOW)
-    late = observation(2, observed_at=NOW - timedelta(milliseconds=201))
+    first = observation(1, observed_at=NOW, cap=cap)
+    late = observation(2, observed_at=NOW - timedelta(milliseconds=201), cap=cap)
     assert evaluate_sequence(cap, first, late).result is SequenceResultKind.OUT_OF_ORDER
-    within = observation(3, observed_at=NOW - timedelta(milliseconds=100))
-    assert evaluate_sequence(cap, first, within).result is SequenceResultKind.ACCEPT
+    within = observation(3, observed_at=NOW - timedelta(milliseconds=100), cap=cap)
+    assert evaluate_sequence(cap, first, within).result is SequenceResultKind.SEQUENCE_UNPROVABLE
+    assert not evaluate_sequence(cap, first, within).synchronized
 
 
 def test_snapshot_only_and_unprovable_modes_never_infer_continuity() -> None:
     snapshot_cap = capability(SequenceMode.SNAPSHOT_ONLY)
-    first = observation(1, snapshot=True)
+    first = observation(1, snapshot=True, cap=snapshot_cap)
     assert evaluate_sequence(snapshot_cap, None, first).synchronized
     assert (
-        evaluate_sequence(snapshot_cap, first, observation(2, snapshot=False)).result
+        evaluate_sequence(
+            snapshot_cap, first, observation(2, snapshot=False, cap=snapshot_cap)
+        ).result
         is SequenceResultKind.SEQUENCE_UNPROVABLE
     )
-    no_proof = evaluate_sequence(capability(SequenceMode.NO_PROVABLE_SEQUENCE), None, first)
+    no_proof_cap = capability(SequenceMode.NO_PROVABLE_SEQUENCE)
+    no_proof = evaluate_sequence(
+        no_proof_cap, None, observation(2, snapshot=True, cap=no_proof_cap)
+    )
     assert no_proof.result is SequenceResultKind.SEQUENCE_UNPROVABLE
     assert not no_proof.synchronized
 
@@ -312,6 +454,43 @@ def test_event_rejects_wrong_identity_provenance_and_generation() -> None:
     )
     with pytest.raises(MarketTruthInputError):
         replace(event(1), provenance_fingerprint="bad")
+
+
+def test_sequence_identity_is_bound_to_channel_contract_visibility_and_capability() -> None:
+    eth = StableId(kind=IdentityKind.INSTRUMENT, value="eth-usdt-perpetual")
+    eth_capability = replace(capability(SequenceMode.STRICT_SEQUENCE), contract_scope=eth)
+    with pytest.raises(MarketTruthConsistencyError):
+        evaluate_sequence(eth_capability, None, event(1, cap=eth_capability).sequence_observation())
+
+    private = replace(
+        capability(SequenceMode.STRICT_SEQUENCE), visibility=ChannelVisibility.PRIVATE
+    )
+    with pytest.raises(MarketTruthConsistencyError):
+        evaluate_sequence(private, None, event(2, cap=private).sequence_observation())
+
+    other_channel = replace(capability(SequenceMode.STRICT_SEQUENCE), channel="other-channel")
+    with pytest.raises(MarketTruthConsistencyError):
+        evaluate_sequence(other_channel, None, event(3, cap=other_channel).sequence_observation())
+
+    with pytest.raises(MarketTruthConsistencyError):
+        event(4, source=StableId(kind=IdentityKind.EXCHANGE, value="other-venue"))
+
+    schema_two = replace(capability(SequenceMode.STRICT_SEQUENCE), schema_version=2)
+    with pytest.raises(MarketTruthConsistencyError):
+        evaluate_sequence(schema_two, None, event(5, cap=schema_two).sequence_observation())
+
+    first = event(6).sequence_observation()
+    policy_two = replace(capability(SequenceMode.STRICT_SEQUENCE), policy_version=2)
+    changed_policy = event(7, cap=policy_two).sequence_observation()
+    with pytest.raises(MarketTruthConsistencyError):
+        evaluate_sequence(capability(SequenceMode.STRICT_SEQUENCE), first, changed_policy)
+
+
+def test_replay_rejects_mixed_identity_before_sequence_semantics() -> None:
+    first = event(1)
+    mixed = replace(event(2), channel="other-channel")
+    with pytest.raises(MarketTruthConsistencyError):
+        replay_sequence(capability(SequenceMode.STRICT_SEQUENCE), (first, mixed))
 
 
 @pytest.mark.parametrize(
@@ -371,8 +550,8 @@ def test_quality_critical_predicates_dominate_explanatory_score() -> None:
         ),
         (
             ResourceDisposition.DEGRADED,
-            DataAuthorityState.ALLOW_NEW_EXPOSURE,
-            QualityReason.FRESH_VALID,
+            DataAuthorityState.DEGRADED_NEW_EXPOSURE,
+            QualityReason.RESOURCE_DEGRADED,
         ),
     ],
 )
@@ -384,12 +563,41 @@ def test_resource_seam_can_restrict_but_never_upgrade(
     assert reason in result.reasons
 
 
+def test_resource_degradation_cannot_upgrade_stricter_quality() -> None:
+    result = derive_data_authority(
+        assessment(
+            disposition=ResourceDisposition.DEGRADED,
+            sequence=SequenceEvaluation(SequenceResultKind.GAP, False, QualityReason.GAP),
+        )
+    )
+    assert result.state is DataAuthorityState.NO_NEW_EXPOSURE
+    assert result.allowed_actions == ()
+    available = derive_data_authority(
+        assessment(
+            disposition=ResourceDisposition.AVAILABLE,
+            sequence=SequenceEvaluation(SequenceResultKind.GAP, False, QualityReason.GAP),
+        )
+    )
+    assert available.state is DataAuthorityState.NO_NEW_EXPOSURE
+
+
 def test_quality_missing_and_safe_action_semantics_are_explicit() -> None:
     result = derive_data_authority(assessment(age_ms=None, freshness_limit_ms=None))
     assert result.state is DataAuthorityState.NO_NEW_EXPOSURE
-    assert ActionClass.NEW_EXPOSURE not in result.affected_actions
-    assert ActionClass.REDUCE_EXPOSURE in result.affected_actions
-    assert set(decision().affected_actions) == set(ActionClass)
+    assert ActionClass.NEW_EXPOSURE in result.affected_actions
+    assert ActionClass.REDUCE_EXPOSURE not in result.affected_actions
+    assert decision().affected_actions == ()
+    assert decision(DataAuthorityState.EMERGENCY).allowed_actions == ()
+
+
+def test_data_authority_direct_construction_is_rejected() -> None:
+    with pytest.raises(MarketTruthInputError):
+        DataAuthorityDecision(
+            DataAuthorityState.ALLOW_NEW_EXPOSURE,
+            (QualityReason.FRESH_VALID,),
+            tuple(ActionClass),
+            99,
+        )
 
 
 def test_trusted_state_requires_verified_synchronization_and_quality() -> None:
@@ -433,36 +641,59 @@ def test_generation_firewall_rejects_retired_and_late_states() -> None:
 
 def test_lifecycle_restriction_is_separate_from_market_trust() -> None:
     trusted = state()
-    ineligible = UniverseLifecycleEvidence(
-        StableId(kind=IdentityKind.UNIVERSE_SNAPSHOT, value="universe-paper-fixture"),
-        CONTRACT,
-        1,
-        # The exact S1C enum is consumed; S1E does not recreate its owner.
-        UniverseEligibilityState.INELIGIBLE,
-        ("INELIGIBLE_LIFECYCLE",),
-        1,
-        SNAPSHOT,
+    ineligible = UniverseLifecycleEvidence.from_snapshot(
+        universe_snapshot(lifecycle=LifecycleClass.INACTIVE), CONTRACT
     )
     restricted = apply_universe_lifecycle(trusted, ineligible)
     assert restricted.trust is MarketStateTrust.TRUSTED
     assert restricted.lifecycle_restriction is LifecycleRestriction.NEW_EXPOSURE_DISABLED
-    unknown = replace(ineligible, state=UniverseEligibilityState.UNKNOWN)
+    unknown = UniverseLifecycleEvidence.from_snapshot(
+        universe_snapshot(unknown_capability=True), CONTRACT
+    )
     assert (
         apply_universe_lifecycle(trusted, unknown).lifecycle_restriction
         is LifecycleRestriction.ELIGIBILITY_UNKNOWN
     )
 
 
-def test_lifecycle_mismatch_cannot_rewrite_another_contract() -> None:
-    evidence = UniverseLifecycleEvidence(
-        StableId(kind=IdentityKind.UNIVERSE_SNAPSHOT, value="universe-paper-fixture"),
-        CONTRACT,
-        1,
-        UniverseEligibilityState.ELIGIBLE,
-        ("ELIGIBLE_REFERENCE_PROVEN",),
-        1,
-        SNAPSHOT,
+def test_lifecycle_evidence_binds_to_the_canonical_s1c_entry() -> None:
+    snapshot = universe_snapshot()
+    canonical = snapshot.entries[0]
+    evidence = UniverseLifecycleEvidence.from_entry(snapshot, canonical)
+    assert evidence == UniverseLifecycleEvidence.from_snapshot(snapshot, CONTRACT)
+    forged_state = replace(
+        canonical,
+        state=UniverseEligibilityState.INELIGIBLE,
+        reason_codes=(UniverseReasonCode.INELIGIBLE_LIFECYCLE,),
     )
+    with pytest.raises(MarketTruthConsistencyError):
+        UniverseLifecycleEvidence.from_entry(snapshot, forged_state)
+    forged_reference = replace(canonical, reference_fingerprint="d" * 64)
+    with pytest.raises(MarketTruthConsistencyError):
+        UniverseLifecycleEvidence.from_entry(snapshot, forged_reference)
+    with pytest.raises(MarketTruthConsistencyError):
+        UniverseLifecycleEvidence.from_snapshot(
+            snapshot,
+            StableId(kind=IdentityKind.INSTRUMENT, value="missing-contract"),
+        )
+
+
+def test_lifecycle_evidence_direct_construction_is_rejected() -> None:
+    with pytest.raises(MarketTruthInputError):
+        UniverseLifecycleEvidence(
+            StableId(kind=IdentityKind.UNIVERSE_SNAPSHOT, value="forged"),
+            CONTRACT,
+            1,
+            UniverseEligibilityState.ELIGIBLE,
+            ("ELIGIBLE_REFERENCE_PROVEN",),
+            1,
+            SNAPSHOT,
+            SNAPSHOT,
+        )
+
+
+def test_lifecycle_mismatch_cannot_rewrite_another_contract() -> None:
+    evidence = UniverseLifecycleEvidence.from_snapshot(universe_snapshot(), CONTRACT)
     other = replace(
         state(), contract_id=StableId(kind=IdentityKind.INSTRUMENT, value="eth-usdt-perpetual")
     )

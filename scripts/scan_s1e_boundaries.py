@@ -9,7 +9,7 @@ import subprocess
 
 from generate_contracts import ROOT
 
-AUTHORIZED_BASE = "2662f81dafb848724bfba0d2f445b03f0c96b959"
+PR_CONTEXT_BASE = "2662f81dafb848724bfba0d2f445b03f0c96b959"
 S1E_PRODUCTION_MODULE = "apps/backend/src/hct_backend/market_truth.py"
 ALLOWED_PATHS = (
     re.compile(r"^adr/HCT-ADR-0049-s1e-market-truth-foundation\.md$"),
@@ -163,7 +163,7 @@ def scan_secrets(name: str, text: str) -> list[str]:
 
 
 def main() -> int:
-    base = os.environ.get("BASE_SHA", AUTHORIZED_BASE)
+    base = os.environ.get("BASE_SHA", PR_CONTEXT_BASE)
     failures: list[str] = []
     names = changed_names(base)
     for name in names:

@@ -16,7 +16,8 @@ permissions:
   contents: read
 
 env:
-  AUTHORIZED_BASE_SHA: 2662f81dafb848724bfba0d2f445b03f0c96b959
+  CHECKPOINT_AUTHORIZED_EXECUTION_BASE: a736eacc621fda386d1ba4d14ecab9c8df9ff7e6
+  PR_CONTEXT_BASE: 2662f81dafb848724bfba0d2f445b03f0c96b959
 
 jobs:
   s1e-quality:
@@ -35,9 +36,18 @@ jobs:
           set -euo pipefail
           test "${{ github.event_name }}" = "pull_request"
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
-          test "${{ github.event.pull_request.base.sha }}" = "$AUTHORIZED_BASE_SHA"
-          test "$(git rev-parse origin/main)" = "$AUTHORIZED_BASE_SHA"
-          git cat-file -e "$AUTHORIZED_BASE_SHA^{commit}"
+          test "${{ github.event.pull_request.base.sha }}" = "$PR_CONTEXT_BASE"
+          test "$(git rev-parse origin/main)" = "$PR_CONTEXT_BASE"
+          git cat-file -e "$CHECKPOINT_AUTHORIZED_EXECUTION_BASE^{commit}"
+          git cat-file -e "$PR_CONTEXT_BASE^{commit}"
+          test "$(git rev-list --count "$CHECKPOINT_AUTHORIZED_EXECUTION_BASE..$PR_CONTEXT_BASE")" = "1"
+          test "$(git rev-parse "$PR_CONTEXT_BASE^1")" = "$CHECKPOINT_AUTHORIZED_EXECUTION_BASE"
+          governance_delta="$(git diff --name-only "$CHECKPOINT_AUTHORIZED_EXECUTION_BASE..$PR_CONTEXT_BASE")"
+          expected_governance_delta=$'checkpoints/history/HCT-CP-0029.json\ncheckpoints/workstreams/planning/latest.json\ndocs/11-checkpoint.md\ndocs/128-s1e-implementation-authorization-and-checkpoint-promotion.md'
+          test "$governance_delta" = "$expected_governance_delta"
+          git diff --quiet "$CHECKPOINT_AUTHORIZED_EXECUTION_BASE..$PR_CONTEXT_BASE" -- \
+            docs/02-requirements.md docs/03-scope.md docs/04-architecture.md docs/99-r12-frozen-requirements-baseline.md \
+            docs/100-r12-requirements-traceability-and-no-loss-proof.md work-orders apps/backend apps/frontend
           if grep -Eq '^[[:space:]]*workflow_dispatch:' .github/workflows/s1e-quality.yml; then
             echo 'S1E receipt must not expose a manual-dispatch success path.'
             exit 1
@@ -52,6 +62,7 @@ jobs:
           grep -Fq '"authorized_implementation_slice": "HCT-IMP-0008-S1E"' checkpoints/workstreams/planning/latest.json
           grep -Fq '"implementation_authorized": true' checkpoints/workstreams/planning/latest.json
           grep -Fq '"implementation_authorization_ceiling": "NON_TRADING_STAGE_1_MARKET_TRUTH_FOUNDATION_ONLY"' checkpoints/workstreams/planning/latest.json
+          grep -Fq '"authorized_execution_base_sha": "a736eacc621fda386d1ba4d14ecab9c8df9ff7e6"' checkpoints/workstreams/planning/latest.json
           grep -Fq '"production_credentials_authorized": false' checkpoints/workstreams/planning/latest.json
           grep -Fq '"production_deployment_authorized": false' checkpoints/workstreams/planning/latest.json
           grep -Fq '"limited_live_authorized": false' checkpoints/workstreams/planning/latest.json
@@ -63,7 +74,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          changed="$(git diff --name-only "$AUTHORIZED_BASE_SHA...HEAD")"
+          changed="$(git diff --name-only "$PR_CONTEXT_BASE...HEAD")"
           printf '%s\n' "$changed"
           invalid="$(printf '%s\n' "$changed" | grep -Ev '^(adr/HCT-ADR-0049-s1e-market-truth-foundation\.md|apps/backend/src/hct_backend/market_truth\.py|apps/backend/tests/test_market_truth\.py|apps/backend/tests/test_scan_s1e_boundaries\.py|scripts/scan_s1e_boundaries\.py|evidence/HCT-IMP-0008-S1E\.md|\.github/workflows/s1e-quality\.yml)$' || true)"
           if [ -n "$invalid" ]; then
@@ -75,8 +86,8 @@ jobs:
             echo 'Frozen, checkpoint, Work Order or dependency-lock surface changed by S1E.'
             exit 1
           fi
-          test "$(git merge-base "$AUTHORIZED_BASE_SHA" HEAD)" = "$AUTHORIZED_BASE_SHA"
-          git diff --check "$AUTHORIZED_BASE_SHA...HEAD"
+          test "$(git merge-base "$PR_CONTEXT_BASE" HEAD)" = "$PR_CONTEXT_BASE"
+          git diff --check "$PR_CONTEXT_BASE...HEAD"
 
       - name: Install locked backend dependencies
         run: |
@@ -96,7 +107,7 @@ jobs:
 
       - name: Run prior-stage regressions and S1E boundary gates
         env:
-          BASE_SHA: ${{ env.AUTHORIZED_BASE_SHA }}
+          BASE_SHA: ${{ env.PR_CONTEXT_BASE }}
         run: |
           uv run --project apps/backend python scripts/scan_s1e_boundaries.py
           uv run --project apps/backend pytest \
@@ -137,4 +148,6 @@ jobs:
         run: |
           echo 's1e-quality is a pull_request-only exact raw-head receipt.'
           echo 'Bounded subject: non-trading Market Truth Foundation only.'
+          echo "Checkpoint-authorized execution base: $CHECKPOINT_AUTHORIZED_EXECUTION_BASE"
+          echo "PR context base: $PR_CONTEXT_BASE"
           echo 'No credentials, private state, orders, persistence, deployment, limited-live or live-trading authority is authorized.'
