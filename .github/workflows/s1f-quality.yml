@@ -1,0 +1,247 @@
+name: HCT-IMP-0010-S1F Realtime Public Market Value Ingest
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "adr/HCT-ADR-0050-s1f-realtime-public-market-value-ingest.md"
+      - "apps/backend/pyproject.toml"
+      - "apps/backend/uv.lock"
+      - "apps/backend/src/hct_backend/s1f_numeric.py"
+      - "apps/backend/src/hct_backend/s1f_values.py"
+      - "apps/backend/src/hct_backend/s1f_mexc.py"
+      - "apps/backend/src/hct_backend/s1f_session.py"
+      - "apps/backend/tests/fixtures/s1f/**"
+      - "apps/backend/tests/test_s1f_numeric.py"
+      - "apps/backend/tests/test_s1f_values.py"
+      - "apps/backend/tests/test_s1f_mexc.py"
+      - "apps/backend/tests/test_s1f_session.py"
+      - "apps/backend/tests/test_scan_s1f_boundaries.py"
+      - "scripts/scan_s1f_boundaries.py"
+      - "scripts/benchmark_s1f.py"
+      - "evidence/HCT-IMP-0010-S1F.md"
+      - "evidence/benchmarks-s1f-*.json"
+      - ".github/workflows/s1f-quality.yml"
+
+permissions:
+  contents: read
+
+env:
+  PR_CONTEXT_BASE: b2a79d1a6096457e9ee209dad218a6eec350c6d6
+  CHECKPOINT_AUTHORIZED_EXECUTION_BASE: 3b972bd7e2016d333fa5d07d8c694a990bd1be88
+  CHECKPOINT_ID: HCT-CP-0031
+  AUTHORIZATION_ID: HCT-IMPL-AUTH-0010
+  IMPLEMENTATION_ID: HCT-IMP-0010-S1F
+
+jobs:
+  s1f-quality:
+    name: s1f-quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact pull request head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Assert exact context and authorization firewall
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ github.event_name }}" = "pull_request"
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+          test "${{ github.event.pull_request.base.sha }}" = "$PR_CONTEXT_BASE"
+          git merge-base --is-ancestor "$PR_CONTEXT_BASE" HEAD
+          git merge-base --is-ancestor "$CHECKPOINT_AUTHORIZED_EXECUTION_BASE" HEAD
+          git diff --check "$PR_CONTEXT_BASE...HEAD"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          checkpoint = json.loads(Path("checkpoints/workstreams/planning/latest.json").read_text())
+          assert checkpoint["checkpoint_id"] == "HCT-CP-0031"
+          assert checkpoint["status"] == "IMPLEMENTATION_AUTHORIZED_S1F"
+          assert checkpoint["authorization_increment"] == "HCT-IMPL-AUTH-0010"
+          assert checkpoint["authorized_implementation_slice"] == "HCT-IMP-0010-S1F"
+          assert checkpoint["authorized_execution_base_sha"] == "3b972bd7e2016d333fa5d07d8c694a990bd1be88"
+          assert checkpoint["implementation_authorized"] is True
+          assert checkpoint["implementation_authorization_scope"] == ["HCT-IMP-0010-S1F"]
+          assert checkpoint["implementation_authorization_ceiling"] == "NON_TRADING_STAGE_1_REALTIME_PUBLIC_MARKET_VALUE_INGEST_FOUNDATION_ONLY"
+          for field in (
+              "production_credentials_authorized",
+              "production_deployment_authorized",
+              "limited_live_authorized",
+              "live_trading_authorized",
+          ):
+              assert checkpoint[field] is False, field
+          print("CP0031 authorization and production/live firewall: PASS")
+          PY
+
+      - name: Validate exact changed-file boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only "$PR_CONTEXT_BASE...HEAD")"
+          printf '%s\n' "$changed"
+          invalid="$(printf '%s\n' "$changed" | grep -Ev '^(adr/HCT-ADR-0050-s1f-realtime-public-market-value-ingest\.md|apps/backend/pyproject\.toml|apps/backend/uv\.lock|apps/backend/src/hct_backend/s1f_(numeric|values|mexc|session)\.py|apps/backend/tests/fixtures/s1f/[^/]+\.json|apps/backend/tests/test_s1f_(numeric|values|mexc|session)\.py|apps/backend/tests/test_scan_s1f_boundaries\.py|scripts/(scan_s1f_boundaries|benchmark_s1f)\.py|evidence/HCT-IMP-0010-S1F\.md|evidence/benchmarks-s1f-(micro|nominal|stress)\.json|\.github/workflows/s1f-quality\.yml)$' || true)"
+          if [ -n "$invalid" ]; then
+            echo "S1F changed files leave the authorized boundary:"
+            echo "$invalid"
+            exit 1
+          fi
+          if printf '%s\n' "$changed" | grep -Eq '^(checkpoints/|docs/|work-orders/|apps/frontend/|packages/contracts/|\.github/workflows/(r12|implementation-authorization))'; then
+            echo "Frozen governance, frontend product, contract or unrelated workflow surface changed."
+            exit 1
+          fi
+
+      - name: Validate exact H013 dependency delta and source manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import subprocess
+          import tomllib
+          from pathlib import Path
+
+          old = tomllib.loads(subprocess.check_output(["git", "show", f"{os.environ['PR_CONTEXT_BASE']}:apps/backend/pyproject.toml"], text=True))
+          new = tomllib.loads(Path("apps/backend/pyproject.toml").read_text())
+          assert "httpx==0.28.1" in old["dependency-groups"]["dev"]
+          assert "httpx==0.28.1" not in new["dependency-groups"]["dev"]
+          assert new["project"]["dependencies"] == [
+              "fastapi==0.141.1", "httpx==0.28.1", "pydantic==2.13.5", "uvicorn==0.52.4", "websockets==17.1"
+          ]
+          assert new["dependency-groups"]["dev"] == [
+              "mypy==2.3.1", "pytest==9.1.1", "pytest-cov==7.1.0", "ruff==0.16.7"
+          ]
+          manifest = json.loads(Path("apps/backend/tests/fixtures/s1f/source-manifest.json").read_text())
+          fixture = Path("apps/backend/tests/fixtures/s1f/mexc-public-fixtures.json")
+          assert manifest["source_url"] == "https://mexcdevelop.github.io/apidocs/contract_v1_en/"
+          assert manifest["source_sha256"] == "57ebc13fea788a1c568c8aeabfdf50acc0c9f5b5a882af4855837d53499940e3"
+          assert manifest["normalized_schema_version"] == "S1F_MEXC_SOURCE_CONTRACT_V1"
+          assert manifest["fixture_hashes"]["mexc-public-fixtures.json"] == hashlib.sha256(fixture.read_bytes()).hexdigest()
+          fixture_data = json.loads(fixture.read_text())["fixtures"]
+          assert "kline_rest_official" in fixture_data
+          assert "depth_commits_official" in fixture_data
+          assert fixture_data["kline_rest_official"]["success"] is True
+          assert fixture_data["kline_rest_official"]["code"] == 0
+          assert fixture_data["depth_commits_official"]["success"] is True
+          assert fixture_data["depth_commits_official"]["code"] == 0
+          print("H013 exact dependency delta and fixture provenance: PASS")
+          PY
+
+      - name: Install locked backend dependencies
+        run: |
+          python -m pip install --disable-pip-version-check uv==0.12.13
+          uv sync --project apps/backend --locked --all-groups
+
+      - name: Validate backend, static analysis, build and audit
+        run: |
+          uv run --project apps/backend pytest --cov=hct_backend --cov-report=term-missing --cov-fail-under=90 apps/backend/tests
+          uv run --project apps/backend ruff check apps/backend/src apps/backend/tests scripts/scan_s1f_boundaries.py scripts/benchmark_s1f.py
+          uv run --project apps/backend ruff format --check apps/backend/src/hct_backend/s1f_numeric.py apps/backend/src/hct_backend/s1f_values.py apps/backend/src/hct_backend/s1f_mexc.py apps/backend/src/hct_backend/s1f_session.py apps/backend/tests/test_s1f_numeric.py apps/backend/tests/test_s1f_values.py apps/backend/tests/test_s1f_mexc.py apps/backend/tests/test_s1f_session.py apps/backend/tests/test_scan_s1f_boundaries.py scripts/scan_s1f_boundaries.py scripts/benchmark_s1f.py
+          uv run --project apps/backend mypy apps/backend/src
+          uv build --project apps/backend --out-dir "$RUNNER_TEMP/hct-backend-dist-s1f"
+          uv run --project apps/backend --with pip-audit==2.10.1 pip-audit --local
+
+      - name: Run negative capability and deterministic benchmark gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --project apps/backend python scripts/scan_s1f_boundaries.py
+          uv run --project apps/backend python scripts/benchmark_s1f.py --profile all --output "$RUNNER_TEMP/benchmarks-s1f.json"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(Path(__import__("os").environ["RUNNER_TEMP"]).joinpath("benchmarks-s1f.json").read_text())
+          expected = {
+              "S1F-CONTRACT-MICRO-V1": 512,
+              "S1F-NOMINAL-MULTICHANNEL-V1": 8192,
+              "S1F-STRESS-BACKPRESSURE-V1": 65536,
+          }
+          assert result["mode"] == "BASELINE_ESTABLISHMENT_V1"
+          assert {item["profile"]: item["messages_produced"] for item in result["profiles"]} == expected
+          for item in result["profiles"]:
+              assert item["correctness"] == "PASS"
+              assert item["bounded_completion"] is True
+              assert item["messages_decoded"] == item["consumed_count"]
+              assert item["admitted_count"] == item["consumed_count"]
+              assert item["consumed_count"] + item["dropped_count"] == item["messages_produced"]
+              assert item["normalization_throughput_per_second"] > 0
+              assert item["replay_throughput_per_second"] > 0
+              assert item["normalization_latency_distribution"]["p95"] >= item["normalization_latency_distribution"]["p50"]
+              assert item["immutable_value_publication_latency_distribution"]["p95"] >= item["immutable_value_publication_latency_distribution"]["p50"]
+              assert item["queue_age_samples"] == item["consumed_count"]
+              assert item["queue_depth_max"] <= item["queue_capacity"]
+          by_profile = {item["profile"]: item for item in result["profiles"]}
+          assert by_profile["S1F-CONTRACT-MICRO-V1"]["dropped_count"] == 0
+          assert by_profile["S1F-NOMINAL-MULTICHANNEL-V1"]["dropped_count"] == 0
+          assert by_profile["S1F-STRESS-BACKPRESSURE-V1"]["dropped_count"] > 0
+          print("S1F exact profiles, latency distribution, bounded queue and replay evidence: PASS")
+          PY
+
+      - name: Run frontend regression gates
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.18.0"
+          cache: npm
+          cache-dependency-path: apps/frontend/package-lock.json
+
+      - name: Validate frontend without product mutation
+        working-directory: apps/frontend
+        run: |
+          npm ci
+          npm run typecheck
+          npm test -- --run
+          npm run lint
+          npm exec -- prettier --check src/generated/contracts.ts
+          npm run build
+
+      - name: Validate author evidence and authorization firewall
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          evidence = Path("evidence/HCT-IMP-0010-S1F.md").read_text()
+          adr = Path("adr/HCT-ADR-0050-s1f-realtime-public-market-value-ingest.md").read_text()
+          combined = evidence + "\n" + adr
+          required = (
+              "S1F_MEXC_SOURCE_CONTRACT_VERSION=S1F_MEXC_SOURCE_CONTRACT_V1",
+              "S1F_MEXC_PUBLIC_CHANNELS=sub.tickers,sub.ticker,sub.deal,sub.depth,sub.depth.full,sub.kline",
+              "S1F_MEXC_CANDLE_CLOSE_PROOF=NEXT_WINDOW_OR_REST_CONFIRMATION",
+              "S1F_MEXC_KLINE_FINAL_FLAG=ABSENT;DO_NOT_FABRICATE",
+              "S1F_NUMERIC_POLICY_VERSION=DECIMAL_TEXT_V1",
+              "S1F_INTERVAL_MODEL=HALF_OPEN_START_INCLUSIVE_END_EXCLUSIVE",
+              "S1F_RUNTIME_WS_API=websockets.asyncio.client",
+              "S1F_RUNTIME_RECONNECT_OWNERSHIP=HCT_BOUNDED_RETRY_BACKOFF_CIRCUIT;NO_INFINITE_LIBRARY_MANAGED_ITERATOR",
+              "S1F_RUNTIME_PROVIDER_PING=application_level_MEXC_ping_authoritative;library_ping_frames_not_substitute",
+              "S1F_RUNTIME_QUEUE_POLICY=explicit_bounded_inbound_queue;Module29_backpressure;no_unbounded_receive_queue",
+              "criticalAuthorFindings=0",
+              "highAuthorFindings=0",
+              "production_credentials_authorized=false",
+              "production_deployment_authorized=false",
+              "limited_live_authorized=false",
+              "live_trading_authorized=false",
+              "Status: `AUTHOR_PREFLIGHT`",
+              "IMP-H001",
+              "IMP-H002",
+              "IMP-H003",
+              "IMP-H004",
+              "IMP-H005",
+              "IMP-H006",
+              "IMP-H006R",
+              "IMP-H007",
+              "IMP-H006R=CLOSED_AUTHOR_SIDE_ONLY",
+              "Independent review remains required",
+          )
+          for marker in required:
+              assert marker in combined, marker
+          for forbidden in ("workflow_dispatch", "private/order", "real-money trading authorization", "status: `execution_in_progress`", "verdict: `approved`"):
+              assert forbidden not in combined.lower(), forbidden
+          print("Author evidence and implementation/production/live firewall: PASS")
+          PY

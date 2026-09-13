@@ -1,12 +1,12 @@
 # Checkpoint
 
-Checkpoint ID: `HCT-CP-0030`
-Status: `S1E_IMPLEMENTATION_APPROVED_MERGED`
+Checkpoint ID: `HCT-CP-0032`
+Status: `S1F_IMPLEMENTATION_APPROVED_MERGED`
 Canonical branch: `main`
 Risk class: `HIGH_ASSURANCE`
 Functional product planning: `FROZEN`
 Planning Freeze checkpoint: `HCT-CP-0014 / PLANNING_FREEZE_APPROVED`
-Completed implementation slices: `HCT-IMP-0001-S0A`, `HCT-IMP-0002-S0B`, `HCT-IMP-0003-S0C`, `HCT-IMP-0004-S1A`, `HCT-IMP-0005-S1B`, `HCT-IMP-0006-S1C`, `HCT-IMP-0007-S1D`, `HCT-IMP-0008-S1E`
+Completed implementation slices: `HCT-IMP-0001-S0A`, `HCT-IMP-0002-S0B`, `HCT-IMP-0003-S0C`, `HCT-IMP-0004-S1A`, `HCT-IMP-0005-S1B`, `HCT-IMP-0006-S1C`, `HCT-IMP-0007-S1D`, `HCT-IMP-0008-S1E`, `HCT-IMP-0010-S1F`
 Current implementation authorization: `NONE_PENDING_NEXT_GOVERNED_AUTHORIZATION`
 Implementation authorization scope: `[]`
 Implementation authorization ceiling: `NONE_PENDING_NEXT_GOVERNED_AUTHORIZATION`
@@ -24,7 +24,7 @@ Completed and independently approved implementation slices are:
 - `HCT-IMP-0007-S1D - Quota/WebSocket Backpressure Governor Foundation`;
 - `HCT-IMP-0008-S1E - Market Truth Foundation`.
 
-`HCT-CP-0028` records the approved and merged completion of `HCT-IMP-0007-S1D`. `HCT-CP-0029` recorded the separate S1E implementation authorization. `HCT-CP-0030` records the approved and merged completion of `HCT-IMP-0008-S1E` and consumes that implementation authority.
+`HCT-CP-0028` records the approved and merged completion of `HCT-IMP-0007-S1D`. `HCT-CP-0029` recorded the separate S1E implementation authorization. `HCT-CP-0030` records the approved and merged completion of `HCT-IMP-0008-S1E`. `HCT-CP-0031` authorized the bounded S1F implementation slice. `HCT-CP-0032` records the independently approved and merged completion of `HCT-IMP-0010-S1F`, consumes that implementation authority and leaves no implementation slice active.
 
 ## S1E implementation authorization provenance
 Authorization Issue: `#64`
@@ -85,6 +85,41 @@ Exact hosted implementation evidence:
 
 Full approval/promotion record: `docs/129-s1e-implementation-approval-and-checkpoint-promotion.md`.
 
+## S1F implementation authorization provenance
+Authorization Issue: `#70`
+Authorization PR: `#71`
+Implementation Issue: `#72`
+
+Authorization base:
+`625dd0c145087038bdbccd665548d811e187194c`
+
+Exact approved authorization head:
+`8c4d064fd24690131ff6bf9ef6739a1de8112a3a`
+
+Governed authorization merge commit:
+`9a775adae1ce1ceb9ed4a66667a7acc40c14f3c7`
+
+The external ChatGPT HIGH_ASSURANCE review receipt supplied by the user was bound to the exact authorization head. It is not Codex self-review and is not relabeled as a GitHub formal approval. Receipt: `5191070710`; verdict: `APPROVED`; unresolved CRITICAL: `0`; unresolved HIGH: `0`; H001-H015: `CLOSED`.
+
+Governance acceptance evidence:
+- PR #71 comment `5654211653`;
+- Issue #70 comment `5654211771`.
+
+Exact hosted authorization evidence:
+- workflow: `HCT-IMPL-AUTH-0010 S1F Authorization Governance`;
+- run: `34763689022`;
+- check/job: `s1f-authorization-governance / 103740795356`;
+- exact head: `8c4d064fd24690131ff6bf9ef6739a1de8112a3a`;
+- event: `pull_request`;
+- result: `completed / success`.
+
+Full approval/promotion record: `docs/132-s1f-implementation-authorization-and-checkpoint-promotion.md`.
+
+The authorized execution base for S1F is the post-promotion canonical main:
+`main@3b972bd7e2016d333fa5d07d8c694a990bd1be88`.
+
+The implementation branch is `implementation/HCT-IMP-0010-S1F`.
+
 ## S1D implementation completion provenance
 Implementation Issue: `#62`
 Implementation PR: `#63`
@@ -136,6 +171,34 @@ The approved and merged S1D increment provides only the provider-neutral, non-ne
 
 This slice establishes control semantics only. It does not create a realtime transport or ingest runtime, and its completion does not authorize any next implementation slice.
 
+## S1F implementation completion provenance
+Implementation Issue: `#72`
+Implementation PR: `#73`
+
+Exact approved implementation head:
+`01b87c36dd27c76782727f1394404647806c1414`
+
+Governed implementation merge commit:
+`b6acfb2466dc537c3aeb84c525be3e9663f51db2`
+
+The external ChatGPT HIGH_ASSURANCE review receipt supplied by the user was bound to the exact implementation head. It is not Codex self-review and is not relabeled as a GitHub formal approval. Receipt: `5191783715`; verdict: `APPROVED`; unresolved CRITICAL: `0`; unresolved HIGH: `0`; IMP-H001-H007 and IMP-H006R: `CLOSED`.
+
+Governance acceptance evidence:
+- PR #73 comment `5655344882`;
+- Issue #72 comment `5655344990`.
+
+Exact hosted implementation evidence:
+- workflow: `HCT-IMP-0010-S1F Realtime Public Market Value Ingest`;
+- run: `34774241404`;
+- check/job: `s1f-quality / 103769292149`;
+- exact head: `01b87c36dd27c76782727f1394404647806c1414`;
+- event: `pull_request`;
+- result: `completed / success`;
+- backend: `301 passed`, global coverage `90.14%`;
+- changed-file boundary: exactly `21` authorized S1F files.
+
+Full approval/promotion record: `docs/133-s1f-implementation-approval-and-checkpoint-promotion.md`.
+
 ## Explicit authorization firewall
 Authoritative flags:
 - `implementation_authorized=false`
@@ -172,7 +235,7 @@ The following remain blocked:
 Frozen R11 Stage 1 orders:
 `Exchange Abstraction + MEXC adapter -> capability/rule resolver -> universe -> quota/WS governor -> market ingest/quality/Market-State/cache`.
 
-S1A, S1B, S1C, S1D and S1E are complete. Actual realtime transport, venue I/O and production market-data truth remain future separately governed slices.
+S1A, S1B, S1C, S1D, S1E and S1F are complete. S1F completion is recorded by `HCT-CP-0032`; no implementation slice is currently authorized. Production credentials, private APIs, persistence, deployment, limited-live and live trading remain future separately governed slices.
 
 ## Prior completion provenance
 S1D is completed under `HCT-CP-0028 / S1D_IMPLEMENTATION_APPROVED_MERGED`, approval record `docs/126-s1d-implementation-approval-and-checkpoint-promotion.md`.
@@ -195,7 +258,7 @@ Planning Freeze remains approved through `HCT-CP-0014`, with frozen source ident
 Historical S0A-S1A workflows contain old whole-tree/path/base assumptions and may fail when later authorized backend paths trigger them. This remains a separate CI-maintenance concern. S1D implementation evidence must execute required prior-stage regressions directly rather than treating those historical workflow statuses as substitute proof.
 
 ## Next necessary action
-Prepare only a governance-only HIGH_ASSURANCE authorization candidate for the smallest necessary next dependency identified by the frozen R11 Stage-2 order. Do not authorize or implement it from `HCT-CP-0030`; a fresh Context Lock, independent review and separate authorization checkpoint are mandatory. Do not deploy, add credentials, activate limited-live or trade.
+Recompile the existing `HCT-IMPL-AUTH-0009` / `HCT-IMP-0009-S2A` governance candidate against the post-S1F canonical main under `HCT-CP-0032`, preserving PR #69 and Issue #68 history. Keep the S2A change to exactly the four governance files, require exact-head governance CI and a fresh independent HIGH_ASSURANCE review, and stop with PR #69 OPEN and UNMERGED. Do not authorize or implement S2A, deploy, add credentials, activate limited-live or trade.
 
 ## Global chat and prompt delivery policy
 All HCT chats and executor/reviewer handoffs SHALL follow `docs/104-chat-delivery-and-prompt-artifact-policy.md`.

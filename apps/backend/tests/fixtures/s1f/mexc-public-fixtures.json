@@ -1,0 +1,20 @@
+{
+  "source_contract_version": "S1F_MEXC_SOURCE_CONTRACT_V1",
+  "source_url": "https://mexcdevelop.github.io/apidocs/contract_v1_en/",
+  "retrieved": "2026-09-13",
+  "source_sha256": "57ebc13fea788a1c568c8aeabfdf50acc0c9f5b5a882af4855837d53499940e3",
+  "fixtures": {
+    "ticker": {"channel": "push.ticker", "symbol": "BTC_USDT", "ts": "1700000000000", "data": {"lastPrice": "411.8", "bid1": "411.7", "ask1": "411.9", "volume24": "10", "holdVol": "20", "indexPrice": "411.6", "fairPrice": "411.7", "fundingRate": "0.0001", "timestamp": "1700000000000"}},
+    "deal": {"channel": "push.deal", "symbol": "BTC_USDT", "ts": "1700000000000", "data": {"deals": [{"p": "411.8", "v": "10", "T": "1", "t": "1700000000000"}]}},
+    "kline": {"channel": "push.kline", "symbol": "BTC_USDT", "ts": "1700000060000", "data": {"interval": "Min1", "t": "1700000040", "o": "411.0", "h": "412.0", "l": "410.5", "c": "411.8", "q": "10", "a": "4118.0"}},
+    "depth_delta": {"channel": "push.depth", "symbol": "BTC_USDT", "ts": "1700000001000", "data": {"version": "2", "bids": [["411.8", "10", "1"]], "asks": [["412.0", "5", "1"]]}},
+    "depth_snapshot": {"version": "1", "timestamp": "1700000000000", "bids": [["411.8", "10", "1"]], "asks": [["412.0", "5", "1"]]},
+    "depth_commits_official": {"success": true, "code": 0, "data": [{"asks": [["412.0", "5", "1"]], "bids": [["411.8", "10", "1"]], "version": 4}]},
+    "kline_rest_official": {"success": true, "code": 0, "data": {"time": ["1700000040"], "open": ["411.0"], "close": ["411.8"], "high": ["412.0"], "low": ["410.5"], "vol": ["10"], "amount": ["4118.0"]}},
+    "kline_rest_failure": {"success": false, "code": 500, "data": {"time": ["1700000040"]}},
+    "malformed_numeric": {"channel": "push.ticker", "symbol": "BTC_USDT", "ts": "1700000000000", "data": {"lastPrice": "NaN"}},
+    "wrong_timestamp_unit": {"channel": "push.deal", "symbol": "BTC_USDT", "ts": "1700000000", "data": {"deals": [{"p": "411.8", "v": "1", "t": "1700000000"}]}},
+    "unknown_channel": {"channel": "push.private.order", "symbol": "BTC_USDT", "ts": "1700000000000", "data": {}},
+    "missing_required": {"channel": "push.ticker", "symbol": "BTC_USDT", "ts": "1700000000000", "data": {"bid1": "411.7"}}
+  }
+}
