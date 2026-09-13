@@ -66,9 +66,9 @@ coverage and the full backend suite passed with 319 tests.
 
 ## Benchmark receipt
 
-Mode: `S2A_BASELINE_ESTABLISHMENT_V1`  
-Runtime: Python 3.12 Decimal feature engine  
-Seed: `S2A-FIXTURE-SEED-V1`  
+Mode: `S2A_BASELINE_ESTABLISHMENT_V1`
+Runtime: Python 3.12 Decimal feature engine
+Seed: `S2A-FIXTURE-SEED-V1`
 All eight features were evaluated over an authorized bounded buffer. The
 memory number is a one-contract representative probe for each profile; the
 throughput measurement covers the complete profile cardinality. These are
