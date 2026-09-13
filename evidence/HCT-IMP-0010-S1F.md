@@ -1,7 +1,11 @@
 # HCT-IMP-0010-S1F — Execution Evidence Bundle
 
-Status: `EXECUTION_IN_PROGRESS`
+Status: `AUTHOR_PREFLIGHT`
 Risk: `HIGH_ASSURANCE`
+
+Functional correction head: `d0fc7a43a7ca1e94bae3efca0b2007b84b8a0270`
+
+This bundle records the author-side correction handoff for IMP-H001 through IMP-H007. Independent review remains required; this status is not approval.
 
 ## Context lock
 
@@ -63,7 +67,7 @@ The implementation binds the primary matrix as follows: `TradeTick` from `sub.de
 
 `S1F_MEXC_CANDLE_CLOSE_PROOF=NEXT_WINDOW_OR_REST_CONFIRMATION`; `S1F_MEXC_KLINE_FINAL_FLAG=ABSENT;DO_NOT_FABRICATE`; close proof binds contract, interval, expected half-open window and returned `time` array. Unknown or contradictory payloads quarantine; no missing value becomes zero.
 
-`S1F_MEXC_DECIMAL_PARSE=LEXICAL_PROVIDER_TOKEN_TO_DECIMAL_NO_BINARY_FLOAT`; source fixtures and manifest bind `source_url`, retrieval date, source SHA-256, normalized schema version and fixture SHA-256 `0ca1b646e538d238735f142855a08b379a2917e4c8396c349736a078564c024c`.
+`S1F_MEXC_DECIMAL_PARSE=LEXICAL_PROVIDER_TOKEN_TO_DECIMAL_NO_BINARY_FLOAT`; source fixtures and manifest bind `source_url`, retrieval date, source SHA-256, normalized schema version and fixture SHA-256 `57bbfd602b807361bbc6b60e682adf3731e1a8a42a3330d2c288bdf6584e08fd`.
 
 Traceability is bounded to the authorized work order: R05 transport/feed, backpressure/resource, time/freshness, coherency, candle/cache/replay and authority bullets are implemented in `s1f_session.py`, `s1f_mexc.py`, `s1f_values.py` and `s1f_numeric.py`; INT-002/003/004/011/012/018/022/024/025/026 and VAL-003/005/006/011/012/013/023/028/030 are covered by the typed contracts, quarantine tests, scanner and benchmark; R11-REQ-006/007/011/012/013/014/015/020/022/024/025 remain separated through `ValueContext`, `GenerationRef`, capability state and read-only value objects. HCT-DEC-0007/0008/0012/0058/0060-0065/0068/0069/0071/0074/0077/0079/0083/0084/0089/0135/0136/0138/0139/0140/0141 and ADR-0049 are bound by ADR-0050, the frozen source contract and this evidence bundle.
 
@@ -85,19 +89,33 @@ S1E trust, DataAuthority, resource, eligibility and lifecycle remain separate; v
 
 `S1F_RUNTIME_TRANSITIVE_LOCK=unavoidable_deterministic_entries_only`; the lock diff is 33 additions and 2 removals, consisting only of the direct metadata movement/addition and the resolver block for `websockets==17.1`. The direct dependency graph is `fastapi==0.141.1`, `httpx==0.28.1`, `pydantic==2.13.5`, `uvicorn==0.52.4`, `websockets==17.1`; dev tools remain `mypy==2.3.1`, `pytest==9.1.1`, `pytest-cov==7.1.0`, `ruff==0.16.7`.
 
-Package license evidence from the locked environment: `httpx 0.28.1 BSD-3-Clause`, `websockets 17.1 BSD-3-Clause`, `fastapi 0.141.1 MIT`, `pydantic 2.13.5 MIT`, `uvicorn 0.52.4 BSD-3-Clause`; the complete `pip-licenses --format=json --with-urls` result was inspected. `pip-audit==2.10.1 --local` returned `No known vulnerabilities found`. Exact local artifact hashes were recorded for the fixture (`0ca1b646...c024c`) and source manifest (`8b7ede159540d0d3d44fd1b25fc4c4326d5ff22718382dc9cae46d84c64bff0c`); final Git blob identities are bound after commit.
+Package license evidence from the locked environment: `httpx 0.28.1 BSD-3-Clause`, `websockets 17.1 BSD-3-Clause`, `fastapi 0.141.1 MIT`, `pydantic 2.13.5 MIT`, `uvicorn 0.52.4 BSD-3-Clause`; the complete `pip-licenses --format=json --with-urls` result was inspected. `pip-audit==2.10.1 --local` returned `No known vulnerabilities found` in the isolated project environment after updating its audit-tool bootstrap package. Exact local artifact hashes were recorded for the fixture (`57bbfd602b807361bbc6b60e682adf3731e1a8a42a3330d2c288bdf6584e08fd`) and source manifest (`413e9bb8e0d2efa568846aec73815d3b1c513f2023421c498d214ed48375d659`); the functional correction commit above binds the source state.
 
 ## Deterministic validation and benchmark evidence
 
-- backend: `285 passed`, global coverage `90.13%` with `--cov-fail-under=90`;
-- focused S1F: `44 passed`;
+- backend: `300 passed`, global coverage `90.15%` with `--cov-fail-under=90`;
+- focused S1F: included in the full suite; all S1F tests PASS;
 - Ruff check and format check: PASS for all backend source/tests and S1F scripts;
 - mypy strict: PASS for 15 backend source files;
 - backend package build: PASS for sdist and wheel (the pre-existing package warning about a missing README does not fail the build);
 - negative capability scanner: PASS, four S1F source files, no private/authenticated endpoint, credentials, persistence, mutation, unauthorized URL or infinite reconnect iterator;
 - frontend regression: typecheck PASS, 13 tests PASS, ESLint PASS, generated contract format PASS, Vite build PASS, `npm ci` audit reported 0 vulnerabilities.
 
-`S1F_BENCHMARK_MODE=BASELINE_ESTABLISHMENT_V1` ran the exact three profiles with seed `0`, synthetic pinned multichannel fixtures, no live network, normalization/replay throughput, per-event latency distribution, peak/steady memory and bounded queue depth/age. Artifacts are `evidence/benchmarks-s1f-micro.json`, `evidence/benchmarks-s1f-nominal.json` and `evidence/benchmarks-s1f-stress.json`; each reports `correctness=PASS` and `bounded_completion=true`. The stress profile used 65,536 events, queue capacity 4,096, maximum queue depth 4,096 and 61,440 deterministic drops under the no-consumer stress harness; this is bounded backpressure evidence, not a product SLO. No product SLO is asserted.
+`S1F_BENCHMARK_MODE=BASELINE_ESTABLISHMENT_V1` ran the exact three profiles with seed `0`, synthetic pinned multichannel fixtures, no live network, normalization/replay throughput, per-event latency distribution, peak/steady memory and bounded queue depth/age. Artifacts are `evidence/benchmarks-s1f-micro.json`, `evidence/benchmarks-s1f-nominal.json` and `evidence/benchmarks-s1f-stress.json`; each reports `correctness=PASS` and `bounded_completion=true`. Artifact SHA-256 values are `micro=5b80981ac8cd5e7a1e5d6bed50a45ff6bfde650161d64a99dc2405ed7027b34a`, `nominal=79e47ea38e045672de080e1b09c8370bb4bb27cdebfccc6b1c9ed0332ceaeaae`, and `stress=4cdf8aa2b1f34374d67b9612a7045abd4ce0c074d342fea01e8f49ed2af3d0c8`.
+
+The micro profile produced/admitted/consumed `512/512/512` with `0` drops; nominal produced/admitted/consumed `8192/8192/8192` with `0` drops; stress produced `65536`, admitted/consumed `12287`, and deterministically dropped `53249` at bounded queue capacity `4096`, with maximum depth `4096` and measured maximum queue age `44034.7228 ms`. This is bounded backpressure evidence, not a product SLO. No product SLO is asserted.
+
+## IMP-H001 through IMP-H007 correction closure
+
+- `IMP-H001`: the WebSocket generation remains active through the open connection, receive loop and heartbeat; retirement occurs on finalization and stale generations are rejected.
+- `IMP-H002`: application ping runs on a recurring `15 s` cadence, with `60 s` no-ping ceiling, injected clock/sleeper coverage and cancellation on retirement.
+- `IMP-H003`: Module 29 admission is fresh immediately before every HTTP retry, WebSocket connection and staged subscription send; the scanner enforces exactly six WebSocket intents and three REST families.
+- `IMP-H004`: REST klines use the official `success/code/data` wrapper and `{time,open,close,high,low,vol,amount}` shape; synthetic shapes are rejected and close proof binds request/window/source/generation context.
+- `IMP-H005`: official `depth_commits` has a dedicated decoder, explicit absent provider event time, typed recovery/resync evidence and contiguous delta enforcement.
+- `IMP-H006`: DecimalValue is content-bound; OrderedLineage recomputes its manifest; CandleCloseProof is typed and admissible only as `NEXT_WINDOW` or `REST_CONFIRMATION`.
+- `IMP-H007`: benchmark publication is separated from normalization, uses deterministic producer/consumer behavior, measured queue age and explicit producer/consumer/admitted/dropped counters; nominal has no drops and stress records bounded shedding.
+
+The correction is author-side only: `criticalAuthorFindings=0`, `highAuthorFindings=0`; no independent verdict is claimed.
 
 ## Author-side findings and stop state
 
