@@ -364,6 +364,24 @@ def test_admission_evidence_is_content_bound_and_matrix_validated() -> None:
     assert first.fingerprint != changed.fingerprint
 
 
+def test_admission_decision_keyword_constructor_bypass_is_rejected() -> None:
+    with pytest.raises(TypeError):
+        AdmissionDecision(
+            outcome=AdmissionOutcome.ADMIT,
+            reason=AdmissionReason.ADMITTED,
+        )
+
+
+def test_admission_decision_positional_constructor_bypass_is_rejected() -> None:
+    with pytest.raises(TypeError):
+        AdmissionDecision(AdmissionOutcome.ADMIT, AdmissionReason.ADMITTED)
+
+
+def test_admission_decision_fail_closed_initializer_is_explicit() -> None:
+    with pytest.raises(TypeError, match=r"Use AdmissionDecision\.create\(\.\.\.\)"):
+        AdmissionDecision()
+
+
 def test_decisions_are_deterministic_for_equal_normalized_inputs() -> None:
     first = decide(request(), elapsed_ms=100)
     second = decide(request(), elapsed_ms=100)
