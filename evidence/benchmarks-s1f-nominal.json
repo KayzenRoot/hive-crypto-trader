@@ -1,0 +1,47 @@
+{
+  "mode": "BASELINE_ESTABLISHMENT_V1",
+  "profiles": [
+    {
+      "bounded_completion": true,
+      "correctness": "PASS",
+      "elapsed_seconds": 30.788302700000713,
+      "limitations": [
+        "synthetic pinned multichannel fixture stream",
+        "no product latency SLO asserted",
+        "no live network",
+        "queue age is measured at immediate admission and has no consumer scheduling delay"
+      ],
+      "messages_decoded": 8192,
+      "normalization_throughput_per_second": 266.0750766231686,
+      "parameters": {
+        "deal": 4096,
+        "depth": 2048,
+        "depth-full": 512,
+        "depth-levels": 20,
+        "kline": 512,
+        "replay-seconds": 900,
+        "symbols": 8,
+        "ticker": 1024,
+        "total": 8192
+      },
+      "peak_memory_bytes": 1623328,
+      "profile": "S1F-NOMINAL-MULTICHANNEL-V1",
+      "queue_age_ms_max": 0,
+      "queue_capacity": 4096,
+      "queue_depth_max": 4096,
+      "queue_dropped": 4096,
+      "raw_artifact_hash": "da20bfa1915ce08a03fd2ff2f7ef667c6e70ee5b2d09d7221a2cd60e286e66de",
+      "replay_throughput_per_second": 266.0750766231686,
+      "seed": 0,
+      "steady_memory_bytes": 1609134,
+      "value_state_update_latency_distribution": {
+        "max": 24861100,
+        "min": 368700,
+        "p50": 874000,
+        "p95": 10638300,
+        "p99": 12556300,
+        "unit": "nanoseconds"
+      }
+    }
+  ]
+}

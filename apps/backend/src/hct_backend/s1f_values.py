@@ -1,0 +1,754 @@
+"""Immutable, provider-neutral typed public market values for S1F."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from enum import StrEnum
+from typing import Any, TypeVar, cast
+
+from hct_backend.contracts import Environment, IdentityKind, StableId
+from hct_backend.market_truth import GenerationRef, NormalizedMarketEvent
+from hct_backend.s1f_numeric import (
+    DecimalValue,
+    NumericFailureReason,
+    NumericPolicyError,
+    require_price,
+    require_quantity,
+    validate_ohlc,
+)
+
+
+class ValuePlaneError(ValueError):
+    """Base error for fail-closed typed value contracts."""
+
+
+class ValuePlaneConsistencyError(ValuePlaneError):
+    """Raised when identity, lineage, units or proof contradict."""
+
+
+class CapabilityState(StrEnum):
+    SUPPORTED = "SUPPORTED"
+    UNSUPPORTED = "UNSUPPORTED"
+    UNKNOWN = "UNKNOWN"
+
+
+class QuantityUnit(StrEnum):
+    CONTRACTS_PROVIDER_NATIVE_V1 = "CONTRACTS_PROVIDER_NATIVE_V1"
+
+
+class Finality(StrEnum):
+    OPEN = "OPEN"
+    CLOSED = "CLOSED"
+    UNKNOWN = "UNKNOWN"
+
+
+class ReferencePriceKind(StrEnum):
+    MARK = "MARK"
+    INDEX = "INDEX"
+    FAIR = "FAIR"
+
+
+T = TypeVar("T")
+
+
+def _hash(material: object) -> str:
+    encoded = json.dumps(material, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def _utc(value: datetime, label: str) -> datetime:
+    if not isinstance(value, datetime) or value.tzinfo is None or value.utcoffset() is None:
+        raise ValuePlaneError(f"{label} must be timezone-aware UTC")
+    return value.astimezone(UTC)
+
+
+def _fingerprint(value: str, label: str) -> None:
+    if (
+        not isinstance(value, str)
+        or len(value) != 64
+        or any(c not in "0123456789abcdef" for c in value)
+    ):
+        raise ValuePlaneError(f"{label} must be a lowercase SHA-256 fingerprint")
+
+
+def _stable(value: StableId, kind: IdentityKind, label: str) -> None:
+    if not isinstance(value, StableId) or value.kind is not kind:
+        raise ValuePlaneError(f"{label} has the wrong identity kind")
+
+
+@dataclass(frozen=True, slots=True)
+class ValueContext:
+    source_id: StableId
+    channel: str
+    contract_id: StableId
+    environment: Environment
+    generation: GenerationRef
+    schema_version: int
+    provenance_fingerprint: str
+    originating_event_fingerprint: str
+    event_time: datetime
+    knowledge_time: datetime
+    wall_receive_time: datetime
+    monotonic_elapsed_ms: int
+
+    def __post_init__(self) -> None:
+        _stable(self.source_id, IdentityKind.EXCHANGE, "value source")
+        _stable(self.contract_id, IdentityKind.INSTRUMENT, "value contract")
+        if not isinstance(self.environment, Environment):
+            raise ValuePlaneError("value environment is invalid")
+        if (
+            self.generation.source_id != self.source_id
+            or self.generation.environment is not self.environment
+        ):
+            raise ValuePlaneConsistencyError("value generation identity differs")
+        if not isinstance(self.channel, str) or not self.channel:
+            raise ValuePlaneError("value channel is required")
+        if (
+            isinstance(self.schema_version, bool)
+            or not isinstance(self.schema_version, int)
+            or self.schema_version < 1
+        ):
+            raise ValuePlaneError("value schema version is invalid")
+        _fingerprint(self.provenance_fingerprint, "value provenance")
+        _fingerprint(self.originating_event_fingerprint, "originating event")
+        object.__setattr__(self, "event_time", _utc(self.event_time, "event time"))
+        object.__setattr__(self, "knowledge_time", _utc(self.knowledge_time, "knowledge time"))
+        object.__setattr__(
+            self, "wall_receive_time", _utc(self.wall_receive_time, "wall receive time")
+        )
+        if self.knowledge_time > self.wall_receive_time:
+            raise ValuePlaneConsistencyError("knowledge_time cannot be after wall_receive_time")
+        if (
+            isinstance(self.monotonic_elapsed_ms, bool)
+            or not isinstance(self.monotonic_elapsed_ms, int)
+            or self.monotonic_elapsed_ms < 0
+        ):
+            raise ValuePlaneError("monotonic elapsed time is invalid")
+
+    @classmethod
+    def from_event(
+        cls,
+        event: NormalizedMarketEvent,
+        *,
+        knowledge_time: datetime,
+        wall_receive_time: datetime | None = None,
+        monotonic_elapsed_ms: int | None = None,
+    ) -> ValueContext:
+        if not isinstance(event, NormalizedMarketEvent):
+            raise ValuePlaneError("normalized event is required")
+        receive = wall_receive_time or event.wall_receive_time
+        elapsed = (
+            event.monotonic_elapsed_ms if monotonic_elapsed_ms is None else monotonic_elapsed_ms
+        )
+        return cls(
+            source_id=event.source_id,
+            channel=event.channel,
+            contract_id=event.contract_id,
+            environment=event.environment,
+            generation=event.generation,
+            schema_version=event.schema_version,
+            provenance_fingerprint=event.provenance_fingerprint,
+            originating_event_fingerprint=event.fingerprint,
+            event_time=event.event_time,
+            knowledge_time=knowledge_time,
+            wall_receive_time=receive,
+            monotonic_elapsed_ms=elapsed,
+        )
+
+    @property
+    def identity_fingerprint(self) -> str:
+        return _hash(
+            {
+                "source": self.source_id.as_text(),
+                "channel": self.channel,
+                "contract": self.contract_id.as_text(),
+                "environment": self.environment.value,
+                "generation": self.generation.fingerprint,
+                "schema": self.schema_version,
+                "provenance": self.provenance_fingerprint,
+                "event": self.originating_event_fingerprint,
+            }
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class Quantity:
+    value: DecimalValue
+    unit: QuantityUnit
+    source_contract_identity_version: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.value, DecimalValue) or not isinstance(self.unit, QuantityUnit):
+            raise ValuePlaneError("typed quantity value and unit are required")
+        if (
+            not isinstance(self.source_contract_identity_version, str)
+            or not self.source_contract_identity_version
+        ):
+            raise ValuePlaneError("quantity source contract identity is required")
+        if self.value.value < 0:
+            raise NumericPolicyError(
+                NumericFailureReason.NEGATIVE_QUANTITY, "quantity cannot be negative"
+            )
+
+    @property
+    def fingerprint(self) -> str:
+        return _hash(
+            {
+                "value": self.value.canonical_text,
+                "material_scale": self.value.material_scale,
+                "unit_kind": self.unit.value,
+                "source_contract_identity_version": self.source_contract_identity_version,
+            }
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderTransactionAmount:
+    value: DecimalValue
+    source_contract_identity_version: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.value, DecimalValue) or self.value.value < 0:
+            raise ValuePlaneError("transaction amount must be a nonnegative Decimal")
+        if (
+            not isinstance(self.source_contract_identity_version, str)
+            or not self.source_contract_identity_version
+        ):
+            raise ValuePlaneError("amount source contract identity is required")
+
+    @property
+    def fingerprint(self) -> str:
+        return _hash(
+            {
+                "value": self.value.canonical_text,
+                "material_scale": self.value.material_scale,
+                "type": "ProviderTransactionAmount",
+                "source_contract_identity_version": self.source_contract_identity_version,
+            }
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CapabilityValue[T]:
+    state: CapabilityState
+    value: T | None
+    source_field: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.state, CapabilityState) or not self.source_field:
+            raise ValuePlaneError("capability value metadata is invalid")
+        if self.state is CapabilityState.SUPPORTED and self.value is None:
+            raise ValuePlaneConsistencyError("SUPPORTED value cannot be absent")
+        if self.state is not CapabilityState.SUPPORTED and self.value is not None:
+            raise ValuePlaneConsistencyError("unsupported or unknown value cannot be synthesized")
+
+    @classmethod
+    def supported(cls, value: T, source_field: str) -> CapabilityValue[T]:
+        return cls(CapabilityState.SUPPORTED, value, source_field)
+
+    @classmethod
+    def unavailable(cls, state: CapabilityState, source_field: str) -> CapabilityValue[T]:
+        if state is CapabilityState.SUPPORTED:
+            raise ValuePlaneError("unavailable state must not be SUPPORTED")
+        return cls(state, None, source_field)
+
+
+@dataclass(frozen=True, slots=True)
+class ValueCapability:
+    family: str
+    channel: str
+    state: CapabilityState
+    policy_version: int = 1
+
+    def __post_init__(self) -> None:
+        if not self.family or not self.channel or not isinstance(self.state, CapabilityState):
+            raise ValuePlaneError("value capability is invalid")
+        if (
+            isinstance(self.policy_version, bool)
+            or not isinstance(self.policy_version, int)
+            or self.policy_version < 1
+        ):
+            raise ValuePlaneError("capability policy version is invalid")
+
+    @property
+    def fingerprint(self) -> str:
+        return _hash(
+            {
+                "family": self.family,
+                "channel": self.channel,
+                "state": self.state.value,
+                "policy": self.policy_version,
+            }
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class OrderedLineage:
+    fingerprints: tuple[str, ...]
+    manifest_fingerprint: str
+    knowledge_time: datetime
+
+    def __post_init__(self) -> None:
+        if not self.fingerprints or any(
+            not isinstance(item, str) or len(item) != 64 for item in self.fingerprints
+        ):
+            raise ValuePlaneError("ordered lineage requires fingerprints")
+        if len(set(self.fingerprints)) != len(self.fingerprints):
+            raise ValuePlaneConsistencyError(
+                "ordered lineage cannot contain duplicate fingerprints"
+            )
+        _fingerprint(self.manifest_fingerprint, "lineage manifest")
+        object.__setattr__(
+            self, "knowledge_time", _utc(self.knowledge_time, "lineage knowledge time")
+        )
+
+    @classmethod
+    def from_fingerprints(
+        cls, fingerprints: tuple[str, ...], knowledge_time: datetime
+    ) -> OrderedLineage:
+        return cls(
+            fingerprints=fingerprints,
+            manifest_fingerprint=_hash({"ordered": fingerprints}),
+            knowledge_time=knowledge_time,
+        )
+
+    @classmethod
+    def from_event(cls, event_fingerprint: str, knowledge_time: datetime) -> OrderedLineage:
+        return cls.from_fingerprints((event_fingerprint,), knowledge_time)
+
+    def append(self, fingerprint: str, knowledge_time: datetime) -> OrderedLineage:
+        _fingerprint(fingerprint, "lineage entry")
+        return self.from_fingerprints(self.fingerprints + (fingerprint,), knowledge_time)
+
+
+@dataclass(frozen=True, slots=True)
+class TradeTick:
+    context: ValueContext
+    price: DecimalValue
+    quantity: Quantity
+    aggressor: str | None = None
+    value_version: int = 1
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.price, DecimalValue) or self.price.value <= 0:
+            raise NumericPolicyError(
+                NumericFailureReason.NON_POSITIVE_PRICE, "trade price must be positive"
+            )
+        if (
+            not isinstance(self.quantity, Quantity)
+            or self.quantity.unit is not QuantityUnit.CONTRACTS_PROVIDER_NATIVE_V1
+        ):
+            raise ValuePlaneConsistencyError(
+                "trade quantity must use provider-native contract units"
+            )
+        require_quantity(self.quantity.value.value)
+        if self.aggressor is not None and self.aggressor not in {"BUY", "SELL", "UNKNOWN"}:
+            raise ValuePlaneError("aggressor is not a canonical value")
+        if (
+            isinstance(self.value_version, bool)
+            or not isinstance(self.value_version, int)
+            or self.value_version < 1
+        ):
+            raise ValuePlaneError("value version is invalid")
+
+    @property
+    def fingerprint(self) -> str:
+        return _hash(
+            {
+                "family": "TradeTick",
+                "context": self.context.identity_fingerprint,
+                "price": self.price.fingerprint,
+                "quantity": self.quantity.fingerprint,
+                "aggressor": self.aggressor,
+                "version": self.value_version,
+            }
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class TickerState:
+    context: ValueContext
+    last_price: CapabilityValue[DecimalValue]
+    bid_price: CapabilityValue[DecimalValue]
+    ask_price: CapabilityValue[DecimalValue]
+    volume24: CapabilityValue[Quantity]
+    hold_vol: CapabilityValue[Quantity]
+    index_price: CapabilityValue[DecimalValue]
+    fair_price: CapabilityValue[DecimalValue]
+    funding_rate: CapabilityValue[DecimalValue]
+    value_version: int = 1
+
+    def __post_init__(self) -> None:
+        values = (
+            self.last_price,
+            self.bid_price,
+            self.ask_price,
+            self.index_price,
+            self.fair_price,
+            self.funding_rate,
+        )
+        if (
+            any(not isinstance(value, CapabilityValue) for value in values)
+            or not isinstance(self.volume24, CapabilityValue)
+            or not isinstance(self.hold_vol, CapabilityValue)
+        ):
+            raise ValuePlaneError("ticker capability values are required")
+        for value in (
+            self.last_price,
+            self.bid_price,
+            self.ask_price,
+            self.index_price,
+            self.fair_price,
+        ):
+            decimal_value = cast(CapabilityValue[DecimalValue], value)
+            if decimal_value.value is not None and decimal_value.value.value <= 0:
+                raise NumericPolicyError(
+                    NumericFailureReason.NON_POSITIVE_PRICE, "ticker price must be positive"
+                )
+        for quantity_capability in (self.volume24, self.hold_vol):
+            quantity_value = cast(CapabilityValue[Quantity], quantity_capability)
+            if (
+                quantity_value.value is not None
+                and quantity_value.value.unit is not QuantityUnit.CONTRACTS_PROVIDER_NATIVE_V1
+            ):
+                raise ValuePlaneConsistencyError("ticker quantity must use provider-native units")
+
+    @property
+    def fingerprint(self) -> str:
+        def material(value: CapabilityValue[Any]) -> object:
+            return {
+                "state": value.state.value,
+                "value": getattr(value.value, "fingerprint", None),
+                "source": value.source_field,
+            }
+
+        return _hash(
+            {
+                "family": "TickerState",
+                "context": self.context.identity_fingerprint,
+                "fields": [
+                    material(item)
+                    for item in (
+                        self.last_price,
+                        self.bid_price,
+                        self.ask_price,
+                        self.volume24,
+                        self.hold_vol,
+                        self.index_price,
+                        self.fair_price,
+                        self.funding_rate,
+                    )
+                ],
+                "version": self.value_version,
+            }
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class Timeframe:
+    name: str
+    duration_seconds: int
+    version: int = 1
+    alignment: str = "UNIX_EPOCH_MULTIPLES"
+
+    def __post_init__(self) -> None:
+        if (
+            not self.name
+            or isinstance(self.duration_seconds, bool)
+            or not isinstance(self.duration_seconds, int)
+            or self.duration_seconds <= 0
+        ):
+            raise ValuePlaneError("timeframe is invalid")
+        if isinstance(self.version, bool) or not isinstance(self.version, int) or self.version < 1:
+            raise ValuePlaneError("timeframe version is invalid")
+        if self.alignment != "UNIX_EPOCH_MULTIPLES":
+            raise ValuePlaneConsistencyError("unsupported timeframe alignment")
+
+    @property
+    def fingerprint(self) -> str:
+        return _hash(
+            {
+                "name": self.name,
+                "duration_seconds": self.duration_seconds,
+                "version": self.version,
+                "alignment": self.alignment,
+            }
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CandleBar:
+    context: ValueContext
+    timeframe: Timeframe
+    start: datetime
+    end: datetime
+    open: DecimalValue
+    high: DecimalValue
+    low: DecimalValue
+    close: DecimalValue
+    volume: Quantity
+    amount: ProviderTransactionAmount
+    finality: Finality
+    lineage: OrderedLineage
+    revision: int = 0
+    predecessor_fingerprint: str | None = None
+    close_proof: str | None = None
+
+    def __post_init__(self) -> None:
+        start = _utc(self.start, "candle start")
+        end = _utc(self.end, "candle end")
+        object.__setattr__(self, "start", start)
+        object.__setattr__(self, "end", end)
+        if end - start != timedelta(seconds=self.timeframe.duration_seconds):
+            raise ValuePlaneConsistencyError("candle interval does not match timeframe")
+        if start.timestamp() % self.timeframe.duration_seconds != 0:
+            raise ValuePlaneConsistencyError("candle start is not Unix-epoch aligned")
+        validate_ohlc(self.open, self.high, self.low, self.close)
+        if self.volume.unit is not QuantityUnit.CONTRACTS_PROVIDER_NATIVE_V1:
+            raise ValuePlaneConsistencyError("candle volume must use provider-native units")
+        if not isinstance(self.amount, ProviderTransactionAmount):
+            raise ValuePlaneError("candle amount must remain distinct from Quantity")
+        if not isinstance(self.finality, Finality) or not isinstance(self.lineage, OrderedLineage):
+            raise ValuePlaneError("candle finality and lineage are required")
+        if (
+            isinstance(self.revision, bool)
+            or not isinstance(self.revision, int)
+            or self.revision < 0
+        ):
+            raise ValuePlaneError("candle revision is invalid")
+        if self.revision > 0 and not self.predecessor_fingerprint:
+            raise ValuePlaneConsistencyError("correction requires predecessor lineage")
+        if self.finality is Finality.CLOSED and not self.close_proof:
+            raise ValuePlaneConsistencyError("closed candle requires exact source/finality proof")
+
+    @property
+    def fingerprint(self) -> str:
+        return _hash(
+            {
+                "family": "CandleBar",
+                "context": self.context.identity_fingerprint,
+                "timeframe": self.timeframe.fingerprint,
+                "start": self.start.isoformat(),
+                "end": self.end.isoformat(),
+                "open": self.open.fingerprint,
+                "high": self.high.fingerprint,
+                "low": self.low.fingerprint,
+                "close": self.close.fingerprint,
+                "volume": self.volume.fingerprint,
+                "amount": self.amount.fingerprint,
+                "finality": self.finality.value,
+                "lineage": self.lineage.manifest_fingerprint,
+                "revision": self.revision,
+                "predecessor": self.predecessor_fingerprint,
+                "close_proof": self.close_proof,
+            }
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class BookLevel:
+    price: DecimalValue
+    quantity: Quantity
+    order_count: int
+
+    def __post_init__(self) -> None:
+        if self.price.value <= 0:
+            raise NumericPolicyError(
+                NumericFailureReason.NON_POSITIVE_PRICE, "book price must be positive"
+            )
+        if self.quantity.unit is not QuantityUnit.CONTRACTS_PROVIDER_NATIVE_V1:
+            raise ValuePlaneConsistencyError("book quantity must use provider-native units")
+        if (
+            isinstance(self.order_count, bool)
+            or not isinstance(self.order_count, int)
+            or self.order_count < 0
+        ):
+            raise ValuePlaneError("order count must be non-negative")
+
+    @property
+    def fingerprint(self) -> str:
+        return _hash(
+            {
+                "price": self.price.fingerprint,
+                "quantity": self.quantity.fingerprint,
+                "order_count": self.order_count,
+            }
+        )
+
+
+def _validate_levels(
+    levels: tuple[BookLevel, ...], *, bids: bool, allow_zero: bool = False
+) -> None:
+    previous = None
+    for level in levels:
+        if not allow_zero and level.quantity.value.value == 0:
+            raise ValuePlaneConsistencyError("zero quantity is only a delta removal instruction")
+        current = level.price.value
+        if previous is not None and (
+            (bids and current >= previous) or (not bids and current <= previous)
+        ):
+            raise ValuePlaneConsistencyError("book levels are not canonically sorted")
+        previous = current
+
+
+@dataclass(frozen=True, slots=True)
+class OrderBookSnapshot:
+    context: ValueContext
+    bids: tuple[BookLevel, ...]
+    asks: tuple[BookLevel, ...]
+    version: int
+    subscription_context: str
+
+    def __post_init__(self) -> None:
+        _validate_levels(self.bids, bids=True)
+        _validate_levels(self.asks, bids=False)
+        if isinstance(self.version, bool) or not isinstance(self.version, int) or self.version < 0:
+            raise ValuePlaneError("book version is invalid")
+        if not self.subscription_context:
+            raise ValuePlaneConsistencyError("full-depth identity requires subscription context")
+
+    @property
+    def fingerprint(self) -> str:
+        return _hash(
+            {
+                "family": "OrderBookSnapshot",
+                "context": self.context.identity_fingerprint,
+                "bids": [level.fingerprint for level in self.bids],
+                "asks": [level.fingerprint for level in self.asks],
+                "version": self.version,
+                "subscription_context": self.subscription_context,
+            }
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class OrderBookDelta:
+    context: ValueContext
+    bids: tuple[BookLevel, ...]
+    asks: tuple[BookLevel, ...]
+    previous_version: int
+    version: int
+    subscription_context: str
+
+    def __post_init__(self) -> None:
+        _validate_levels(self.bids, bids=True, allow_zero=True)
+        _validate_levels(self.asks, bids=False, allow_zero=True)
+        if self.version != self.previous_version + 1:
+            raise ValuePlaneConsistencyError("depth version is not previous+1; resync is required")
+        if not self.subscription_context:
+            raise ValuePlaneConsistencyError("delta subscription context is required")
+
+    @property
+    def fingerprint(self) -> str:
+        return _hash(
+            {
+                "family": "OrderBookDelta",
+                "context": self.context.identity_fingerprint,
+                "bids": [level.fingerprint for level in self.bids],
+                "asks": [level.fingerprint for level in self.asks],
+                "previous": self.previous_version,
+                "version": self.version,
+                "subscription_context": self.subscription_context,
+            }
+        )
+
+    def apply(self, snapshot: OrderBookSnapshot) -> OrderBookSnapshot:
+        if (
+            snapshot.context.identity_fingerprint != self.context.identity_fingerprint
+            or snapshot.version != self.previous_version
+            or snapshot.subscription_context != self.subscription_context
+        ):
+            raise ValuePlaneConsistencyError("delta cannot mutate a different book context")
+
+        def update(
+            existing: tuple[BookLevel, ...], changes: tuple[BookLevel, ...], descending: bool
+        ) -> tuple[BookLevel, ...]:
+            levels = {level.price.canonical_text: level for level in existing}
+            for level in changes:
+                key = level.price.canonical_text
+                if level.quantity.value.value == 0:
+                    levels.pop(key, None)
+                else:
+                    levels[key] = level
+            result = tuple(levels.values())
+            return tuple(sorted(result, key=lambda item: item.price.value, reverse=descending))
+
+        return OrderBookSnapshot(
+            self.context,
+            update(snapshot.bids, self.bids, True),
+            update(snapshot.asks, self.asks, False),
+            self.version,
+            self.subscription_context,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ReferencePriceEvidence:
+    context: ValueContext
+    kind: ReferencePriceKind
+    value: DecimalValue
+    source_field: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.kind, ReferencePriceKind) or not self.source_field:
+            raise ValuePlaneError("reference price evidence metadata is invalid")
+        require_price(self.value.value)
+
+    @property
+    def fingerprint(self) -> str:
+        return _hash(
+            {
+                "family": "ReferencePriceEvidence",
+                "context": self.context.identity_fingerprint,
+                "kind": self.kind.value,
+                "value": self.value.fingerprint,
+                "source": self.source_field,
+            }
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class FundingEvidence:
+    context: ValueContext
+    rate: DecimalValue
+    applicable_time: datetime
+    source_field: str = "fundingRate"
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "applicable_time", _utc(self.applicable_time, "funding applicable time")
+        )
+        if not isinstance(self.rate, DecimalValue):
+            raise ValuePlaneError("funding rate must be Decimal")
+        if not self.source_field:
+            raise ValuePlaneError("funding source field is required")
+
+    @property
+    def fingerprint(self) -> str:
+        return _hash(
+            {
+                "family": "FundingEvidence",
+                "context": self.context.identity_fingerprint,
+                "rate": self.rate.fingerprint,
+                "applicable_time": self.applicable_time.isoformat(),
+                "source": self.source_field,
+            }
+        )
+
+
+def validate_series_units(values: tuple[Quantity, ...]) -> QuantityUnit:
+    if not values:
+        raise ValuePlaneConsistencyError("quantity series cannot be empty")
+    units = {value.unit for value in values}
+    if len(units) != 1:
+        raise ValuePlaneConsistencyError("mixed quantity units fail closed")
+    return next(iter(units))
+
+
+def value_context_from_event(
+    event: NormalizedMarketEvent, knowledge_time: datetime
+) -> ValueContext:
+    return ValueContext.from_event(event, knowledge_time=knowledge_time)

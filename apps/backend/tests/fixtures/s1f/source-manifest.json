@@ -1,0 +1,11 @@
+{
+  "source_url": "https://mexcdevelop.github.io/apidocs/contract_v1_en/",
+  "retrieved": "2026-09-13",
+  "source_sha256": "57ebc13fea788a1c568c8aeabfdf50acc0c9f5b5a882af4855837d53499940e3",
+  "normalized_schema_version": "S1F_MEXC_SOURCE_CONTRACT_V1",
+  "fixture_file": "mexc-public-fixtures.json",
+  "fixture_hashes": {
+    "mexc-public-fixtures.json": "0ca1b646e538d238735f142855a08b379a2917e4c8396c349736a078564c024c"
+  },
+  "network_policy": "CI_ZERO_UNCONTROLLED_MEXC_NETWORK_CALLS"
+}
