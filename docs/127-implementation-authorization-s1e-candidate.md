@@ -23,7 +23,7 @@ This bounded correction preserves the existing authorization candidate, branch, 
 - R05 obligations are referenced by exact frozen locators in the form `R05::<heading>::B<ordinal>` computed from `docs/54-r05-realtime-requirements-addendum.md`.
 - S1E now defines a provider-neutral immutable Channel Capability / Sequence Policy contract with finite continuity modes and fail-closed resynchronization semantics.
 - Module 7 now emits exactly the canonical typed data-authority states from HCT-DEC-0063 as restrictive input to the R11 lattice; it cannot authorize trading or live authority.
-- S1E references, but does not own, the S1C `UniverseSnapshot` / `UniverseEligibilityState` lifecycle evidence. `INELIGIBLE`, `UNKNOWN`, retired or otherwise invalid evidence deterministically invalidates, retires or degrades affected projections.
+- S1E references, but does not own, the S1C `UniverseSnapshot` / `UniverseEligibilityState` lifecycle evidence. `INELIGIBLE` and `UNKNOWN` block NEW/ADD exposure and candidate admission, but do not automatically downgrade otherwise valid Market-State trust; lifecycle restriction metadata is separate from trust/freshness metadata.
 
 ## Why this is the next dependency
 
@@ -43,7 +43,7 @@ The future S1E Work Order may implement only provider-neutral, deterministic con
 - Module 7 canonical `ALLOW_NEW_EXPOSURE`, `DEGRADED_NEW_EXPOSURE`, `NO_NEW_EXPOSURE`, `REDUCE_ONLY`, `RECONCILIATION_ONLY` and `EMERGENCY` data-authority outputs, always restrictive-only;
 - Module 5 generation-scoped coherent Market-State snapshot/fabric contracts, synchronization barriers, trust states and explicit rejection of mixed-generation or unproven continuity as trusted truth;
 - Module 30 cache/hot-state projection contracts with freshness lease/TTL/invalidation metadata and an explicit no-authority-upgrade invariant;
-- a typed reference seam to the S1C `UniverseSnapshot` / `UniverseEligibilityState` evidence owned by ADR-0047, including deterministic invalidation/retirement/degradation on lifecycle invalidation;
+- a typed reference seam to the S1C `UniverseSnapshot` / `UniverseEligibilityState` evidence owned by ADR-0047, including independent lifecycle restriction metadata and deterministic blocking of NEW/ADD exposure/candidate admission;
 - typed integration contracts proving that Module 29 quota/backpressure constrains resources and admission but never owns market truth;
 - deterministic fixtures/replay inputs, negative-capability scanning, tests and evidence without live MEXC or external network calls.
 
@@ -59,6 +59,7 @@ The future S1E Work Order may implement only provider-neutral, deterministic con
 - Module 29 may deny/defer/shed resource admission, but it cannot publish market truth or relax Module 7/5 trust barriers.
 - The canonical data-authority result is one restrictive input to the R11 authority lattice and cannot by itself authorize trading, bypass Risk/Safety/Session/Exchange restrictions or create live authority.
 - S1C remains the sole structural universe/lifecycle owner; S1E cannot create a parallel universe truth.
+- Universe eligibility, Market-State trust, DataAuthority and downstream action-class use are independent typed axes. `INELIGIBLE`/`UNKNOWN` alone cannot erase fresh/coherent market truth or disable REDUCE/CLOSE/PROTECT/RECONCILE-compatible paths.
 
 ## Explicitly forbidden
 
@@ -95,6 +96,8 @@ This candidate itself does not change those flags.
 - direct R05/R11/R12/Decisions Ledger traceability;
 - exact R05 frozen locators, the HCT-DEC-0058 through HCT-DEC-0066 applicability/defer matrix, ADR-0047 and ADR-0048 seam ownership;
 - adversarial proof for all sequence-policy modes, canonical data-authority states, restrictive-only behavior and S1C lifecycle invalidation;
+- explicit lifecycle/trust matrix proving `INELIGIBLE + TRUSTED` and `UNKNOWN + TRUSTED` preserve valid Market-State while blocking new exposure, plus independent stale/gap/clock/generation downgrade causes;
+- implementation execution appendix with ordered phases, proof obligations, test families and Evidence Bundle fields;
 - complete S1E implementation Work Order with fail-closed tests, fixtures/replay, scanner and STOP CONDITION;
 - pull-request-only exact-head authorization CI success;
 - fresh independent HIGH_ASSURANCE/HEDS Delta review with unresolved CRITICAL=0 and HIGH=0.

@@ -36,8 +36,10 @@ The implementation candidate shall use the repository source hierarchy and read 
 - `docs/09-definition-of-done.md`;
 - `docs/11-checkpoint.md`;
 - `docs/14-product-module-map.md`, Modules 4, 5, 7, 29 and 30;
+- `docs/51-r05-realtime-transport-state-resilience-architecture.md`;
 - `docs/53-r05-acceptance-criteria-and-review-gates.md`;
 - `docs/54-r05-realtime-requirements-addendum.md`;
+- `docs/55-r05-decision-proposals.md`;
 - `docs/91-r11-integrated-authority-state-dependency-architecture.md`;
 - `docs/92-r11-v1-module-classification-and-integration-hardening.md`;
 - `docs/93-r11-integration-requirements-addendum.md`;
@@ -238,9 +240,30 @@ Define typed integration boundaries showing that quota/backpressure admission an
 - override Module 7 quality or Module 5 trust barriers;
 - become a second market-truth owner.
 
-### S1C universe/lifecycle seam
+### Four-axis lifecycle, trust, authority and action model
 
-S1E shall consume a typed immutable lifecycle evidence reference containing the canonical S1C `UniverseSnapshot` identity/fingerprint, contract reference, universe generation, `UniverseEligibilityState`, reason code and source/policy versions. `ELIGIBLE` is not trading authority. `INELIGIBLE`, `UNKNOWN`, retired or lifecycle-invalid evidence deterministically invalidates, retires or degrades the affected Market-State/cache projection, prevents it from presenting as current trusted state and requires recovery/resynchronization. S1E does not create, recompute or persist universe membership.
+S1E shall keep these typed axes independent:
+
+- **Universe eligibility — S1C / ADR-0047:** structural participation and lifecycle evidence for a contract. It must not directly decide Market-State freshness/trust.
+- **Market-State trust — Module 5:** whether generation-scoped coherent market state is `TRUSTED`, `DEGRADED`, `UNTRUSTED` or `RESYNC_REQUIRED`. It must not create universe eligibility.
+- **Data authority — Module 7:** the R05 restrictive `DataAuthorityState` output from quality/freshness/continuity/clock/coherency evidence. It must not grant trading authority by itself.
+- **Consumer/action class — downstream Safety/Session/Risk/Execution policy:** whether `NEW_EXPOSURE`, `ADD_EXPOSURE`, `REDUCE_EXPOSURE`, `CLOSE_EXPOSURE`, `ESTABLISH_OR_REPAIR_PROTECTION`, cancellation or `RECONCILIATION_RECOVERY` use is permitted. It must not be inferred from one upstream axis alone.
+
+S1E shall consume a typed immutable lifecycle restriction reference containing the canonical S1C `UniverseSnapshot` identity/fingerprint, contract reference, universe generation, `UniverseEligibilityState`, reason code and source/policy versions. `INELIGIBLE` and `UNKNOWN` fail closed for `NEW_EXPOSURE`/`ADD_EXPOSURE` eligibility and scanner/strategy candidate admission where applicable, but do not automatically downgrade otherwise valid Market-State trust or blind safety-oriented consumers. A lifecycle transition may cause a separate Market-State downgrade only when independent source/generation/freshness evidence proves the market-data source is retired or unavailable. S1E does not create, recompute or persist universe membership.
+
+#### Normative lifecycle/trust matrix
+
+| Universe evidence | Market data evidence | Market-State result | New exposure / candidate use | Safety-oriented use |
+|---|---|---|---|---|
+| `ELIGIBLE` | `TRUSTED` | `TRUSTED` | Eligible subject to all other authorities | Available subject to all other authorities |
+| `INELIGIBLE` | `TRUSTED` | `TRUSTED` + lifecycle restriction | Blocked | May remain available for reduce/close/protect/reconcile |
+| `UNKNOWN` | `TRUSTED` | `TRUSTED` + eligibility-unknown restriction | Blocked / fail closed | May remain available where downstream safety policy permits |
+| Any | `UNTRUSTED` / `STALE` / `GAP` / `CLOCK_UNTRUSTED` / `UNSYNCED` | `UNTRUSTED` / `RESYNC_REQUIRED` / `DEGRADED` as applicable | Blocked or tightened | Consumers follow their own degraded-state prerequisites |
+| Any | Retired feed generation / late event | Must not mutate current trusted state | Blocked from current generation | Preserve as evidence only |
+
+`INELIGIBLE`/`UNKNOWN` alone never changes a valid Market-State trust result. Cache/hot-state carries lifecycle restriction metadata separately from trust/freshness metadata, so `TRUSTED` market data may coexist with `NEW_EXPOSURE_DISABLED`. Lifecycle metadata cannot upgrade `UNTRUSTED`/`DEGRADED` state. Safety-oriented evidence for `REDUCE_EXPOSURE`, `CLOSE_EXPOSURE`, `ESTABLISH_OR_REPAIR_PROTECTION`, cancellation and `RECONCILIATION_RECOVERY` remains available when its own authoritative prerequisites are satisfied.
+
+Stale data independently downgrades Market-State trust; `UniverseEligibilityState` is not treated as a data-quality failure merely because it is `INELIGIBLE` or `UNKNOWN`.
 
 ## ARCHITECTURE RULES
 
@@ -252,6 +275,8 @@ S1E shall consume a typed immutable lifecycle evidence reference containing the 
 - Module 29 owns resource control only.
 - ADR-0047 owns the structural universe/lifecycle state; S1E consumes lifecycle evidence and never becomes a competing universe owner.
 - ADR-0048 owns quota/backpressure decisions; S1E cannot synthesize resource admission or relax a quality/trust barrier.
+- Lifecycle restriction metadata is separate from Market-State trust/freshness metadata; S1C eligibility cannot silently overwrite Module 5 or Module 7 results.
+- Module 5 is the sole Market-State trust owner; Module 7 is the sole DataAuthority predicate/output owner; downstream action-class policy remains downstream.
 - Provider/topology neutrality is mandatory; logical modules do not prescribe production deployment.
 - All material behavior uses typed identity, version and deterministic fingerprints.
 - Failure and degradation state is explicit and propagates to consumers.
@@ -281,6 +306,8 @@ The future implementation may be accepted only when:
 - Channel Capability/Sequence Policy modes are immutable, provider-neutral, fingerprinted and fail closed to `SEQUENCE_UNPROVABLE`/resynchronization;
 - Module 7 emits exactly the six canonical HCT-DEC-0063 data-authority states and remains restrictive-only;
 - S1C lifecycle evidence is referenced through a typed seam and invalidation is deterministic for `ELIGIBLE -> INELIGIBLE`, `ELIGIBLE -> UNKNOWN`, generation/version change and retired source generation;
+- the lifecycle/trust matrix proves `INELIGIBLE + TRUSTED` and `UNKNOWN + TRUSTED` block new exposure while preserving valid trusted market data and compatible safety paths;
+- stale/expired, gap, clock-untrusted, unsynchronized and retired-feed evidence independently causes the applicable Market-State downgrade; universe eligibility alone does not;
 - environment namespace separation is preserved;
 - deterministic fixtures/replay are sufficient for CI without live MEXC;
 - negative-capability scanner rejects credentials/private/order/Risk/OMS/Execution/persistence/deploy/live surfaces;
@@ -303,6 +330,8 @@ The future implementation Work Order must provide at minimum:
 - Module 29 resource-starvation/admission integration tests;
 - canonical data-authority tests for required-feed untrusted, severe contradiction, untrusted clock/time-sensitive state, required sequence-unprovable and Module 29 resource starvation;
 - S1C lifecycle tests for `ELIGIBLE -> INELIGIBLE`, `ELIGIBLE -> UNKNOWN`, snapshot generation/version change, retired source generation and cache invalidation/lease behavior;
+- `ELIGIBLE + TRUSTED`, `ELIGIBLE -> INELIGIBLE + TRUSTED`, `ELIGIBLE -> UNKNOWN + TRUSTED`, ineligible+stale, unknown+gap/`SEQUENCE_UNPROVABLE`, retired-generation late event and lifecycle-to-cache restriction tests;
+- tests that lifecycle transitions cannot promote `DEGRADED`/`UNTRUSTED` Market-State to `TRUSTED`, and cannot blind reduce/close/protect/reconcile-compatible evidence paths;
 - LIVE/PAPER/SHADOW/REPLAY namespace isolation tests where applicable;
 - deterministic fixture/replay tests without live MEXC/network;
 - negative tests for network/provider endpoint, credentials/private APIs, trading/Risk/OMS/Execution, persistence, deployment and live authority;

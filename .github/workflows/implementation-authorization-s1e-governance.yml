@@ -130,6 +130,8 @@ jobs:
               "docs/03-scope.md",
               "docs/04-architecture.md",
               "docs/06-test-benchmark-plan.md",
+              "docs/51-r05-realtime-transport-state-resilience-architecture.md",
+              "docs/55-r05-decision-proposals.md",
               "adr/HCT-ADR-0047-s1c-market-universe-registry.md",
               "adr/HCT-ADR-0048-s1d-quota-backpressure-governor.md",
               "HCT-REQ-BASELINE-V1-CANDIDATE",
@@ -182,6 +184,32 @@ jobs:
               "retired source generation",
           ):
               assert marker in authorization and marker in implementation, marker
+          for marker in (
+              "H001-H004",
+              "lifecycle restriction metadata",
+              "Market-State trust",
+              "INELIGIBLE + TRUSTED",
+              "UNKNOWN + TRUSTED",
+              "do not automatically downgrade",
+              "Stale data independently downgrades Market-State trust",
+              "REDUCE_EXPOSURE",
+              "CLOSE_EXPOSURE",
+              "ESTABLISH_OR_REPAIR_PROTECTION",
+              "RECONCILIATION_RECOVERY",
+              "ineligible+stale",
+              "unknown+gap/`SEQUENCE_UNPROVABLE`",
+              "retired-generation late event",
+          ):
+              assert marker in candidate + authorization + implementation, marker
+          for marker in (
+              "IMPLEMENTATION EXECUTION APPENDIX",
+              "Phase A",
+              "Phase G",
+              "PO-01",
+              "PO-10",
+              "Evidence Bundle",
+          ):
+              assert marker in implementation, marker
           for marker in (
               "event identity",
               "event_time",
