@@ -140,7 +140,8 @@ Use the modern `websockets.asyncio.client` API. HCT owns bounded retry/backoff/c
 - Brain, agents, RAG, memory, learning, calibration, promotion, Risk, Safety, Session Policy, sizing, leverage, OMS, Execution, reconciliation, protection, orders, balances, positions and fills;
 - private/authenticated market or account data, credentials, signing, persistence, database/RLS, feature stores, HA/fencing, deployment and infrastructure topology;
 - checkpoint mutation, implementation or live authority not explicitly granted by a later gate; production credentials, production deployment, limited-live and live/real-money trading;
-- mutation of S1E ownership, frozen requirement blobs, source hierarchy, dependency locks, CP0030, PR #69 or the S1F governance artifacts.
+- general or unrelated dependency mutation, any direct dependency upgrade/downgrade outside H013, and any dependency-file change outside `apps/backend/pyproject.toml` and `apps/backend/uv.lock` are out of scope; the exact H013 direct delta is authorized only after a separate S1F authorization checkpoint, with unavoidable deterministic transitive lock entries permitted only from the locked resolver for that delta;
+- mutation of S1E ownership, frozen requirement blobs, source hierarchy, CP0030, PR #69 or the S1F governance artifacts.
 
 ## FILES/SOURCES TO READ
 
@@ -316,7 +317,6 @@ Test public session generation/reconnect/retirement, staged resubscription, boun
 
 ## BENCHMARK AND EVIDENCE
 
-Freeze `S1F_BENCHMARK_MODE=BASELINE_ESTABLISHMENT_V1`: `S1F-CONTRACT-MICRO-V1` = 1 symbol, ticker 64/deal 256/depth 128/depth-full 32/kline 32, total 512, depth 5, 60-second replay; `S1F-NOMINAL-MULTICHANNEL-V1` = 8 symbols, ticker 1024/deal 4096/depth 2048/depth-full 512/kline 512, total 8192, depth 20, 900-second replay; `S1F-STRESS-BACKPRESSURE-V1` = 32 symbols, ticker 8192/deal 32768/depth 16384/depth-full 4096/kline 4096, total 65536, depth 20, queue capacity 4096, 3600-second replay. Declare the locked public channels, fixture configuration, seed, code/build/dependency/runtime, hardware/environment, tool version and hashes. Mandatory measurements are normalization throughput, per-event/value-state update latency distribution, replay throughput, peak/steady memory and queue depth/age. Acceptance is correctness, bounded completion, no unbounded memory/queue growth and complete baseline publication, with no product SLO. Evidence records raw artifact/hash and limitations; future regression thresholds are proposals until later governance. No uncontrolled live network is used in CI.
 Freeze `S1F_BENCHMARK_MODE=BASELINE_ESTABLISHMENT_V1`: `S1F-CONTRACT-MICRO-V1` = 1 symbol, ticker 64/deal 256/depth 128/depth-full 32/kline 32, total 512, depth 5, 60-second replay; `S1F-NOMINAL-MULTICHANNEL-V1` = 8 symbols, ticker 1024/deal 4096/depth 2048/depth-full 512/kline 512, total 8192, depth 20, 900-second replay; `S1F-STRESS-BACKPRESSURE-V1` = 32 symbols, ticker 8192/deal 32768/depth 16384/depth-full 4096/kline 4096, total 65536, depth 20, queue capacity 4096, 3600-second replay. Declare the locked public channels, fixture configuration, seed, code/build/dependency/runtime, hardware/environment, tool version and hashes. Mandatory measurements are normalization throughput, per-event/value-state update latency distribution, replay throughput, peak/steady memory and queue depth/age. Acceptance is correctness, bounded completion, no unbounded memory/queue growth and complete baseline publication, with no product SLO. Evidence records raw artifact/hash and limitations; future regression thresholds are proposals until later governance. No uncontrolled live network is used in CI. H013 evidence additionally includes the pyproject diff, uv.lock diff, dependency graph delta, package licenses, pip-audit result and exact hashes/versions.
 
 ## DELIVERABLES
@@ -329,7 +329,7 @@ Freeze `S1F_BENCHMARK_MODE=BASELINE_ESTABLISHMENT_V1`: `S1F-CONTRACT-MICRO-V1` =
 
 ## REVIEW FORMAT
 
-The implementation review must bind the fields in the authorization candidate, including exact base/head, source identities, typed value kinds, numeric policy, ordered lineage, interval semantics, S1E axis matrix, `docs06Bound`, benchmark evidence, H013 runtime dependency policy, H014 quantity units, governance and authorization firewalls. A green test suite or `COMPLETE_CANDIDATE` is not approval.
+The implementation review must bind the fields in the authorization candidate, including exact base/head, source identities, typed value kinds, numeric policy, ordered lineage, interval semantics, S1E axis matrix, `docs06Bound`, benchmark evidence, H013 runtime dependency policy, H014 quantity units, H015 dependency-scope contradiction closure, canonical dependency wording, benchmark block count, governance and authorization firewalls. A green test suite or `COMPLETE_CANDIDATE` is not approval.
 
 ## STOP CONDITION
 

@@ -305,6 +305,17 @@ jobs:
           assert "never auto-detect seconds versus milliseconds" in implementation
           assert "apps/backend/pyproject.toml" in candidate and "apps/backend/uv.lock" in candidate
           assert "apps/backend/pyproject.toml" in implementation and "apps/backend/uv.lock" in implementation
+          out_of_scope_match = re.search(r"## OUT OF SCOPE(?P<section>.*?)(?=\n## |\Z)", implementation, flags=re.DOTALL)
+          assert out_of_scope_match, "implementation OUT OF SCOPE section missing"
+          out_of_scope = out_of_scope_match.group("section").lower()
+          assert "dependency locks" not in out_of_scope
+          assert not re.search(r"\bno\s+(?:dependency|lockfile)\s+(?:changes?|mutation)\b", out_of_scope)
+          assert not re.search(r"\b(?:dependency|lockfile)\s+(?:changes?|mutation)\s+(?:are|is)\s+categorically\s+out\s+of\s+scope\b", out_of_scope)
+          assert "general or unrelated dependency mutation" in out_of_scope
+          assert "S1F_RUNTIME_DEPENDENCY_ALLOWLIST=apps/backend/pyproject.toml;apps/backend/uv.lock" in implementation
+          benchmark_marker = "Freeze `S1F_BENCHMARK_MODE=BASELINE_ESTABLISHMENT_V1`"
+          assert implementation.count(benchmark_marker) == 1
+          assert implementation.count("H013 evidence additionally includes") == 1
           for forbidden in ("dependency locks are out of scope", "dependency-lock mutation is categorically out of scope", "no dependency-lock changes"):
               assert forbidden not in combined.lower(), forbidden
           assert "Decimal or" not in combined
@@ -340,6 +351,9 @@ jobs:
           echo "h006SemanticAssertions=PASS"
           echo "h013RuntimeDependencyPolicy=PASS"
           echo "h014QuantityUnitsFrozen=PASS"
+          echo "h015DependencyScopeContradictionClosed=PASS"
+          echo "benchmarkDeduplicated=PASS"
+          echo "semanticCiContradictionGuard=PASS"
           echo "orderedInputLineage=PASS"
           echo "s1eAxisSeparation=PASS"
           echo "docs06Bound=PASS"
