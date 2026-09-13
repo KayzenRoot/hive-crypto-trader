@@ -72,7 +72,11 @@ Seed: `S2A-FIXTURE-SEED-V1`
 All eight features were evaluated over an authorized bounded buffer. The
 memory number is a one-contract representative probe for each profile; the
 throughput measurement covers the complete profile cardinality. These are
-baseline measurements, not production SLOs or profitability claims.
+baseline measurements, not production SLOs or profitability claims. The
+exact-head CI repeats the benchmark and compares the deterministic profile
+projection (fixture hashes, feature counts, bounded windows, validity counts and
+correctness); runner-dependent timing and memory measurements remain separately
+required to be positive and bounded.
 
 | Profile | Contracts | Closed 1m/contract | Max window | Feature evals | Eval/s | Replay candles/s | Peak bytes | Warmup | Restrictive | No-lookahead |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|

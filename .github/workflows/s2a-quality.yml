@@ -212,7 +212,31 @@ jobs:
               assert set(item["per_feature_compute_latency_ns"]) == set(item["feature_ids"])
               for latency in item["per_feature_compute_latency_ns"].values():
                   assert set(latency) == {"p50", "p95", "p99", "max"}
-          assert first["profiles"] == second["profiles"]
+          deterministic_fields = (
+              "profile",
+              "contracts",
+              "closed_1m_candles_per_contract",
+              "max_window",
+              "feature_ids",
+              "feature_evaluations",
+              "memory_probe_contracts",
+              "window_buffer_depth",
+              "warmup_count",
+              "restrictive_state_count",
+              "no_lookahead_rejection_count",
+              "input_manifest_hash",
+              "output_manifest_hash",
+              "correctness",
+              "bounded_completion",
+          )
+          def deterministic_profiles(document):
+              return [
+                  {field: item[field] for field in deterministic_fields}
+                  for item in document["profiles"]
+              ]
+          # Timing and memory measurements are intentionally excluded from replay parity;
+          # they are validated as positive bounded metrics above but vary by runner load.
+          assert deterministic_profiles(first) == deterministic_profiles(second)
           stress = next(item for item in first["profiles"] if item["profile"] == "STRESS")
           assert stress["restrictive_state_count"] >= 3
           print("S2A exact profiles, bounded memory/window, restrictive propagation and replay hash parity: PASS")
