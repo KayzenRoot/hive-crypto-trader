@@ -301,6 +301,23 @@ jobs:
               "S2B_WALL_RECEIVE_TIME=MAX_CONSTITUENT_WALL_RECEIVE_TIME",
               "S2B_PRE_BOUNDARY_RULE=MATCHED_FORBIDDEN_BEFORE_FINAL_CLOSED_BAR_AND_ALL_KNOWLEDGE_TIMES",
               "S2B_FROZEN_PACKAGE_COUNT=17",
+              "S2B_CONSTITUENT_PAIR=EXACT_CANDLEBAR_PLUS_EVALUATOR_ISSUED_FEATURE_SAMPLE_FROM_SAME_CANDLE",
+              "S2B_PAIR_OPEN_SOURCE=CANDLEBAR_OPEN",
+              "S2B_PAIR_AUTHORITY_SOURCE=EVALUATOR_ISSUED_FEATURE_SAMPLE",
+              "S2B_PAIR_FINGERPRINT_EQUALITY=sample.fingerprint==candle.fingerprint",
+              "S2B_PAIR_OPEN_BINDING=CANDLEBAR_FINGERPRINT_COMMITS_OPEN",
+              "sample.fingerprint == candle.fingerprint",
+              "sample.source_id == candle.context.source_id",
+              "sample.contract_id == candle.context.contract_id",
+              "sample.environment == candle.context.environment",
+              "sample.generation_fingerprint == candle.context.generation.fingerprint",
+              "sample.timeframe.fingerprint == candle.timeframe.fingerprint",
+              "sample.interval_start == candle.start",
+              "sample.closed == (candle.finality == CLOSED)",
+              "sample.quantity == candle.volume",
+              "supplies the authoritative OHLC, including `open`",
+              "consumed only from the exact `CandleBar` whose fingerprint equals",
+              "left.candle.end == right.candle.start",
               "docs/14-product-module-map.md",
               "docs/91-r11-integrated-authority-state-dependency-architecture.md",
               "docs/105-r12-freeze-approval-and-checkpoint-promotion.md",
@@ -325,9 +342,11 @@ jobs:
 
           # 6. proof obligations and rollback semantics
           for marker in (
-              "S2B-PO-01", "S2B-PO-09", "S2B-PO-10", "S2B-PO-11", "S2B-PO-12",
+              "S2B-PO-01", "S2B-PO-09", "S2B-PO-10", "S2B-PO-11", "S2B-PO-12", "S2B-PO-13",
               "negative-valid", "boundary-equality", "zero-range", "timeframe-rejection", "rollback",
               "wrong duration", "non-canonical alignment",
+              "forged or mutated `open`", "unpaired raw `CandleBar`", "unpaired `FeatureSample`",
+              "different `CandleBar` fails",
           ):
               assert marker in combined, marker
 
@@ -356,6 +375,11 @@ jobs:
               "S2B_WALL_RECEIVE_TIME=MAX_CONSTITUENT_WALL_RECEIVE_TIME",
               "S2B_PRE_BOUNDARY_RULE=MATCHED_FORBIDDEN_BEFORE_FINAL_CLOSED_BAR_AND_ALL_KNOWLEDGE_TIMES",
               "S2B_FROZEN_PACKAGE_COUNT=17",
+              "S2B_CONSTITUENT_PAIR=EXACT_CANDLEBAR_PLUS_EVALUATOR_ISSUED_FEATURE_SAMPLE_FROM_SAME_CANDLE",
+              "S2B_PAIR_OPEN_SOURCE=CANDLEBAR_OPEN",
+              "S2B_PAIR_AUTHORITY_SOURCE=EVALUATOR_ISSUED_FEATURE_SAMPLE",
+              "S2B_PAIR_FINGERPRINT_EQUALITY=sample.fingerprint==candle.fingerprint",
+              "S2B_PAIR_OPEN_BINDING=CANDLEBAR_FINGERPRINT_COMMITS_OPEN",
           )
           for document in (candidate, authorization, implementation):
               for marker in shared:
@@ -416,6 +440,8 @@ jobs:
           printf -- '- %s\n' 'exactCandlestickDefinitions=PASS' >> "${summary}"
           printf -- '- %s\n' 'timeframeAllowlist=PASS' >> "${summary}"
           printf -- '- %s\n' 'matchValiditySeparation=PASS' >> "${summary}"
+          printf -- '- %s\n' 'constituentPairContract=PASS' >> "${summary}"
+          printf -- '- %s\n' 'openBinding=PASS' >> "${summary}"
           printf -- '- %s\n' 'implementationAuthorized=false' >> "${summary}"
           printf -- '- %s\n' 'productionCredentials=false' >> "${summary}"
           printf -- '- %s\n' 'productionDeployment=false' >> "${summary}"

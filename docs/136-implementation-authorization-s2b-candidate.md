@@ -1,4 +1,13 @@
-# HCT-IMPL-AUTH-0011 — S2B Candlestick Pattern Foundation Authorization Candidate
+#`S2B-PO-13` paired-constituent adversarial tests: a valid `CandleBar` plus
+`FeatureSample.from_candle` of that same candle passes; the same sample paired with a
+different `CandleBar` fails; a `CandleBar` with a forged or mutated `open` while reusing the
+sample fails by fingerprint mismatch; the same OHLC with only `open` changed fails; a
+mismatched sample or candle source, contract, environment, generation, timeframe, interval,
+finality or revision fails; an unpaired raw `CandleBar` fails in non-REPLAY; an unpaired
+`FeatureSample` fails because `open` cannot be proven or consumed; caller-supplied authority
+or an arbitrary fingerprint fails; `REPLAY` fixture pairing remains explicitly `REPLAY`-only;
+cross-pair reorder, duplicate, non-contiguous window or mixed identity remains `INVALID`.
+ HCT-IMPL-AUTH-0011 — S2B Candlestick Pattern Foundation Authorization Candidate
 
 Status: `PENDING_INDEPENDENT_HIGH_ASSURANCE_REVIEW`
 Risk: `HIGH_ASSURANCE`
@@ -271,6 +280,63 @@ Axis propagation keeps `MarketStateTrust`, `DataAuthority`, `ResourceRestriction
 existing S2A most-restrictive semantics, and no later constituent may upgrade an earlier
 restrictive one. Pattern analytical validity remains separate from the resource and
 lifecycle restrictions.
+
+## EXPLICIT PAIRED CONSTITUENT CONTRACT
+
+`S2B_CONSTITUENT_PAIR=EXACT_CANDLEBAR_PLUS_EVALUATOR_ISSUED_FEATURE_SAMPLE_FROM_SAME_CANDLE`
+
+`S2B_PAIR_OPEN_SOURCE=CANDLEBAR_OPEN`
+
+`S2B_PAIR_AUTHORITY_SOURCE=EVALUATOR_ISSUED_FEATURE_SAMPLE`
+
+`S2B_PAIR_FINGERPRINT_EQUALITY=sample.fingerprint==candle.fingerprint`
+
+`S2B_PAIR_OPEN_BINDING=CANDLEBAR_FINGERPRINT_COMMITS_OPEN`
+
+The authority seam alone is not sufficient for pattern evaluation: the evaluator-issued S2A
+`FeatureSample` deliberately carries `high`, `low`, `close`, quantity, timing and identity
+evidence but does **not** carry `open`, while every one of the six frozen pattern equations
+needs `open` directly or through `body = abs(close - open)`. Leaving that unreconciled would
+force the implementation to invent where authoritative `open` comes from.
+
+The frozen resolution is an explicit pair. Every non-REPLAY pattern constituent is the pair
+of the original typed S1F `CandleBar` and the evaluator-issued S2A `FeatureSample` produced
+from that **same** `CandleBar` through `FeatureSample.from_candle(...)`:
+
+- the `CandleBar` supplies the authoritative OHLC, including `open`;
+- the `FeatureSample` and its `FeatureAuthorityEvidence` supply the canonical point-in-time
+  authority proof.
+
+The evaluator must not accept an unpaired raw `CandleBar`, an unpaired `FeatureSample`,
+caller-supplied trust strings, caller-supplied hashes, or a reconstructed synthetic `open`.
+The exact name of a future runtime type is not pre-authorized; the semantics below are.
+
+Exact cross-binding, required for every pair:
+
+- `sample.fingerprint == candle.fingerprint`;
+- `sample.source_id == candle.context.source_id`;
+- `sample.contract_id == candle.context.contract_id`;
+- `sample.environment == candle.context.environment`;
+- `sample.generation_fingerprint == candle.context.generation.fingerprint`;
+- `sample.timeframe.fingerprint == candle.timeframe.fingerprint`;
+- `sample.interval_start == candle.start` and `sample.interval_end == candle.end`;
+- `sample.closed == (candle.finality == CLOSED)`;
+- `sample.high == candle.high`, `sample.low == candle.low`, `sample.close == candle.close`
+  and `sample.quantity == candle.volume`;
+- `sample.authority` is evaluator-issued and exact-event and exact-value-evidence bound
+  under the existing S2A rules.
+
+`open` is consumed only from the exact `CandleBar` whose fingerprint equals
+`sample.fingerprint`. Because `CandleBar.fingerprint` commits `open` (alongside high, low,
+close, volume, amount, timeframe, interval, finality, lineage, revision and predecessor), a
+forged or mutated `open` necessarily breaks the pair and fails closed.
+
+Ordered multi-bar windows apply the pair contract independently to every constituent, and
+preserve the existing same source/contract/environment/generation/timeframe-version rules,
+strict ordering, uniqueness and contiguity with `left.candle.end == right.candle.start`.
+Ordered `CandleBar` fingerprints and ordered `FeatureSample`/authority fingerprints are
+fingerprint material. A correction or revision requires a new `CandleBar` fingerprint, a new
+S2A sample and authority binding, and new `PatternEvidence` and predecessor lineage.
 
 ## POINT-IN-TIME DERIVED TIMESTAMPS
 
