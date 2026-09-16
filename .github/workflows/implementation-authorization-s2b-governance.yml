@@ -335,7 +335,7 @@ jobs:
               "S2B_RESTRICTIVE_VALIDITY_RULE=WARMUP_UNKNOWN_INVALID_REQUIRES_INDETERMINATE",
               "S2B_VALID_NON_MATCH=NOT_MATCHED_NEVER_UNKNOWN",
               "S2B_NO_LOOKAHEAD=STRICT_ONE_STEP_BEFORE_FORMATION_BOUNDARY_NOT_RECOGNIZED",
-              "S2B_AXIS_SEPARATION=FeatureValidity;MarketStateTrust;DataAuthority;ResourceRestriction;UniverseLifecycleRestriction",
+              "S2B_AXIS_SEPARATION=PatternValidity;MarketStateTrust;DataAuthority;ResourceRestriction;UniverseLifecycleRestriction",
               "PatternMatchState",
           ):
               assert marker in combined, marker
@@ -344,6 +344,7 @@ jobs:
           for marker in (
               "S2B-PO-01", "S2B-PO-09", "S2B-PO-10", "S2B-PO-11", "S2B-PO-12", "S2B-PO-13",
               "S2B-PO-14", "S2B-PO-15", "S2B-PO-16", "S2B-PO-17",
+              "S2B-PO-18", "S2B-PO-19", "S2B-PO-20", "S2B-PO-21",
               "negative-valid", "boundary-equality", "zero-range", "timeframe-rejection", "rollback",
               "wrong duration", "non-canonical alignment",
               "forged or mutated `open`", "unpaired raw `CandleBar`", "unpaired `FeatureSample`",
@@ -367,6 +368,15 @@ jobs:
               "resource-restrictive remains `VALID`",
               "lifecycle-restrictive remains `VALID`",
               "never accepted as caller truth",
+              "`PatternValidity` owns `VALID`",
+              "never substitutes for `PatternValidity`",
+              "earlier than canonical",
+              "never an arbitrary later call time",
+              "never substituted for the knowledge-time",
+              "no winner, suppression, score, ranking or trade preference",
+              "sequence",
+              "determinism only and grants no rank or authority",
+              "cannot skip, fork or overwrite history",
           ):
               assert marker in combined, marker
 
@@ -376,7 +386,7 @@ jobs:
               "S2B_PATTERN_COUNT=6",
               "S2B_NO_LOOKAHEAD=STRICT_ONE_STEP_BEFORE_FORMATION_BOUNDARY_NOT_RECOGNIZED",
               "S2B_PATTERN_DECIMAL_POLICY=FEATURE_DECIMAL_V1",
-              "S2B_AXIS_SEPARATION=FeatureValidity;MarketStateTrust;DataAuthority;ResourceRestriction;UniverseLifecycleRestriction",
+              "S2B_AXIS_SEPARATION=PatternValidity;MarketStateTrust;DataAuthority;ResourceRestriction;UniverseLifecycleRestriction",
               "S2B_CHART_STRUCTURE_DISPOSITION=REQUIRED_FOLLOW_ON_MODULE9_SLICE_BEFORE_REGIME",
               "S2B_TIMEFRAME_ALLOWLIST=Min1,Min5,Min15",
               "S2B_PATTERN_MATCH_STATE=MATCHED,NOT_MATCHED,INDETERMINATE",
@@ -421,6 +431,22 @@ jobs:
               "S2B_PATTERN_EVIDENCE_ISSUANCE=EVALUATOR_ISSUED_PRIVATE_ATTESTATION",
               "S2B_PATTERN_EVIDENCE_FORGERY=FAIL_CLOSED",
               "S2B-PO-14", "S2B-PO-15", "S2B-PO-16", "S2B-PO-17",
+              "S2B-PO-18", "S2B-PO-19", "S2B-PO-20", "S2B-PO-21",
+              "S2B_AXIS_SEPARATION=PatternValidity;MarketStateTrust;DataAuthority;ResourceRestriction;UniverseLifecycleRestriction",
+              "S2B_LOCAL_VALIDITY_AXIS=PatternValidity",
+              "S2B_UPSTREAM_FEATURE_VALIDITY=READ_ONLY_NEVER_SUBSTITUTES",
+              "S2B_CANONICAL_EVALUATION_BOUNDARY=max(window_end,knowledge_time)",
+              "S2B_BOUNDARY_STORED=CANONICAL_NEVER_CALL_TIME",
+              "S2B_WALL_RECEIVE_SUBSTITUTION=FORBIDDEN",
+              "S2B_LATER_REEVALUATION=IDEMPOTENT_SAME_FINGERPRINT",
+              "S2B_PATTERN_EVIDENCE_KEY=pattern_id;definition_version;source_id;contract_id;environment;generation;timeframe_fingerprint;window_start;window_end;ordered_constituent_candle_fingerprints",
+              "S2B_EVIDENCE_DUPLICATE_SUPPRESSION=NONE_IDEMPOTENT_BY_KEY",
+              "S2B_EVIDENCE_CONFLICT_POLICY=INDEPENDENT_NO_WINNER_NO_RANKING",
+              "S2B_EVIDENCE_ORDER=timeframe_duration_asc;window_end_asc;pattern_id_asc;definition_version_asc;evidence_fingerprint_asc",
+              "S2B_EVIDENCE_ORDER_AUTHORITY=NONE_SEQUENCE_DETERMINISM_ONLY",
+              "S2B_PREDECESSOR_SCOPE=same_pattern_id;definition_version;source;contract;environment;timeframe;window_start;window_end",
+              "S2B_PREDECESSOR_NONE_ONLY_WHEN_NO_EARLIER_EVIDENCE=TRUE",
+              "S2B_REVISION_CHAIN=NO_SKIP_NO_FORK_NO_OVERWRITE",
           )
           for document in (candidate, authorization, implementation):
               for marker in shared:
@@ -432,6 +458,11 @@ jobs:
           assert "AUTHOR_SIDE_GOVERNANCE_PREFLIGHT_NOT_INDEPENDENT_APPROVAL" in combined
           assert "INVALID/UNKNOWN" not in combined
           assert "WARMUP/UNKNOWN" not in combined
+          assert "S2B_AXIS_SEPARATION=FeatureValidity" not in combined, (
+              "superseded FeatureValidity axis marker must be rejected"
+          )
+          assert "S2B_AXIS_SEPARATION=PatternValidity;MarketStateTrust;DataAuthority;"
+          "ResourceRestriction;UniverseLifecycleRestriction" in combined
 
           # 8. no capability-creating construct; exclusion prose remains legitimate.
           for forbidden in (
@@ -554,6 +585,11 @@ jobs:
           printf -- '- %s\n' 'evidenceVersionDirectionFingerprint=PASS' >> "${summary}"
           printf -- '- %s\n' 'validityFoldPrecedence=PASS' >> "${summary}"
           printf -- '- %s\n' 'evaluatorIssuedPatternEvidence=PASS' >> "${summary}"
+          printf -- '- %s\n' 'localPatternValidityAxis=PASS' >> "${summary}"
+          printf -- '- %s\n' 'canonicalEvaluationBoundary=PASS' >> "${summary}"
+          printf -- '- %s\n' 'idempotentEvidence=PASS' >> "${summary}"
+          printf -- '- %s\n' 'duplicateOverlapConflictSemantics=PASS' >> "${summary}"
+          printf -- '- %s\n' 'predecessorChainSemantics=PASS' >> "${summary}"
           printf -- '- %s\n' 'implementationAuthorized=false' >> "${summary}"
           printf -- '- %s\n' 'productionCredentials=false' >> "${summary}"
           printf -- '- %s\n' 'productionDeployment=false' >> "${summary}"

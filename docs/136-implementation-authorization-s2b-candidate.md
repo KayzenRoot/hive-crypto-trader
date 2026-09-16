@@ -385,7 +385,7 @@ instant before that boundary the pattern must not be `MATCHED`; `WARMUP` is the 
 admissible pre-boundary outcome and yields `INDETERMINATE`, and a stronger `INVALID` or
 `UNKNOWN` condition dominates `WARMUP`.
 
-`S2B_AXIS_SEPARATION=FeatureValidity;MarketStateTrust;DataAuthority;ResourceRestriction;UniverseLifecycleRestriction`
+`S2B_AXIS_SEPARATION=PatternValidity;MarketStateTrust;DataAuthority;ResourceRestriction;UniverseLifecycleRestriction`
 
 Structural pattern evidence stays separate from directional probability, expected return,
 strategy suitability, ranking, signal and trade authorization. No downstream authority
@@ -548,6 +548,76 @@ tampered direction, timestamps, lineage, pattern version, pair order or fingerpr
 Correction or revision creates new evaluator-issued `PatternEvidence` with new predecessor
 and fingerprint lineage, and historical evidence is immutable.
 
+## LOCAL VALIDITY AXIS, CANONICAL BOUNDARY AND IDEMPOTENT EVIDENCE
+
+`S2B_LOCAL_VALIDITY_AXIS=PatternValidity`
+
+`S2B_UPSTREAM_FEATURE_VALIDITY=READ_ONLY_NEVER_SUBSTITUTES`
+
+`S2B_CANONICAL_EVALUATION_BOUNDARY=max(window_end,knowledge_time)`
+
+`S2B_BOUNDARY_STORED=CANONICAL_NEVER_CALL_TIME`
+
+`S2B_WALL_RECEIVE_SUBSTITUTION=FORBIDDEN`
+
+`S2B_LATER_REEVALUATION=IDEMPOTENT_SAME_FINGERPRINT`
+
+`S2B_PATTERN_EVIDENCE_KEY=pattern_id;definition_version;source_id;contract_id;environment;generation;timeframe_fingerprint;window_start;window_end;ordered_constituent_candle_fingerprints`
+
+`S2B_EVIDENCE_DUPLICATE_SUPPRESSION=NONE_IDEMPOTENT_BY_KEY`
+
+`S2B_EVIDENCE_CONFLICT_POLICY=INDEPENDENT_NO_WINNER_NO_RANKING`
+
+`S2B_EVIDENCE_ORDER=timeframe_duration_asc;window_end_asc;pattern_id_asc;definition_version_asc;evidence_fingerprint_asc`
+
+`S2B_EVIDENCE_ORDER_AUTHORITY=NONE_SEQUENCE_DETERMINISM_ONLY`
+
+`S2B_PREDECESSOR_SCOPE=same_pattern_id;definition_version;source;contract;environment;timeframe;window_start;window_end`
+
+`S2B_PREDECESSOR_NONE_ONLY_WHEN_NO_EARLIER_EVIDENCE=TRUE`
+
+`S2B_REVISION_CHAIN=NO_SKIP_NO_FORK_NO_OVERWRITE`
+
+Module 9 owns a **local** analytical validity axis. `PatternValidity` owns `VALID`,
+`DEGRADED`, `WARMUP`, `UNKNOWN` and `INVALID` for `PatternEvidence`, and the shared axis
+marker names it accordingly. Upstream `FeatureValidity` remains a read-only S2A concept: if
+Module 9 ever consumes it, it never substitutes for `PatternValidity`.
+`ResourceRestriction` and `UniverseLifecycleRestriction` stay separate axes and do not by
+themselves downgrade otherwise `VALID` `PatternValidity`. `MarketStateTrust` and
+`DataAuthority` stay upstream restrictive axes that Module 9 may propagate but never
+upgrade.
+
+The canonical evaluation boundary is `max(window_end, knowledge_time)`, where `window_end` is
+the final ordered constituent `interval_end` and `knowledge_time` is the maximum constituent
+`knowledge_time` under the frozen H006 derivation. A supplied boundary earlier than canonical
+cannot emit `MATCHED` or `NOT_MATCHED` and follows the frozen restrictive semantics. A
+supplied boundary at or after canonical may evaluate, but `PatternEvidence` stores and
+fingerprints the **canonical** boundary, never an arbitrary later call time.
+`wall_receive_time` remains evidence material but is never substituted for the knowledge-time
+admissibility boundary. The same definition over the same ordered pairs with the same
+revision lineage, evaluated later without new evidence, returns the same `PatternEvidence`
+fingerprint and must not mint a duplicate.
+
+`S2B_PATTERN_EVIDENCE_KEY` is the canonical evidence identity: repeated evaluation of an
+unchanged key and material is idempotent and yields one canonical evidence identity and
+fingerprint with no duplicate emission.
+
+Overlap and conflict semantics: different pattern IDs may `MATCH` on the same window and are
+retained independently with no winner, suppression, score, ranking or trade preference;
+overlapping windows across adjacent closes are independent by distinct window identity;
+`NOT_MATCHED` for one pattern never suppresses `MATCHED` for another; bullish and bearish
+structural evidence may coexist and Module 9 does not resolve it into a directional decision.
+
+Deterministic order for evidence at the same canonical boundary is
+`timeframe.duration_seconds ASC`, then `window_end ASC`, then `pattern_id ASC`, then
+`definition_version ASC`, then evidence fingerprint ASC. This ordering is sequence
+determinism only and grants no rank or authority.
+
+On correction or revision, `predecessor_evidence_fingerprint` points to the immediately
+superseded `PatternEvidence` for the same `pattern_id`, `definition_version`, source,
+contract, environment, timeframe, `window_start` and `window_end`. It is `None` only when no
+earlier evidence exists, and revision chains cannot skip, fork or overwrite history.
+
 ## Proof obligations
 
 `S2B-PO-01` finite exact allowlist and version collision protection;
@@ -616,3 +686,22 @@ lifecycle-restrictive remains `VALID`.
 `S2B-PO-17` PatternEvidence attestation and forgery tests: direct constructor, `replace` and
 tamper, caller-selected match state, direction, times or fingerprint, and mismatched
 definition or pair lineage are all rejected.
+
+`S2B-PO-18` local-axis tests: `PatternValidity` is canonical for `PatternEvidence` and the
+superseded marker naming `FeatureValidity` is rejected.
+
+`S2B-PO-19` canonical-boundary and idempotency tests: one instant before
+`max(window_end, knowledge_time)` cannot emit `MATCHED`; at the canonical boundary the
+evaluator may emit `MATCHED` or `NOT_MATCHED` per the equation; re-evaluation later with
+unchanged evidence returns the same fingerprint with no duplicate; and a later knowledge-time
+correction or revision changes the canonical boundary and produces new revision-linked
+evidence.
+
+`S2B-PO-20` duplicate, overlap and conflict tests: exact duplicate evaluation returns the same
+fingerprint with no duplicate emission; two matching pattern IDs on the same window are both
+retained in canonical order; adjacent overlapping windows remain independent; and no winner,
+suppression, score or ranking is applied.
+
+`S2B-PO-21` predecessor-chain tests: `predecessor_evidence_fingerprint` points to the
+immediately superseded evidence, is `None` only when no earlier evidence exists, and chains
+cannot skip, fork or overwrite history.
