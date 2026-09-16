@@ -103,4 +103,3 @@ correction delta. It does not change any locked source identity above.
   PR #74 metadata; the pull request remains OPEN and UNMERGED.
 
 `correctionHandoff=PASS`
-
