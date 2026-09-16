@@ -1099,6 +1099,28 @@ def _require_immediate_predecessor(
             )
 
 
+def _consumption_key(evidence: PatternEvidence) -> tuple[object, ...]:
+    """Exact logical predecessor identity: evidence fingerprint plus frozen scope."""
+
+    return (evidence.fingerprint, *_scope_key(evidence))
+
+
+# Evaluator-owned, non-persistent predecessor consumption registry.  The frozen
+# contract is ``S2B_REVISION_CHAIN=NO_SKIP_NO_FORK_NO_OVERWRITE``, which has to hold at
+# the issuance boundary and not only when a chain is appended to: one logical
+# predecessor head may authorize at most one distinct successor evidence, and a stale
+# immutable ``PatternEvaluationState`` value can never mint a sibling.  Consumption is
+# bound to the attested predecessor fingerprint plus the frozen predecessor scope, so it
+# never leaks across unrelated pattern/window keys.
+#
+# Runtime boundary: this is in-process memory only.  There is no durable store, no file,
+# network or provider state, and restart recovery is explicitly not authorized by this
+# slice, so a restarted evaluator starts with an empty registry.  Within one process the
+# decision is deterministic and fail-closed, and entering a chain state carried across a
+# restart is not a capability this slice grants.
+_CONSUMED_PREDECESSORS: Final[dict[tuple[object, ...], PatternEvidence]] = {}
+
+
 def _issue_pattern_evidence(
     pattern: PatternVersion,
     items: Sequence[PatternConstituent],
@@ -1112,6 +1134,9 @@ def _issue_pattern_evidence(
     evaluation boundary time and the typed prior evidence state.  The span, axis fold,
     equation, direction, validity, timestamps, lineage, revision link and fingerprint
     material are all recomputed here; no caller-selected output material is accepted.
+    When a predecessor is supplied, its consumption is linear: a repeat of the identical
+    transition returns the same canonical evidence identity, while a different successor
+    for an already-consumed predecessor fails before attestation.
     """
 
     span = _span(items, pattern.bar_cardinality)
@@ -1171,9 +1196,26 @@ def _issue_pattern_evidence(
         ):
             object.__setattr__(instance, name, value)
         instance._validate_material()
+        if prior is not None:
+            if _transition_material(instance) == _transition_material(prior):
+                raise PatternEvaluationError(
+                    "revision request carries no behavior or evidence change"
+                )
+            key = _consumption_key(prior)
+            consumed = _CONSUMED_PREDECESSORS.get(key)
+            if consumed is not None:
+                if consumed.fingerprint != instance.fingerprint:
+                    # NO_FORK: the predecessor already authorized a different successor,
+                    # so no second sibling may be attested from it.
+                    raise PatternEvaluationError(
+                        "predecessor already authorized a different successor"
+                    )
+                # Identical idempotent re-evaluation: the same canonical evidence
+                # identity is returned and no new revision is minted.
+                return consumed
         object.__setattr__(instance, "_attestation", _evidence_seal(instance))
-        if prior is not None and _transition_material(instance) == _transition_material(prior):
-            raise PatternEvaluationError("revision request carries no behavior or evidence change")
+        if prior is not None:
+            _CONSUMED_PREDECESSORS[_consumption_key(prior)] = instance
         return instance
 
     def indeterminate(validity: PatternValidity, reason: str) -> PatternEvidence:

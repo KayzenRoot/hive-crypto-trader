@@ -323,10 +323,11 @@ def bars(
     frame: Timeframe | None = None,
     contract: StableId = CONTRACT,
     environment: Environment = Environment.PAPER,
+    offset: int = 0,
 ):
     return tuple(
         pair(
-            index,
+            index + offset,
             open_value=row[0],
             high=row[1],
             low=row[2],
@@ -1018,12 +1019,12 @@ def test_s2b_po19_boundary_is_canonical_and_later_calls_are_idempotent() -> None
 
 def test_s2b_po19_revision_changes_the_boundary_and_the_predecessor_link() -> None:
     state = s1e_state()
-    original = bars(("10", "11", "9", "10"), state=state)
+    original = bars(("10", "11", "9", "10"), state=state, offset=3)
     base = evaluate_pattern(PatternVersion.standard("P-DC-001"), original)
     revision = PatternEvaluationState((base,))
     corrected = (
         revised_pair(
-            0,
+            3,
             open_value="10",
             high="11.5",
             low="9",
@@ -1112,12 +1113,12 @@ def test_s2b_po21_predecessor_is_none_only_without_earlier_evidence() -> None:
 
 def test_s2b_po21_chain_links_are_exact_and_replayable() -> None:
     state = s1e_state()
-    original = bars(("10", "11", "9", "10"), state=state)
+    original = bars(("10", "11", "9", "10"), state=state, offset=7)
     first = evaluate_pattern(PatternVersion.standard("P-DC-001"), original)
     chain = PatternEvaluationState((first,))
     corrected = (
         revised_pair(
-            0,
+            7,
             open_value="10",
             high="11.5",
             low="9",
@@ -1130,7 +1131,7 @@ def test_s2b_po21_chain_links_are_exact_and_replayable() -> None:
     chain = chain.record(second)
     again = (
         revised_pair(
-            0,
+            7,
             open_value="10",
             high="12",
             low="9",
@@ -1519,12 +1520,12 @@ def test_s2b_imp_h003_wrong_scope_is_rejected() -> None:
 def test_s2b_imp_h003_skip_fork_and_overwrite_are_rejected() -> None:
     state = s1e_state()
     version = PatternVersion.standard("P-DC-001")
-    original = bars(("10", "11", "9", "10"), state=state)
+    original = bars(("10", "11", "9", "10"), state=state, offset=11)
     head = evaluate_pattern(version, original)
     first_chain = PatternEvaluationState((head,))
     correction = (
         revised_pair(
-            0,
+            11,
             open_value="10",
             high="12",
             low="9",
@@ -1539,7 +1540,7 @@ def test_s2b_imp_h003_skip_fork_and_overwrite_are_rejected() -> None:
         PatternEvaluationState((second,))
     again = (
         revised_pair(
-            0,
+            11,
             open_value="10",
             high="13",
             low="9",
@@ -1551,20 +1552,6 @@ def test_s2b_imp_h003_skip_fork_and_overwrite_are_rejected() -> None:
     third = evaluate_pattern(version, again, state=chain)
     with pytest.raises(PatternEvaluationError):
         PatternEvaluationState((head,)).record(third)
-    fork = (
-        revised_pair(
-            0,
-            open_value="10",
-            high="11.9",
-            low="9",
-            close="10.1",
-            state=state,
-            prior_candle=original[0].candle,
-        ),
-    )
-    sibling = evaluate_pattern(version, fork, state=first_chain)
-    with pytest.raises(PatternEvaluationError):
-        chain.record(sibling)
     with pytest.raises(PatternEvaluationError):
         chain.record(second)
     assert [item.revision for item in chain.record(third).evidences] == [0, 1, 2]
@@ -1656,13 +1643,13 @@ def test_s2b_imp_h003_no_change_revision_is_rejected() -> None:
 def test_s2b_imp_h003_replay_reproduces_the_chain() -> None:
     state = s1e_state()
     version = PatternVersion.standard("P-DC-001")
-    original = bars(("10", "11", "9", "10"), state=state)
+    original = bars(("10", "11", "9", "10"), state=state, offset=17)
     head = evaluate_pattern(version, original)
 
     def replay() -> tuple[str, ...]:
         chain = PatternEvaluationState((head,))
         first_candle = revised_pair(
-            0,
+            17,
             open_value="10",
             high="12",
             low="9",
@@ -1673,7 +1660,7 @@ def test_s2b_imp_h003_replay_reproduces_the_chain() -> None:
         first = evaluate_pattern(version, (first_candle,), state=chain)
         chain = chain.record(first)
         second_candle = revised_pair(
-            0,
+            17,
             open_value="10",
             high="12.5",
             low="9",
@@ -1775,3 +1762,132 @@ def test_s2b_imp_h004_every_material_key_is_fingerprint_visible() -> None:
             else:
                 mutated[key] = "S2B_MUTATED"
             assert module._hash(mutated) != baseline, (identifier, key)
+
+
+# ---------------------------------------------------------------------------
+# S2B-IMP-H003R no-fork enforcement at the issuance boundary
+# ---------------------------------------------------------------------------
+
+
+def test_s2b_imp_h003r_stale_predecessor_reuse_is_rejected_at_issuance() -> None:
+    state = s1e_state()
+    version = PatternVersion.standard("P-DC-001")
+    original = bars(("10", "11", "9", "10"), state=state, offset=29)
+    head = evaluate_pattern(version, original)
+    assert head.revision == 0
+    assert head.predecessor_evidence_fingerprint is None
+    predecessor = PatternEvaluationState((head,))
+    correction_a = (
+        revised_pair(
+            29,
+            open_value="10",
+            high="12",
+            low="9",
+            close="10.5",
+            state=state,
+            prior_candle=original[0].candle,
+        ),
+    )
+    correction_b = (
+        revised_pair(
+            29,
+            open_value="10",
+            high="11.5",
+            low="9",
+            close="10.2",
+            state=state,
+            prior_candle=original[0].candle,
+        ),
+    )
+
+    first = evaluate_pattern(version, correction_a, state=predecessor)
+    assert first.revision == 1
+    assert first.predecessor_evidence_fingerprint == head.fingerprint
+
+    # The same exact predecessor state cannot authorize a different successor, and the
+    # rejection happens before any second sibling is attested.  A separately held stale
+    # state value for the same predecessor is rejected identically.
+    stale = PatternEvaluationState((head,))
+    assert stale.scope_key == predecessor.scope_key
+    with pytest.raises(PatternEvaluationError) as reused:
+        evaluate_pattern(version, correction_b, state=predecessor)
+    assert "different successor" in str(reused.value)
+    with pytest.raises(PatternEvaluationError):
+        evaluate_pattern(version, correction_b, state=stale)
+
+    # The identical idempotent re-evaluation returns the same canonical evidence
+    # identity instead of minting a new revision.
+    replay = evaluate_pattern(version, correction_a, state=predecessor)
+    assert replay is first
+    assert replay.fingerprint == first.fingerprint
+    assert replay.revision == 1
+
+    # The legitimate chain advances: revision 2 is issued from the current state.
+    advanced = PatternEvaluationState((head,)).record(first)
+    correction_c = (
+        revised_pair(
+            29,
+            open_value="10",
+            high="13",
+            low="9",
+            close="10.9",
+            state=state,
+            prior_candle=correction_a[0].candle,
+        ),
+    )
+    second = evaluate_pattern(version, correction_c, state=advanced)
+    assert second.revision == 2
+    assert second.predecessor_evidence_fingerprint == first.fingerprint
+    assert advanced.record(second).evidences[-1] is second
+
+
+def test_s2b_imp_h003r_consumption_does_not_leak_across_scopes() -> None:
+    state = s1e_state()
+    version = PatternVersion.standard("P-DC-001")
+    original = bars(("10", "11", "9", "10"), state=state, offset=29)
+    head = evaluate_pattern(version, original)
+    correction = (
+        revised_pair(
+            29,
+            open_value="10",
+            high="12",
+            low="9",
+            close="10.5",
+            state=state,
+            prior_candle=original[0].candle,
+        ),
+    )
+    consumed = evaluate_pattern(version, correction, state=PatternEvaluationState((head,)))
+    assert consumed.revision == 1
+
+    # Same pattern ID, different logical window: not blocked by the other consumption.
+    other_window = bars(("10", "11", "9", "10"), state=state, offset=31)
+    other_head = evaluate_pattern(version, other_window)
+    other_correction = (
+        revised_pair(
+            31,
+            open_value="10",
+            high="12",
+            low="9",
+            close="10.5",
+            state=state,
+            prior_candle=other_window[0].candle,
+        ),
+    )
+    unrelated_window = evaluate_pattern(
+        version, other_correction, state=PatternEvaluationState((other_head,))
+    )
+    assert unrelated_window.revision == 1
+    assert unrelated_window.predecessor_evidence_fingerprint == other_head.fingerprint
+
+    # Same logical window, different pattern ID: also not blocked.
+    other_pattern = PatternVersion.standard("P-MB-001")
+    other_pattern_head = evaluate_pattern(other_pattern, original)
+    unrelated_pattern = evaluate_pattern(
+        other_pattern,
+        correction,
+        state=PatternEvaluationState((other_pattern_head,)),
+    )
+    assert unrelated_pattern.revision == 1
+    assert unrelated_pattern.pattern.canonical_id == "P-MB-001"
+    assert unrelated_pattern.predecessor_evidence_fingerprint == other_pattern_head.fingerprint

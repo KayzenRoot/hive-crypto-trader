@@ -148,6 +148,9 @@ jobs:
               "UNIX_EPOCH_MULTIPLES", "SMALL_BODY_MAX", "LONG_BODY_MIN",
               "OVER_CARDINALITY_WINDOW", "EXACT_CARDINALITY_OVER_CARDINALITY_WINDOW_INVALID",
               "PatternEvaluationState", "constituent_revisions", "_evidence_seal",
+              "S2B_REVISION_CHAIN=NO_SKIP_NO_FORK_NO_OVERWRITE", "NO_FORK",
+              "_CONSUMED_PREDECESSORS", "_consumption_key",
+              "predecessor already authorized a different successor",
               "CANDLEBAR_OHLC_PLUS_EVALUATOR_ISSUED_FEATURE_SAMPLE",
               "S2B_CANONICAL_EVALUATION_BOUNDARY=max(window_end,knowledge_time)",
               "ZERO_RANGE_PRIMITIVE_UNKNOWN", "CLOSED_BAR_REQUIRED",
@@ -200,7 +203,7 @@ jobs:
 
       - name: Run S2B IMP-H001-H004 focused correction tests
         run: |
-          uv run --project apps/backend pytest -q apps/backend/tests/test_patterns.py -k "imp_h001 or imp_h002 or imp_h003 or imp_h004"
+          uv run --project apps/backend pytest -q apps/backend/tests/test_patterns.py -k "imp_h001 or imp_h002 or imp_h003 or imp_h003r or imp_h004"
 
       - name: Run prior-stage regressions and S2B static gates
         run: |
@@ -258,6 +261,7 @@ jobs:
           printf -- '- %s\n' 'limited_live_authorized: false' >> "${summary}"
           printf -- '- %s\n' 'live_trading_authorized: false' >> "${summary}"
           printf -- '- %s\n' 'imp_h001_h004: CLOSED_AUTHOR_SIDE_ONLY pending fresh independent review' >> "${summary}"
+          printf -- '- %s\n' 'imp_h003r: CLOSED_AUTHOR_SIDE_ONLY pending fresh independent review' >> "${summary}"
           grep -Fq -- "${HEAD_SHA}" "${summary}"
           grep -Fq -- "${IMPLEMENTATION_BASE_SHA}" "${summary}"
           grep -Fq -- "${CHECKPOINT_ID}" "${summary}"

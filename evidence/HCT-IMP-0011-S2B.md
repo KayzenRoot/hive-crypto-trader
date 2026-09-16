@@ -32,6 +32,14 @@ and MICRO/NOMINAL/STRESS output manifests `0b5f7c458942c2444fbf2cc82e4ea35fce5db
 `d163aaa2d7a33e394f025c8cbf4b4e9a6c81018a1bd6b8d77fb74ae6464afcf9`. That receipt is retained
 here as history for that head only.
 
+The IMP-H001-H004 correction was recorded at head `5ae90efbddf35d755edc1edcab3095e8b4956e2c`,
+exact-head run `35128709704`, job `104904061677`, conclusion `success`, at that time with
+`449 passed`, `58` S2B pattern tests, coverage `90.37%` and MICRO/NOMINAL/STRESS output
+manifests `505cbec6ca95de3574ae7f70acbdd0118515deaaaf9f5b5d7839331f0a1102b5`,
+`98488d6400b9e143ba9e9314edab0fdf9ad511d4105052b4a7c5d9e6712d8244` and
+`8d956cbb3a5a1838f3e4b9d9a59ab11c9f650bd54eab1af676cd59fd1c4a28e6`. That receipt is retained
+here as history for that head only.
+
 Independent review `5225276949` (`HIGH_ASSURANCE`, bound to the exact head
 `253fe3d2d8ebfd61c3401b3ffbe33d44d3019f5c`) returned `CORRECTION REQUIRED` with
 `CRITICAL 0` / `HIGH 4`: `S2B-IMP-H001` (exact bar cardinality not enforced),
@@ -40,9 +48,16 @@ Independent review `5225276949` (`HIGH_ASSURANCE`, bound to the exact head
 `S2B-IMP-H004` (`PatternDefinition`/`PatternVersion` identity not binding all frozen
 behaviorally material semantics).
 
-## Correction delta IMP-H001-H004
+Independent review `5226463605` (`HIGH_ASSURANCE`, bound to the exact head
+`5ae90efbddf35d755edc1edcab3095e8b4956e2c`) confirmed IMP-H001, IMP-H002 and IMP-H004 as
+materially closed and returned `CORRECTION REQUIRED` with `CRITICAL 0` / `HIGH 1`:
+`S2B-IMP-H003R` — a stale immutable `PatternEvaluationState` could still mint two
+independently attested sibling successors from the same predecessor, so the public evaluator
+did not enforce `S2B_REVISION_CHAIN=NO_SKIP_NO_FORK_NO_OVERWRITE` at the issuance boundary.
 
-The four findings were closed author-side only on the same PR #78 and the same eight-file
+## Correction delta IMP-H001-H004 and IMP-H003R
+
+The findings were closed author-side only on the same PR #78 and the same eight-file
 implementation boundary. No prior successful S2B semantic was removed, no S1E/S1F/S2A runtime
 source, Work Order, checkpoint, frozen requirement, Decisions Ledger, ADR, dependency lock or
 frontend file was modified, and the exact six-pattern scope, the CP0035 authority ceiling and
@@ -73,6 +88,20 @@ the negative-capability firewall are unchanged.
   corresponding prior constituent fingerprint. A revision request with no behavior or evidence
   change is rejected, and the chain rejects a skip, a fork, a non-immediate predecessor and an
   overwrite.
+- `S2B-IMP-H003R` — predecessor authorization is now linear at the evaluator issuance
+  boundary. The evaluator owns an in-process consumption registry keyed by the attested
+  predecessor evidence fingerprint plus the frozen predecessor scope (pattern ID, definition
+  version, source, contract, environment, timeframe identity, window start and window end), so
+  one logical predecessor head may authorize at most one distinct successor evidence. A second
+  request that reuses an already-consumed predecessor for a different successor fails with
+  `PatternEvaluationError` before any sibling is attested, independently of whether the first
+  successor was inserted into a separately held `PatternEvaluationState` value and
+  independently of a freshly rebuilt but equally stale state. An identical idempotent
+  re-evaluation of the same transition returns the same canonical evidence identity instead of
+  minting a new revision, a genuine correction still derives `head.revision + 1` with
+  `predecessor = head.fingerprint`, and consumption never leaks across unrelated pattern/window
+  keys. Raw caller-supplied hashes are never used as truth; only evaluator-attested typed
+  evidence and evaluator-owned state are consumed.
 - `S2B-IMP-H004` — `PatternDefinition` now binds every frozen behaviorally material semantic in
   its material and fingerprint: the exact input contract
   `CANDLEBAR_OHLC_PLUS_EVALUATOR_ISSUED_FEATURE_SAMPLE`, the ordered source fields
@@ -127,9 +156,10 @@ The four findings are proven by focused tests that CI runs before the full suite
 | S2B-IMP-H001 | `test_s2b_imp_h001_over_cardinality_window_fails_closed`, `test_s2b_imp_h001_no_silent_slicing_of_presented_constituents`, `test_s2b_imp_h001_exact_cardinality_semantics_unchanged` |
 | S2B-IMP-H002 | `test_s2b_imp_h002_no_arbitrary_material_issuance_api`, `test_s2b_imp_h002_coherent_forgery_is_impossible`, `test_s2b_imp_h002_caller_selected_fields_are_rejected`, `test_s2b_imp_h002_tampered_or_copied_evidence_is_rejected` |
 | S2B-IMP-H003 | `test_s2b_imp_h003_raw_revision_and_predecessor_inputs_are_removed`, `test_s2b_imp_h003_scope_covers_pattern_identity_source_contract_environment`, `test_s2b_imp_h003_wrong_scope_is_rejected`, `test_s2b_imp_h003_skip_fork_and_overwrite_are_rejected`, `test_s2b_imp_h003_constituent_continuity_is_required`, `test_s2b_imp_h003_valid_correction_derives_the_immediate_link`, `test_s2b_imp_h003_no_change_revision_is_rejected`, `test_s2b_imp_h003_replay_reproduces_the_chain` |
+| S2B-IMP-H003R | `test_s2b_imp_h003r_stale_predecessor_reuse_is_rejected_at_issuance`, `test_s2b_imp_h003r_consumption_does_not_leak_across_scopes` |
 | S2B-IMP-H004 | `test_s2b_imp_h004_definition_golden_fingerprints`, `test_s2b_imp_h004_definition_material_binds_every_frozen_semantic`, `test_s2b_imp_h004_definition_mutation_is_rejected`, `test_s2b_imp_h004_every_material_key_is_fingerprint_visible` |
 
-Observed results: `19 passed, 39 deselected` for the focused selection. The over-cardinality
+Observed results: `21 passed, 39 deselected` for the focused selection. The over-cardinality
 adversary covers two bars for each one-bar pattern, three bars for each two-bar pattern and
 four bars for each three-bar pattern, and none of them may emit `MATCHED`/`NOT_MATCHED`; every
 correct-cardinality golden window keeps identical match and direction semantics. The coherent
@@ -141,6 +171,25 @@ rejected even when every value is individually well-typed. Definition fingerprin
 golden vectors for all six standard V1 definitions, and mutating an equation token, source
 field, timeframe duration/version/alignment, boundary rule, finality rule, threshold/equality or
 Decimal policy is rejected as non-V1 while every material key remains fingerprint-visible.
+
+The H003R adversary creates head revision 0 with one predecessor state, issues correction A
+from it as attested revision 1 with `predecessor = head`, then reuses the exact same unchanged
+state for a different correction B: the second issuance raises `PatternEvaluationError` with
+"predecessor already authorized a different successor" before any sibling exists, and a
+separately held stale state for the same predecessor is rejected identically. The identical
+re-evaluation of A returns the very same attested object, and only after advancing the
+legitimate chain with A can revision 2 be issued. Consumption in one window does not block a
+different window of the same pattern, nor the same window of a different pattern. The focused
+test is mutation-proven: restoring the pre-correction behaviour (attesting the sibling instead
+of rejecting it) makes it fail.
+
+### Non-persistent runtime boundary
+
+The consumption registry is in-process memory only: there is no durable store, no file,
+network or provider state, and restart recovery is explicitly not authorized by this slice, so
+a restarted evaluator starts with an empty registry. Within one process the decision is
+deterministic and fail-closed, consumption is bounded by the number of issued corrections, and
+entering a chain state carried across a restart is not a capability this slice grants.
 
 ## Proof obligations
 
@@ -166,29 +215,31 @@ Decimal policy is rejected as non-V1 while every material key remains fingerprin
 | S2B-PO-18 | local `PatternValidity` axis with the superseded marker rejected | PASS |
 | S2B-PO-19 | canonical boundary, idempotent later re-evaluation and evaluator-derived revision link | PASS |
 | S2B-PO-20 | duplicate, overlap, conflict, canonical sequence order and no-winner semantics | PASS |
-| S2B-PO-21 | immediate predecessor chain with no skip, fork or overwrite, evaluator-derived revision and predecessor (`test_s2b_imp_h003_*`) | PASS |
+| S2B-PO-21 | immediate predecessor chain with no skip, fork or overwrite, evaluator-derived revision and predecessor, and no minted sibling at the issuance boundary (`test_s2b_imp_h003_*`, `test_s2b_imp_h003r_*`) | PASS |
 | S2B-IMP-H001 | exact evaluable bar cardinality with fail-closed over-cardinality windows and no silent slicing | PASS |
 | S2B-IMP-H002 | non-forgeable authoritative evidence with evaluator-owned issuance and content-bound attestation | PASS |
 | S2B-IMP-H003 | evaluator-derived revision/predecessor chain with exact scope and constituent continuity | PASS |
+| S2B-IMP-H003R | linear predecessor consumption at the issuance boundary with no minted sibling (`test_s2b_imp_h003r_*`) | PASS |
 | S2B-IMP-H004 | fully content-bound `PatternDefinition`/`PatternVersion` identity with golden and mutation proofs | PASS |
 
-`S2B-PO-17` and `S2B-PO-21` are asserted only through the focused correction tests above,
-not merely because the earlier suite was green.
+`S2B-PO-17`, `S2B-PO-21` and `S2B-IMP-H003R` are asserted only through the focused
+correction tests above, not merely because the earlier suite was green.
 
 ## Local validation receipt
 
-- `python -m pytest -q apps/backend`: `449 passed`
-- S2B pattern tests: `58 passed`
-- focused IMP-H001-H004 selection: `19 passed, 39 deselected`
-- global coverage: `90.37%` (gate `>= 90%`); `patterns.py` coverage `91%`
+- `python -m pytest -q apps/backend`: `451 passed`
+- S2B pattern tests: `60 passed`
+- focused IMP-H001-H003R-H004 selection: `21 passed, 39 deselected`
+- global coverage: `90.39%` (gate `>= 90%`); `patterns.py` coverage `91%`
 - ruff check on S2B source/tests/scripts: PASS
 - ruff format check on S2B source/tests/scripts: PASS
 - strict mypy on backend source: `Success: no issues found in 19 source files`
 - backend sdist/wheel build: PASS
 - pip-audit: no known vulnerabilities
 - S2B negative-capability scan: PASS, including the contract checks that reject a reintroduced
-  arbitrary-material issuance helper and raw `revision`/`predecessor_evidence_fingerprint`
-  evaluator inputs; each new rule was mutation-tested and fires on the reintroduced defect
+  arbitrary-material issuance helper, raw `revision`/`predecessor_evidence_fingerprint`
+  evaluator inputs and removal of the no-fork issuance markers; each new rule was
+  mutation-tested and fires on the reintroduced defect
 - CI contract gate executed locally with the same assertions: PASS, and mutation-tested against a
   reintroduced raw evaluator input and a removed required marker
 - frontend prior-stage gates: typecheck PASS, `13 passed`, lint PASS, generated-format PASS, build PASS, `npm audit` 0 vulnerabilities
@@ -203,7 +254,9 @@ Runtime: Python 3.12 Decimal pattern engine.
 
 The frozen profile cardinality fixes the corpus. Each pattern is evaluated only over its own
 exact evaluable bar cardinality, sampled deterministically with the recorded stride, so these
-are baseline measurements and not product SLOs.
+are baseline measurements and not product SLOs. The H003R no-fork enforcement consumes
+predecessors per logical key and changes no evidence material, so the manifest hashes below are
+identical to the ones recorded for the previous corrected head.
 
 | Profile | Contracts | Closed pairs/contract/timeframe | Stride | Windows | Evaluations | Eval/s | Replay pairs/s | Peak bytes | Depth |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
@@ -275,6 +328,7 @@ limited-live and live trading remain unauthorized.
 ## Required stop condition
 
 The implementation PR remains OPEN and UNMERGED. No completion checkpoint is promoted and no
-independent approval is claimed. `S2B-IMP-H001` through `S2B-IMP-H004` are closed
-`AUTHOR_SIDE_ONLY`; the next mandatory action is a fresh independent `HIGH_ASSURANCE` review of
-the exact corrected head.
+independent approval is claimed. `S2B-IMP-H001` through `S2B-IMP-H004` and `S2B-IMP-H003R` are closed `AUTHOR_SIDE_ONLY`;
+review `5226463605` is retained as a historical record for head
+`5ae90efbddf35d755edc1edcab3095e8b4956e2c`. The next mandatory action is a fresh independent
+`HIGH_ASSURANCE` review of the exact corrected head.
