@@ -1,6 +1,7 @@
 """Compatibility import surface for the Module 8 feature engine."""
 
 from hct_backend.features import (
+    AUTHORITY_POINT_IN_TIME_RELATION_VERSION,
     DERIVED_MTF_PROVENANCE,
     FEATURE_ALGORITHM_VERSION,
     FEATURE_AUTHORITY_VERSION,
@@ -29,6 +30,7 @@ from hct_backend.features import (
 )
 
 __all__ = [
+    "AUTHORITY_POINT_IN_TIME_RELATION_VERSION",
     "AlignedWindowEvidence",
     "DERIVED_MTF_PROVENANCE",
     "FEATURE_ALGORITHM_VERSION",

@@ -116,3 +116,22 @@ Second correction handoff (IMP-H005 — IMP-H007, review `5217772587`):
   evidence receipt comment.
 
 `secondCorrectionHandoff=PASS`
+
+Third correction handoff (IMP-H008, active review `5218038625`):
+
+- reviewed head for this delta: `84bc7fca2be1fc262e460e0e2fb8848d46e1e888`;
+- review `5217999812` posted an `APPROVED` comment before the point-in-time
+  source-binding inspection completed and is superseded by `5218038625`; it cannot
+  authorize merge;
+- frozen relation `S2A_AUTHORITY_POINT_IN_TIME_RELATION_V1` now requires a verified
+  canonical synchronization proof whose latest event is exactly the candle
+  `originating_event_fingerprint`, present in the state event lineage;
+- the same eight-file boundary, execution base, checkpoint, authorization scope and
+  ceiling were preserved; no S1E/S1F/Module 29 or governance file was modified;
+- corrected finding: `IMP-H008`, recorded as `CLOSED_AUTHOR_SIDE_ONLY` in
+  `evidence/HCT-IMP-0009-S2A.md`;
+- `IMP-H001` — `IMP-H007` remain closed author-side with no regression;
+- the exact final implementation head is bound by the PR #74 body and the external
+  evidence receipt comment.
+
+`thirdCorrectionHandoff=PASS`

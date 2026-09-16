@@ -198,12 +198,16 @@ def s1e_capability() -> ChannelCapability:
     )
 
 
+def s1e_event_fingerprint(number: int) -> str:
+    return (str(number) * 64)[:64]
+
+
 def s1e_observation(number: int, *, snapshot: bool = True) -> SequenceObservation:
     capability = s1e_capability()
     return SequenceObservation(
         generation=s1e_generation(),
         observed_at=NOW,
-        event_fingerprint=(str(number) * 64)[:64],
+        event_fingerprint=s1e_event_fingerprint(number),
         update_id=number,
         is_snapshot=snapshot,
         source_id=S1E_SOURCE,
@@ -237,9 +241,10 @@ def s1e_state(
     *,
     trust: MarketStateTrust = MarketStateTrust.TRUSTED,
     lifecycle: LifecycleRestriction = LifecycleRestriction.NONE,
+    event_number: int = 99,
 ) -> MarketStateSnapshot:
     capability = s1e_capability()
-    evaluation = evaluate_sequence(capability, None, s1e_observation(99, snapshot=True))
+    evaluation = evaluate_sequence(capability, None, s1e_observation(event_number, snapshot=True))
     proof = SynchronizationProof.from_sequence_evaluation(
         capability=capability,
         generation=s1e_generation(),
@@ -283,7 +288,7 @@ def s1e_state(
     )
 
 
-def paper_candle(index: int, close: str) -> CandleBar:
+def paper_candle(index: int, close: str, *, event_number: int = 99) -> CandleBar:
     frame = Timeframe("Min1", 60)
     start = NOW + timedelta(minutes=index)
     context = ValueContext(
@@ -294,7 +299,7 @@ def paper_candle(index: int, close: str) -> CandleBar:
         s1e_generation(),
         1,
         S1E_PROVENANCE,
-        ("%064x" % (index + 1)),
+        s1e_event_fingerprint(event_number),
         start,
         start,
         start,
@@ -1895,3 +1900,235 @@ def test_imp_h007_validator_rejects_missing_profiles_and_drift() -> None:
     drift["profiles"][1]["output_manifest_hash"] = "d" * 64
     with pytest.raises(module.BenchmarkValidationError):
         module.validate_benchmark_documents(good, drift)
+
+
+# ---------------------------------------------------------------------------
+# IMP-H008 point-in-time authority to originating event binding
+# ---------------------------------------------------------------------------
+
+
+def paper_closed_candles(
+    event_numbers: tuple[int, ...],
+) -> tuple[CandleBar, ...]:
+    """Closed 1m PAPER constituents, one originating event per candle."""
+
+    opened = tuple(
+        paper_candle(
+            index,
+            str(10 + index),
+            event_number=event_numbers[min(index, len(event_numbers) - 1)],
+        )
+        for index in range(len(event_numbers) + 1)
+    )
+    return tuple(
+        replace(
+            current,
+            finality=Finality.CLOSED,
+            close_proof=CandleCloseProof._from_next_window_evidence(
+                current_candle=current, next_window=opened[index + 1]
+            ),
+        )
+        for index, current in enumerate(opened[:-1])
+    )
+
+
+def s1e_unsynchronized_state() -> MarketStateSnapshot:
+    """Truth-restricted state with no synchronization proof to bind an event."""
+
+    capability = s1e_capability()
+    return MarketStateSnapshot(
+        contract_id=S1E_CONTRACT,
+        environment=Environment.PAPER,
+        generation=s1e_generation(),
+        source_id=S1E_SOURCE,
+        source_version=1,
+        provenance_fingerprint=S1E_PROVENANCE,
+        event_fingerprints=(s1e_event_fingerprint(99),),
+        trust=MarketStateTrust.UNKNOWN,
+        data_authority=s1e_state().data_authority,
+        synchronized=False,
+        synchronization_proof=None,
+        capability_fingerprint=capability.fingerprint,
+        capability_policy_version=capability.policy_version,
+        channel=capability.channel,
+        schema_version=capability.schema_version,
+        visibility=capability.visibility,
+        lifecycle_restriction=LifecycleRestriction.NONE,
+    )
+
+
+def test_imp_h008_freezes_the_point_in_time_relation_version() -> None:
+    assert feature_module.AUTHORITY_POINT_IN_TIME_RELATION_VERSION == (
+        "S2A_AUTHORITY_POINT_IN_TIME_RELATION_V1"
+    )
+
+
+def test_imp_h008_exact_event_relation_binds_the_canonical_state() -> None:
+    event_number = 99
+    state = s1e_state(event_number=event_number)
+    candle = paper_candle(0, "10", event_number=event_number)
+    sample = FeatureSample.from_candle(candle, market_state=state)
+    authority = sample.authority
+    assert authority.is_fixture is False
+    assert authority.point_in_time_relation == "S2A_AUTHORITY_POINT_IN_TIME_RELATION_V1"
+    assert authority.originating_event_fingerprint == candle.context.originating_event_fingerprint
+    assert state.synchronization_proof is not None
+    assert (
+        state.synchronization_proof.latest_event_fingerprint
+        == candle.context.originating_event_fingerprint
+    )
+    material = authority.material
+    assert material["originating_event_fingerprint"] == s1e_event_fingerprint(event_number)
+    assert material["point_in_time_relation"] == "S2A_AUTHORITY_POINT_IN_TIME_RELATION_V1"
+    assert material["market_state_fingerprint"] == state.fingerprint
+
+
+def test_imp_h008_same_generation_later_state_is_rejected() -> None:
+    earlier = 99
+    later = 98
+    candle = paper_candle(0, "10", event_number=earlier)
+    later_state = s1e_state(event_number=later)
+    assert later_state.generation == s1e_generation()
+    with pytest.raises(FeatureError):
+        FeatureAuthorityEvidence.from_candle(candle, later_state)
+    with pytest.raises(FeatureError):
+        FeatureSample.from_candle(candle, market_state=later_state)
+
+
+def test_imp_h008_missing_event_lineage_is_rejected() -> None:
+    candle = paper_candle(0, "10", event_number=99)
+    other = s1e_state(event_number=97)
+    assert other.source_id == candle.context.source_id
+    assert other.contract_id == candle.context.contract_id
+    assert other.environment is candle.context.environment
+    assert other.generation == candle.context.generation
+    assert candle.context.originating_event_fingerprint not in other.event_fingerprints
+    with pytest.raises(FeatureError):
+        FeatureAuthorityEvidence.from_candle(candle, other)
+
+
+def test_imp_h008_missing_or_unverified_proof_fails_closed() -> None:
+    state = s1e_unsynchronized_state()
+    assert state.synchronization_proof is None
+    candle = paper_candle(0, "10", event_number=99)
+    with pytest.raises(FeatureError):
+        FeatureAuthorityEvidence.from_candle(candle, state)
+    with pytest.raises(FeatureError):
+        feature_module._point_in_time_relation(state, s1e_event_fingerprint(99))
+
+
+def test_imp_h008_five_candle_state_laundering_is_rejected() -> None:
+    events = (91, 92, 93, 94, 95)
+    candles = paper_closed_candles(events)
+    states = {number: s1e_state(event_number=number) for number in events}
+    authorities = tuple(
+        FeatureAuthorityEvidence.from_candle(candle, states[number])
+        for candle, number in zip(candles, events, strict=True)
+    )
+    boundary = NOW + timedelta(minutes=5)
+    aligned = align_closed_1m_candles(candles, 5, evaluation_time=boundary, authorities=authorities)
+    assert aligned.validity is FeatureValidity.VALID
+    assert len(set(aligned.authority_evidence_fingerprints)) == 5
+    laundering_state = states[events[-1]]
+    for candle in candles[:-1]:
+        with pytest.raises(FeatureError):
+            FeatureAuthorityEvidence.from_candle(candle, laundering_state)
+    with pytest.raises((FeatureError, FeatureEvaluationError)):
+        align_closed_1m_candles(
+            candles,
+            5,
+            evaluation_time=boundary,
+            authorities=(authorities[-1], *authorities[:-1]),
+        )
+
+
+def test_imp_h008_restrictive_constituent_is_not_upgraded() -> None:
+    events = (81, 82, 83, 84, 85)
+    candles = paper_closed_candles(events)
+    states = {number: s1e_state(event_number=number) for number in events}
+    restricted_index = 2
+    restricted_state = s1e_state(
+        trust=MarketStateTrust.UNKNOWN, event_number=events[restricted_index]
+    )
+    authorities = tuple(
+        FeatureAuthorityEvidence.from_candle(
+            candle, restricted_state if index == restricted_index else states[number]
+        )
+        for index, (candle, number) in enumerate(zip(candles, events, strict=True))
+    )
+    boundary = NOW + timedelta(minutes=5)
+    aligned = align_closed_1m_candles(candles, 5, evaluation_time=boundary, authorities=authorities)
+    assert aligned.validity is FeatureValidity.UNKNOWN
+    assert aligned.constituent_market_state_trust is MarketStateTrust.UNKNOWN
+    trusted_later = states[events[-1]]
+    with pytest.raises(FeatureError):
+        FeatureAuthorityEvidence.from_candle(candles[restricted_index], trusted_later)
+    upgraded = (
+        *authorities[:restricted_index],
+        FeatureAuthorityEvidence.from_candle(candles[restricted_index], restricted_state),
+        *authorities[restricted_index + 1 :],
+    )
+    assert (
+        align_closed_1m_candles(candles, 5, evaluation_time=boundary, authorities=upgraded).validity
+        is FeatureValidity.UNKNOWN
+    )
+
+
+def test_imp_h008_revision_requires_a_new_relation_and_changes_evidence() -> None:
+    event_number = 99
+    state = s1e_state(event_number=event_number)
+    candle = paper_candle(0, "10", event_number=event_number)
+    original = FeatureSample.from_candle(candle, market_state=state)
+    revised_candle = replace(candle, revision=1, predecessor_fingerprint=candle.fingerprint)
+    revised = FeatureSample.from_candle(revised_candle, market_state=state)
+    assert revised.authority.fingerprint != original.authority.fingerprint
+    assert revised.authority.bound_evidence_fingerprint != (
+        original.authority.bound_evidence_fingerprint
+    )
+    assert (
+        revised.authority.originating_event_fingerprint
+        == original.authority.originating_event_fingerprint
+    )
+    mismatched = paper_candle(0, "10", event_number=98)
+    with pytest.raises(FeatureError):
+        FeatureSample.from_candle(
+            replace(mismatched, revision=1, predecessor_fingerprint=mismatched.fingerprint),
+            market_state=state,
+        )
+
+
+def test_imp_h008_tampered_relation_cannot_retain_attestation() -> None:
+    state = s1e_state()
+    authority = FeatureSample.from_candle(paper_candle(0, "10"), market_state=state).authority
+    for change in (
+        {"originating_event_fingerprint": "a" * 64},
+        {"point_in_time_relation": "S2A_AUTHORITY_POINT_IN_TIME_RELATION_V2"},
+        {"originating_event_fingerprint": None},
+        {"point_in_time_relation": None},
+        {"bound_evidence_fingerprint": None},
+    ):
+        with pytest.raises(FeatureError):
+            replace(authority, **change)
+    with pytest.raises(FeatureError):
+        FeatureAuthorityEvidence()
+    payload = authority.material
+    assert payload["point_in_time_relation"] == ("S2A_AUTHORITY_POINT_IN_TIME_RELATION_V1")
+
+
+def test_imp_h008_replay_fixtures_claim_no_event_relation() -> None:
+    candle = _candle(0, "10")
+    fixture = FeatureAuthorityEvidence.fixture_for_candle(candle)
+    assert fixture.is_fixture is True
+    assert fixture.point_in_time_relation is None
+    assert fixture.originating_event_fingerprint is None
+    sample = FeatureSample.from_candle(candle)
+    assert sample.authority.is_fixture is True
+    assert sample.authority.point_in_time_relation is None
+    assert FeatureSample.from_candle(_candle(1, "11")).authority.fingerprint != (
+        sample.authority.fingerprint
+    )
+    for environment in (Environment.LIVE, Environment.PAPER, Environment.SHADOW):
+        with pytest.raises(FeatureError):
+            FeatureAuthorityEvidence.fixture(
+                market_state_fingerprint="a" * 64, environment=environment
+            )

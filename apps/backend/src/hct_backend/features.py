@@ -43,6 +43,7 @@ FEATURE_ALGORITHM_VERSION: Final = "S2A_STANDARD_FEATURES_V1"
 FEATURE_DECIMAL_POLICY_VERSION: Final = "FEATURE_DECIMAL_V1"
 RECURSIVE_STATE_VERSION: Final = "S2A_ACCUMULATOR_STATE_V1"
 FEATURE_AUTHORITY_VERSION: Final = "S2A_AUTHORITY_EVIDENCE_V1"
+AUTHORITY_POINT_IN_TIME_RELATION_VERSION: Final = "S2A_AUTHORITY_POINT_IN_TIME_RELATION_V1"
 DERIVED_MTF_PROVENANCE: Final = "DERIVED_ANALYTICAL_V1"
 _SCALE_18 = Decimal("1e-18")
 _HASH = re.compile(r"^[0-9a-f]{64}$")
@@ -255,6 +256,27 @@ def _value_evidence_material(
     }
 
 
+def _point_in_time_relation(state: MarketStateSnapshot, originating_event_fingerprint: str) -> str:
+    """Prove the S1E state represents the exact S1F originating event.
+
+    ``S2A_AUTHORITY_POINT_IN_TIME_RELATION_V1`` requires a verified canonical
+    synchronization proof whose latest event is exactly the candle's originating
+    event, and that the same event fingerprint is present in the state event
+    lineage.  The relation is derived from typed canonical objects only; no
+    caller-supplied flag can stand in for it.
+    """
+
+    _require_hash(originating_event_fingerprint, "originating event fingerprint")
+    proof = state.synchronization_proof
+    if proof is None or not proof.verified:
+        raise FeatureError("point-in-time authority requires a verified synchronization proof")
+    if proof.latest_event_fingerprint != originating_event_fingerprint:
+        raise FeatureError("market-state latest event is not the candle originating event")
+    if originating_event_fingerprint not in state.event_fingerprints:
+        raise FeatureError("candle originating event is absent from the state event lineage")
+    return originating_event_fingerprint
+
+
 def _candle_value_evidence_material(candle: CandleBar) -> dict[str, object]:
     context = candle.context
     return _value_evidence_material(
@@ -307,6 +329,8 @@ class FeatureAuthorityEvidence:
     environment: Environment
     generation_fingerprint: str
     bound_evidence_fingerprint: str | None
+    originating_event_fingerprint: str | None
+    point_in_time_relation: str | None
     is_fixture: bool
     _attestation: object = field(default=None, repr=False, compare=False)
 
@@ -335,6 +359,8 @@ class FeatureAuthorityEvidence:
         environment: Environment,
         generation_fingerprint: str,
         bound_evidence_fingerprint: str | None,
+        originating_event_fingerprint: str | None,
+        point_in_time_relation: str | None,
         is_fixture: bool,
     ) -> FeatureAuthorityEvidence:
         instance = object.__new__(cls)
@@ -352,6 +378,8 @@ class FeatureAuthorityEvidence:
             ("environment", environment),
             ("generation_fingerprint", generation_fingerprint),
             ("bound_evidence_fingerprint", bound_evidence_fingerprint),
+            ("originating_event_fingerprint", originating_event_fingerprint),
+            ("point_in_time_relation", point_in_time_relation),
             ("is_fixture", is_fixture),
         ):
             object.__setattr__(instance, name, value)
@@ -399,9 +427,32 @@ class FeatureAuthorityEvidence:
                 raise FeatureError("synthetic authority is REPLAY-only")
             if self.bound_evidence_fingerprint is not None:
                 _require_hash(self.bound_evidence_fingerprint, "authority bound value evidence")
+            if (
+                self.originating_event_fingerprint is not None
+                or self.point_in_time_relation is not None
+            ):
+                raise FeatureError(
+                    "synthetic authority cannot claim a point-in-time event relation"
+                )
         else:
             if self.bound_evidence_fingerprint is not None:
                 _require_hash(self.bound_evidence_fingerprint, "authority bound value evidence")
+                if self.originating_event_fingerprint is None:
+                    raise FeatureError("canonical bound authority must prove its originating event")
+            if (self.originating_event_fingerprint is None) != (
+                self.point_in_time_relation is None
+            ):
+                raise FeatureError("authority point-in-time event relation is incomplete")
+            if self.originating_event_fingerprint is not None:
+                _require_hash(
+                    self.originating_event_fingerprint,
+                    "authority originating event fingerprint",
+                )
+            if (
+                self.point_in_time_relation is not None
+                and self.point_in_time_relation != AUTHORITY_POINT_IN_TIME_RELATION_VERSION
+            ):
+                raise FeatureError("authority point-in-time relation is unsupported")
 
     @property
     def resource_restriction(self) -> FeatureAxisRestriction:
@@ -446,6 +497,8 @@ class FeatureAuthorityEvidence:
             "environment": self.environment.value,
             "generation": self.generation_fingerprint,
             "bound_evidence_fingerprint": self.bound_evidence_fingerprint,
+            "originating_event_fingerprint": self.originating_event_fingerprint,
+            "point_in_time_relation": self.point_in_time_relation,
             "is_fixture": self.is_fixture,
         }
 
@@ -511,6 +564,8 @@ class FeatureAuthorityEvidence:
             environment=state.environment,
             generation_fingerprint=state.generation.fingerprint,
             bound_evidence_fingerprint=None,
+            originating_event_fingerprint=None,
+            point_in_time_relation=None,
             is_fixture=False,
         )
 
@@ -528,13 +583,15 @@ class FeatureAuthorityEvidence:
             raise FeatureError("CandleBar is required")
         if not isinstance(state, MarketStateSnapshot):
             raise FeatureError("canonical S1E market-state snapshot is required")
+        context = candle.context
         if (
-            state.source_id != candle.context.source_id
-            or state.contract_id != candle.context.contract_id
-            or state.environment is not candle.context.environment
-            or state.generation != candle.context.generation
+            state.source_id != context.source_id
+            or state.contract_id != context.contract_id
+            or state.environment is not context.environment
+            or state.generation != context.generation
         ):
             raise FeatureError("candle and market-state identity disagree")
+        relation = _point_in_time_relation(state, context.originating_event_fingerprint)
         base = cls.from_market_state(state, resource=resource)
         return cls._issue(
             market_state_fingerprint=base.market_state_fingerprint,
@@ -550,6 +607,8 @@ class FeatureAuthorityEvidence:
             environment=base.environment,
             generation_fingerprint=base.generation_fingerprint,
             bound_evidence_fingerprint=_hash(_candle_value_evidence_material(candle)),
+            originating_event_fingerprint=relation,
+            point_in_time_relation=AUTHORITY_POINT_IN_TIME_RELATION_VERSION,
             is_fixture=False,
         )
 
@@ -644,6 +703,8 @@ class FeatureAuthorityEvidence:
                 or _hash({"fixture": True, "source": source.as_text(), "generation": 1})
             ),
             bound_evidence_fingerprint=bound_evidence_fingerprint,
+            originating_event_fingerprint=None,
+            point_in_time_relation=None,
             is_fixture=True,
         )
 
@@ -926,6 +987,8 @@ class FeatureSample:
             ):
                 raise FeatureError("sample material disagrees with its bound value evidence")
         else:
+            if self.authority.point_in_time_relation != AUTHORITY_POINT_IN_TIME_RELATION_VERSION:
+                raise FeatureError("sample authority lacks the frozen event relation")
             if not self.authority.matches_identity(
                 source_id=self.source_id,
                 contract_id=self.contract_id,
@@ -2593,6 +2656,13 @@ def _bound_constituent_authorities(
             )
         if item.is_fixture and context.environment is not Environment.REPLAY:
             raise FeatureEvaluationError("synthetic per-constituent authority is REPLAY-only")
+        if not item.is_fixture and (
+            item.point_in_time_relation != AUTHORITY_POINT_IN_TIME_RELATION_VERSION
+            or item.originating_event_fingerprint != context.originating_event_fingerprint
+        ):
+            raise FeatureEvaluationError(
+                "per-constituent authority does not prove its exact originating event"
+            )
         if item.bound_evidence_fingerprint != _hash(_candle_value_evidence_material(candle)):
             raise FeatureEvaluationError(
                 "per-constituent authority is not bound to its exact candle evidence"
@@ -2861,6 +2931,7 @@ __all__ = [
     "AlignedWindowEvidence",
     "DERIVED_MTF_PROVENANCE",
     "FEATURE_ALGORITHM_VERSION",
+    "AUTHORITY_POINT_IN_TIME_RELATION_VERSION",
     "FEATURE_AUTHORITY_VERSION",
     "FEATURE_DECIMAL_POLICY_VERSION",
     "FeatureAuthorityEvidence",

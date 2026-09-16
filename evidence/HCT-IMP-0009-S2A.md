@@ -18,8 +18,13 @@ trading.
   `CORRECTION REQUIRED / CRITICAL 0 / HIGH 4`, review `5192500441`)
 - `reviewedHead=c8daaac3f3d733a59f0b71a2b9747cba723c4cd8` (reviewed head that returned
   `CORRECTION REQUIRED / CRITICAL 0 / HIGH 3`, review `5217772587`)
+- `reviewedHead=84bc7fca2be1fc262e460e0e2fb8848d46e1e888` (reviewed head that returned
+  `CORRECTION REQUIRED / CRITICAL 0 / HIGH 1`, active review `5218038625`)
 - prior correction head that carried IMP-H001 — IMP-H004 and passed a fresh exact-head
   run: `4715b06fc1aafba87ead686655f5231d3f3f8b04`
+- superseded historical review: `5217999812` posted an `APPROVED` comment before the
+  point-in-time source-binding inspection completed. It is superseded by `5218038625`
+  and MUST NOT be treated as merge authorization.
 
 The exact final implementation head is bound externally by the PR #74 body and the
 external evidence receipt comment, not by this tracked file, so that no tracked file
@@ -202,8 +207,13 @@ IMP-H001 — IMP-H004 reviewed head `c8daaac3f3d733a59f0b71a2b9747cba723c4cd8`:
 
 - exact-head run `35046413999` / job `104637078470` / `SUCCESS`
 
-Both receipts are static facts about prior heads. The IMP-H005 — IMP-H007 final head
-receipt is published in the PR #74 body and the external evidence receipt comment.
+IMP-H005 — IMP-H007 corrected head `84bc7fca2be1fc262e460e0e2fb8848d46e1e888`:
+
+- exact-head run `35048728387` / job `104644245254` / `SUCCESS` on all 14 steps,
+  including the per-profile benchmark validator step
+
+All receipts above are static facts about prior heads. The IMP-H008 final head receipt
+is published in the PR #74 body and the external evidence receipt comment.
 Pull request `#74` remains `OPEN`, non-draft, `MERGEABLE`, unmerged, base
 `main@fecb97b6c9513a6dc0114d22c5e3768017411157`.
 
@@ -299,6 +309,65 @@ evaluator-issued recursive state with identity binding and restore-by-recomputat
 axis separation, and evaluator-issued aligned evidence. No regression was observed.
 
 
+## S2A implementation correction delta (IMP-H008)
+
+| Finding | Severity | Author-side status |
+|---|---|---|
+| IMP-H008 point-in-time authority to originating event binding | HIGH | `CLOSED_AUTHOR_SIDE_ONLY` |
+
+`CLOSED_AUTHOR_SIDE_ONLY` records that the author-side correction, focused adversarial
+tests and all full gates pass. It is not independent closure and does not authorize
+merge.
+
+### IMP-H008 — frozen point-in-time authority relation
+
+The pre-correction non-REPLAY authority adapter proved source, contract, environment and
+generation equality and bound the exact candle material, but did not prove that the
+supplied `MarketStateSnapshot` was the point-in-time authority state corresponding to the
+candle's originating normalized event. A later `TRUSTED` snapshot in the same generation
+could therefore be reused to issue candle-bound authority for earlier candles.
+
+Correction:
+
+- `S2A_AUTHORITY_POINT_IN_TIME_RELATION_V1` is introduced as a frozen, versioned relation
+  constant exported from the Module 8 surface;
+- `FeatureAuthorityEvidence.from_candle(candle, state, resource=...)` now derives the
+  relation from typed canonical objects only, and fails closed unless the state carries a
+  verified `synchronization_proof`, that proof's `latest_event_fingerprint` is exactly the
+  candle's `context.originating_event_fingerprint`, and the same fingerprint is present in
+  the state's `event_fingerprints`. No caller-selected boolean can stand in for the proof;
+- the relation version and the exact originating event fingerprint are stored as material
+  evidence on `FeatureAuthorityEvidence` and are part of its fingerprint, together with
+  the market-state fingerprint and the bound S1F value evidence;
+- a non-fixture authority that is bound to candle material must prove the relation, and a
+  non-REPLAY `FeatureSample` accepts only authority carrying the frozen relation, so a
+  replace-based mutation cannot retain a stale event relation;
+- MTF alignment rejects any per-constituent authority whose relation does not prove that
+  exact constituent's originating event, in addition to the existing per-candle value
+  binding, so one unrelated later state cannot be rebound to earlier candles;
+- axis-only authority derived from `MarketStateSnapshot` alone carries no event relation
+  and therefore can never be attached to a sample or a constituent;
+- synthetic `REPLAY` authority claims no event relation at all and remains deterministic
+  and REPLAY-only;
+- `CandleCloseProof` still governs CLOSED finality and was not replaced. No
+  `event_time`/`knowledge_time` field was invented inside `MarketStateSnapshot`, the
+  resource admission seam keeps its canonical decision fingerprint as a separate
+  restrictive axis, and no upstream S1E/S1F/Module 29 or governance file was mutated.
+
+Adversarial coverage added: exact event/state relation accepted; same-generation later
+state rejected; missing event lineage rejected despite identity equality; missing or
+unverified synchronization proof fails closed; five-candle laundering rejected while the
+exact per-candle relation stays valid; a restrictive `UNKNOWN` constituent not upgraded by
+a later trusted state; candle revision requires a newly valid relation and changes the
+evidence fingerprint; tampered relation cannot retain evaluator attestation; REPLAY
+fixtures claim no relation and remain REPLAY-only.
+
+### IMP-H001 — IMP-H007 regression status
+
+All prior corrections remain closed author-side and were re-exercised by the same suite,
+including `PO-F01` through `PO-F10`. No regression was observed.
+
+
 ## Proof obligations
 
 | Obligation | Evidence | Result |
@@ -345,6 +414,9 @@ measurements, not production SLOs or profitability claims.
 | NOMINAL | 16 | 8,192 | 256 | 128 | 1,296 | 0 | 16 | PASS (0 mismatches) | PASS |
 | STRESS | 32 | 16,384 | 512 | 256 | 2,592 | 96 | 32 | PASS (0 mismatches) | PASS |
 
+Captured at the IMP-H005 — IMP-H007 head; the accepted input fixture hashes are
+unchanged and the deterministic projection is identical across two consecutive runs.
+
 Input manifest hashes (unchanged from the pre-correction baseline):
 
 - MICRO: `bc2140402cd5d4c7e4a1ea01aa2ddb456222e6fe4aa50b80c7d3647d15f54d1c`
@@ -353,15 +425,15 @@ Input manifest hashes (unchanged from the pre-correction baseline):
 
 Output manifest hashes (regenerated only after the corrected tests passed):
 
-- MICRO: `e0ac994cc0bba8d2b61e7c5a68b1949185f239a7ff0700a0719a4563b34def3e`
-- NOMINAL: `3c75c5965c794ad803a6c9c08cce461a4efa973ec3b15d0af7f1ff81cfbe300b`
-- STRESS: `d048b39530cf84e1375cea83654b85b510b95da12a7e18e834e83f2d9cedfeec`
+- MICRO: `4cf00ff4feab98f60e2783f8a3bbdc9dfb638186e863350cf0c8fec317e4cdcb`
+- NOMINAL: `cb4b9ef0a10f376d16a9c4cca8947b548b28c0f796306ad8abce1c2dcb34e0d6`
+- STRESS: `12090f4e492c08f23196bc8b0f5374167fb37b700a4ca0fe31ea9d395cf64046`
 
 Recursive-path parity fingerprints:
 
-- MICRO: `460e4989eb1976b95460de7b07ddcd197f42c99f47593a0374815e1e4dad6965`
-- NOMINAL: `d9d38b0db50c5b690aa3f7e7660a783f0e2d91f15eca34530e5b1d01e1e514ef`
-- STRESS: `874173d0058cd8e462ea5a12bc583dfa887720e1453f1103c3737ae7ba6d84d7`
+- MICRO: `ea0f62fd936fa7d1f7bf2244a6c23a3b7f62f7f9baaee72c41bdb28364030fa7`
+- NOMINAL: `ab63fb03417c755dc17fcd6cf073d37903cb208bc9c8f4f9827f6accab03e84a`
+- STRESS: `d8cd419a96a8699d9815aacc705433950d28f31ecbada0eb7fee928e1e92246f`
 
 The output manifest and parity fingerprints changed relative to the IMP-H001 — IMP-H004
 head because authority material now binds per-constituent identity and the folded
@@ -375,9 +447,9 @@ and mixed-generation (`INVALID`) evidence.
 
 ## Local validation receipt
 
-- `python -m pytest -q apps/backend`: `381 passed`
-- S2A feature tests: `80 passed` (includes the IMP-H005 — IMP-H007 adversarial matrix)
-- coverage: `90.37%` (gate `>= 90%`) over `5449` statements
+- `python -m pytest -q apps/backend`: `391 passed`
+- S2A feature tests: `90 passed` (includes the IMP-H005 — IMP-H008 adversarial matrices)
+- coverage: `90.32%` (gate `>= 90%`) over `5478` statements
 - ruff check on S2A source/tests/scripts: PASS
 - ruff format check on S2A source/tests/scripts: PASS
 - mypy on backend source: `Success: no issues found in 17 source files`
