@@ -41,6 +41,11 @@ from hct_backend.s1f_values import (
     ValueContext,
 )
 
+
+class BenchmarkValidationError(RuntimeError):
+    """Raised when a benchmark document fails a mandatory correctness gate."""
+
+
 FEATURE_IDS = (
     "F-RET-001",
     "F-SMA-001",
@@ -356,16 +361,158 @@ def _run_profile(name: str) -> dict[str, object]:
         "recursive_parity_fingerprint": parity_fingerprint,
         "recursive_parity_mismatches": parity_mismatches,
         "recursive_parity_duration_ns": parity_elapsed_ns,
-        "correctness": "PASS",
+        "correctness": "PASS" if parity_ok else "FAIL",
         "bounded_completion": True,
     }
+
+
+REQUIRED_PROFILES: tuple[str, ...] = ("MICRO", "NOMINAL", "STRESS")
+
+DETERMINISTIC_FIELDS: tuple[str, ...] = (
+    "profile",
+    "contracts",
+    "closed_1m_candles_per_contract",
+    "max_window",
+    "feature_ids",
+    "feature_evaluations",
+    "memory_probe_contracts",
+    "window_buffer_depth",
+    "warmup_count",
+    "restrictive_state_count",
+    "no_lookahead_rejection_count",
+    "input_manifest_hash",
+    "output_manifest_hash",
+    "recursive_parity",
+    "recursive_parity_fingerprint",
+    "recursive_parity_mismatches",
+    "correctness",
+    "bounded_completion",
+)
+
+_FROZEN_CARDINALITY: dict[str, tuple[int, int, int]] = {
+    "MICRO": (1, 4096, 64),
+    "NOMINAL": (16, 8192, 256),
+    "STRESS": (32, 16384, 512),
+}
+
+
+def _validate_profile_document(document: dict[str, object], label: str) -> None:
+    """Fail closed on every profile of one benchmark document."""
+
+    if document.get("mode") != "S2A_BASELINE_ESTABLISHMENT_V1":
+        raise BenchmarkValidationError(f"{label}: unexpected benchmark mode")
+    profiles = document.get("profiles")
+    if not isinstance(profiles, list) or not profiles:
+        raise BenchmarkValidationError(f"{label}: benchmark profiles are missing")
+    names = [item["profile"] for item in profiles]
+    if names != list(REQUIRED_PROFILES):
+        raise BenchmarkValidationError(
+            f"{label}: expected exactly {list(REQUIRED_PROFILES)}, observed {names}"
+        )
+    for item in profiles:
+        profile = item["profile"]
+        expected = _FROZEN_CARDINALITY[profile]
+        observed = (
+            item["contracts"],
+            item["closed_1m_candles_per_contract"],
+            item["max_window"],
+        )
+        if observed != expected:
+            raise BenchmarkValidationError(
+                f"{label}/{profile}: frozen cardinality changed: {observed} != {expected}"
+            )
+        if item["feature_ids"] != list(FEATURE_IDS):
+            raise BenchmarkValidationError(
+                f"{label}/{profile}: feature allowlist changed"
+            )
+        if item["recursive_parity"] != "PASS":
+            raise BenchmarkValidationError(
+                f"{label}/{profile}: recursive parity did not pass"
+            )
+        if item["recursive_parity_mismatches"] != 0:
+            raise BenchmarkValidationError(
+                f"{label}/{profile}: recursive parity reported mismatches"
+            )
+        fingerprint = item["recursive_parity_fingerprint"]
+        if not isinstance(fingerprint, str) or len(fingerprint) != 64:
+            raise BenchmarkValidationError(
+                f"{label}/{profile}: recursive parity fingerprint is invalid"
+            )
+        if item["correctness"] != "PASS":
+            raise BenchmarkValidationError(
+                f"{label}/{profile}: correctness did not pass"
+            )
+        if item["bounded_completion"] is not True:
+            raise BenchmarkValidationError(
+                f"{label}/{profile}: bounded completion is not true"
+            )
+        if item["feature_evaluations_per_second"] <= 0:
+            raise BenchmarkValidationError(
+                f"{label}/{profile}: evaluation throughput is not positive"
+            )
+        if item["replay_throughput_candles_per_second"] <= 0:
+            raise BenchmarkValidationError(
+                f"{label}/{profile}: replay throughput is not positive"
+            )
+        if item["peak_memory_bytes"] <= 0:
+            raise BenchmarkValidationError(
+                f"{label}/{profile}: peak memory is not positive"
+            )
+        latency = item["per_feature_compute_latency_ns"]
+        if set(latency) != set(item["feature_ids"]):
+            raise BenchmarkValidationError(
+                f"{label}/{profile}: latency shape is invalid"
+            )
+        for value in latency.values():
+            if set(value) != {"p50", "p95", "p99", "max"}:
+                raise BenchmarkValidationError(
+                    f"{label}/{profile}: latency percentiles are invalid"
+                )
+
+
+def validate_benchmark_documents(
+    first: dict[str, object], second: dict[str, object]
+) -> None:
+    """Fail closed unless both runs are individually correct and deterministic."""
+
+    _validate_profile_document(first, "run-a")
+    _validate_profile_document(second, "run-b")
+    projected = [
+        [
+            {field: item[field] for field in DETERMINISTIC_FIELDS}
+            for item in document["profiles"]
+        ]
+        for document in (first, second)
+    ]
+    if projected[0] != projected[1]:
+        raise BenchmarkValidationError(
+            "deterministic profile projection differs across consecutive runs"
+        )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--profile", choices=(*PROFILES, "all"), default="all")
-    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--validate",
+        nargs=2,
+        type=Path,
+        metavar=("FIRST", "SECOND"),
+        help="validate two consecutive benchmark documents and fail closed",
+    )
     args = parser.parse_args()
+    if args.validate is not None:
+        first = json.loads(args.validate[0].read_text(encoding="utf-8"))
+        second = json.loads(args.validate[1].read_text(encoding="utf-8"))
+        validate_benchmark_documents(first, second)
+        print(
+            "S2A exact profiles, per-profile recursive parity, cardinality and "
+            "replay hash parity across both runs: PASS"
+        )
+        return 0
+    if args.output is None:
+        parser.error("--output is required unless --validate is used")
     names = tuple(PROFILES) if args.profile == "all" else (args.profile,)
     result = {
         "mode": "S2A_BASELINE_ESTABLISHMENT_V1",
@@ -378,6 +525,9 @@ def main() -> int:
     )
     print(json.dumps(result, indent=2, sort_keys=True))
     gc.collect()
+    if any(item["correctness"] != "PASS" for item in result["profiles"]):
+        print("S2A benchmark correctness: FAIL", file=sys.stderr)
+        return 1
     return 0
 
 

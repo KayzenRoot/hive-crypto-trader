@@ -103,3 +103,16 @@ correction delta. It does not change any locked source identity above.
   PR #74 metadata; the pull request remains OPEN and UNMERGED.
 
 `correctionHandoff=PASS`
+
+Second correction handoff (IMP-H005 — IMP-H007, review `5217772587`):
+
+- reviewed head for this delta: `c8daaac3f3d733a59f0b71a2b9747cba723c4cd8`;
+- the same eight-file boundary, execution base, checkpoint, authorization scope and
+  ceiling were preserved; no frozen upstream source was modified;
+- corrected findings: `IMP-H005`, `IMP-H006`, `IMP-H007`, recorded as
+  `CLOSED_AUTHOR_SIDE_ONLY` in `evidence/HCT-IMP-0009-S2A.md`;
+- `IMP-H001` — `IMP-H004` remain closed author-side with no regression;
+- the exact final implementation head is bound by the PR #74 body and the external
+  evidence receipt comment.
+
+`secondCorrectionHandoff=PASS`

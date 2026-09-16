@@ -186,66 +186,7 @@ jobs:
           uv run --project apps/backend python scripts/scan_s2a_boundaries.py
           uv run --project apps/backend python scripts/benchmark_s2a.py --profile all --output "$RUNNER_TEMP/benchmarks-s2a-a.json"
           uv run --project apps/backend python scripts/benchmark_s2a.py --profile all --output "$RUNNER_TEMP/benchmarks-s2a-b.json"
-          python - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          root = Path(os.environ["RUNNER_TEMP"])
-          first = json.loads(root.joinpath("benchmarks-s2a-a.json").read_text())
-          second = json.loads(root.joinpath("benchmarks-s2a-b.json").read_text())
-          assert first["mode"] == "S2A_BASELINE_ESTABLISHMENT_V1"
-          assert first["profiles"] and len(first["profiles"]) == 3
-          expected = {
-              "MICRO": (1, 4096, 64),
-              "NOMINAL": (16, 8192, 256),
-              "STRESS": (32, 16384, 512),
-          }
-          for item in first["profiles"]:
-              assert (item["contracts"], item["closed_1m_candles_per_contract"], item["max_window"]) == expected[item["profile"]]
-              assert item["feature_ids"] == ["F-RET-001", "F-SMA-001", "F-EMA-001", "F-ROC-001", "F-RSI-001", "F-TR-001", "F-ATR-001", "F-VSMA-001"]
-              assert item["correctness"] == "PASS" and item["bounded_completion"] is True
-              assert item["feature_evaluations_per_second"] > 0 and item["replay_throughput_candles_per_second"] > 0
-              assert item["no_lookahead_rejection_count"] > 0
-              assert item["warmup_count"] > 0 and item["peak_memory_bytes"] > 0
-          assert item["recursive_parity"] == "PASS"
-          assert item["recursive_parity_mismatches"] == 0
-          assert len(item["recursive_parity_fingerprint"]) == 64
-          assert set(item["per_feature_compute_latency_ns"]) == set(item["feature_ids"])
-          for latency in item["per_feature_compute_latency_ns"].values():
-              assert set(latency) == {"p50", "p95", "p99", "max"}
-          deterministic_fields = (
-              "profile",
-              "contracts",
-              "closed_1m_candles_per_contract",
-              "max_window",
-              "feature_ids",
-              "feature_evaluations",
-              "memory_probe_contracts",
-              "window_buffer_depth",
-              "warmup_count",
-              "restrictive_state_count",
-              "no_lookahead_rejection_count",
-              "input_manifest_hash",
-              "output_manifest_hash",
-              "recursive_parity",
-              "recursive_parity_fingerprint",
-              "recursive_parity_mismatches",
-              "correctness",
-              "bounded_completion",
-          )
-          def deterministic_profiles(document):
-              return [
-                  {field: item[field] for field in deterministic_fields}
-                  for item in document["profiles"]
-              ]
-          # Timing and memory measurements are intentionally excluded from replay parity;
-          # they are validated as positive bounded metrics above but vary by runner load.
-          assert deterministic_profiles(first) == deterministic_profiles(second)
-          stress = next(item for item in first["profiles"] if item["profile"] == "STRESS")
-          assert stress["restrictive_state_count"] >= 3
-          print("S2A exact profiles, bounded memory/window, restrictive propagation and replay hash parity: PASS")
-          PY
+          uv run --project apps/backend python scripts/benchmark_s2a.py --validate "$RUNNER_TEMP/benchmarks-s2a-a.json" "$RUNNER_TEMP/benchmarks-s2a-b.json"
 
       - name: Run frontend prior-stage regression gates
         uses: actions/setup-node@v4

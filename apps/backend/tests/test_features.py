@@ -2,6 +2,7 @@ import json
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 
@@ -146,6 +147,23 @@ def authority(
         data_authority_reasons=reasons,
         resource_disposition=resource,
         lifecycle_restriction=lifecycle,
+    )
+
+
+def constituent_authority(
+    candle: CandleBar,
+    *,
+    trust: MarketStateTrust = MarketStateTrust.TRUSTED,
+    resource: ResourceDisposition = ResourceDisposition.AVAILABLE,
+    lifecycle: LifecycleRestriction = LifecycleRestriction.NONE,
+    reasons: tuple[QualityReason, ...] = (QualityReason.FRESH_VALID,),
+) -> FeatureAuthorityEvidence:
+    return FeatureAuthorityEvidence.fixture_for_candle(
+        candle,
+        market_state_trust=trust,
+        resource_disposition=resource,
+        lifecycle_restriction=lifecycle,
+        data_authority_reasons=reasons,
     )
 
 
@@ -629,30 +647,12 @@ def test_po_f05_unknown_and_contradictory_market_truth_remain_restrictive() -> N
 
 def test_po_f06_generation_and_environment_namespaces_do_not_alias() -> None:
     replay = evaluate_feature(FeatureVersion.standard("F-RET-001"), samples(["1", "2"]))
-    live_authority = FeatureAuthorityEvidence.from_market_state(s1e_state())
-    live_samples = tuple(
-        FeatureSample(
-            value=item.value,
-            fingerprint=item.fingerprint,
-            event_time=item.event_time,
-            knowledge_time=item.knowledge_time,
-            wall_receive_time=item.wall_receive_time,
-            closed=item.closed,
-            source_id=S1E_SOURCE,
-            contract_id=S1E_CONTRACT,
-            environment=Environment.PAPER,
-            generation_fingerprint=s1e_generation().fingerprint,
-            market_state_fingerprint=live_authority.market_state_fingerprint,
-            provenance_fingerprint=item.provenance_fingerprint,
-            timeframe=item.timeframe,
-            authority=live_authority,
-            interval_start=item.interval_start,
-            interval_end=item.interval_end,
-            close=item.close,
-        )
-        for item in samples(["1", "2"])
+    state = s1e_state()
+    paper_samples = tuple(
+        FeatureSample.from_candle(paper_candle(index, close), market_state=state)
+        for index, close in enumerate(["10", "11"])
     )
-    paper = evaluate_feature(FeatureVersion.standard("F-RET-001"), live_samples)
+    paper = evaluate_feature(FeatureVersion.standard("F-RET-001"), paper_samples)
     assert replay.fingerprint != paper.fingerprint
     assert replay.environment is Environment.REPLAY
     assert paper.environment is Environment.PAPER
@@ -763,7 +763,7 @@ def test_po_f07_mtf_structural_provenance_and_boundary_guards() -> None:
     with pytest.raises(FeatureEvaluationError):
         align_closed_1m_candles(candles, 10)
     with pytest.raises(FeatureEvaluationError):
-        align_closed_1m_candles(candles, 5, authority="TRUSTED")  # type: ignore[arg-type]
+        align_closed_1m_candles(candles, 5, authorities="TRUSTED")  # type: ignore[arg-type]
     assert align_closed_1m_candles((opened[0],), 5).validity is FeatureValidity.INVALID
     future_context = replace(
         candles[0].context,
@@ -1236,9 +1236,9 @@ def test_imp_h004_incomplete_and_degraded_paths_bind_evidence() -> None:
         candles[:5],
         5,
         evaluation_time=boundary,
-        authority=FeatureAuthorityEvidence.fixture(
-            market_state_fingerprint="c" * 64,
-            resource_disposition=ResourceDisposition.DEGRADED,
+        authorities=tuple(
+            constituent_authority(candle, resource=ResourceDisposition.DEGRADED)
+            for candle in candles[:5]
         ),
     )
     assert degraded.validity is FeatureValidity.VALID
@@ -1425,6 +1425,9 @@ def test_aligned_evidence_material_cannot_disagree_with_constituents() -> None:
         "constituent_fingerprints": valid.constituent_fingerprints,
         "constituent_provenance_fingerprints": valid.constituent_provenance_fingerprints,
         "authority_evidence_fingerprints": valid.authority_evidence_fingerprints,
+        "authority_fold_fingerprint": valid.authority_fold_fingerprint,
+        "data_authority_state": valid.data_authority_state,
+        "constituent_market_state_trust": valid.constituent_market_state_trust,
         "validity": FeatureValidity.VALID,
         "reason": "FORGED",
         "source_id": valid.source_id,
@@ -1462,3 +1465,433 @@ def test_aligned_evidence_material_cannot_disagree_with_constituents() -> None:
     material["constituent_provenance_fingerprints"] = ()
     with pytest.raises(FeatureError):
         AlignedWindowEvidence._from_evaluator(**material)
+
+
+# ---------------------------------------------------------------------------
+# IMP-H005 non-fixture authority and value evidence are not caller-mintable
+# ---------------------------------------------------------------------------
+
+
+def test_imp_h005_non_fixture_authority_is_evaluator_issued() -> None:
+    with pytest.raises(FeatureError):
+        FeatureAuthorityEvidence()
+    state = s1e_state()
+    derived = FeatureAuthorityEvidence.from_market_state(state, resource=s1e_resource())
+    assert derived._is_attested()
+    assert derived.is_fixture is False
+    assert derived.environment is Environment.PAPER
+    assert derived.source_id == S1E_SOURCE
+    assert derived.bound_evidence_fingerprint is None
+    for change in (
+        {"market_state_trust": MarketStateTrust.UNTRUSTED},
+        {"data_authority_state": DataAuthorityState.EMERGENCY},
+        {"resource_disposition": ResourceDisposition.AVAILABLE},
+        {"lifecycle_restriction": LifecycleRestriction.NONE},
+        {"is_fixture": True},
+        {"bound_evidence_fingerprint": "a" * 64},
+        {"environment": Environment.LIVE},
+    ):
+        with pytest.raises(FeatureError):
+            replace(derived, **change)
+
+
+def test_imp_h005_forged_non_replay_sample_fails() -> None:
+    state = s1e_state()
+    unbound = FeatureAuthorityEvidence.from_market_state(state, resource=s1e_resource())
+    forged = {
+        "value": DecimalValue.parse("10"),
+        "fingerprint": "a" * 64,
+        "event_time": NOW,
+        "knowledge_time": NOW,
+        "wall_receive_time": NOW,
+        "closed": True,
+        "source_id": S1E_SOURCE,
+        "contract_id": S1E_CONTRACT,
+        "environment": Environment.PAPER,
+        "generation_fingerprint": s1e_generation().fingerprint,
+        "market_state_fingerprint": unbound.market_state_fingerprint,
+        "provenance_fingerprint": S1E_PROVENANCE,
+        "timeframe": Timeframe("Min1", 60),
+        "authority": unbound,
+        "close": DecimalValue.parse("10"),
+    }
+    with pytest.raises(FeatureError):
+        FeatureSample(**forged)  # type: ignore[arg-type]
+    other = FeatureAuthorityEvidence.fixture_for_candle(_candle(0, "10"))
+    forged["authority"] = other
+    forged["market_state_fingerprint"] = other.market_state_fingerprint
+    with pytest.raises(FeatureError):
+        FeatureSample(**forged)  # type: ignore[arg-type]
+    forged["environment"] = Environment.REPLAY
+    with pytest.raises(FeatureError):
+        FeatureSample(**forged)  # type: ignore[arg-type]
+
+
+def test_imp_h005_non_replay_mutation_is_rejected() -> None:
+    state = s1e_state()
+    bound = FeatureSample.from_candle(paper_candle(0, "10"), market_state=state)
+    assert bound.authority.is_fixture is False
+    assert bound.market_state_fingerprint == state.fingerprint
+    mutations = (
+        {"close": DecimalValue.parse("11")},
+        {"high": DecimalValue.parse("13")},
+        {"low": DecimalValue.parse("8")},
+        {"value": DecimalValue.parse("9")},
+        {
+            "quantity": Quantity(
+                DecimalValue.parse("5"), QuantityUnit.CONTRACTS_PROVIDER_NATIVE_V1, "S1F"
+            )
+        },
+        {"fingerprint": "b" * 64},
+        {"provenance_fingerprint": "c" * 64},
+        {"event_time": NOW + timedelta(minutes=1)},
+        {"knowledge_time": NOW + timedelta(minutes=1)},
+        {"wall_receive_time": NOW + timedelta(minutes=2)},
+        {"interval_start": NOW + timedelta(minutes=1)},
+        {"interval_end": NOW + timedelta(minutes=2)},
+        {"timeframe": Timeframe("Min5", 300)},
+        {"generation_fingerprint": "d" * 64},
+        {
+            "source_id": StableId(kind=IdentityKind.EXCHANGE, value="other-venue"),
+        },
+        {
+            "contract_id": StableId(kind=IdentityKind.INSTRUMENT, value="other-contract"),
+        },
+        {"market_state_fingerprint": "e" * 64},
+        {"authority": FeatureAuthorityEvidence.from_market_state(state)},
+    )
+    for change in mutations:
+        with pytest.raises(FeatureError):
+            replace(bound, **change)
+
+
+def test_imp_h005_canonical_candle_binding_succeeds_and_mismatch_fails() -> None:
+    state = s1e_state()
+    candle = paper_candle(0, "10")
+    sample = FeatureSample.from_candle(candle, market_state=state)
+    assert sample.value_evidence_fingerprint == sample.authority.bound_evidence_fingerprint
+    assert sample.fingerprint == candle.fingerprint
+    assert sample.market_state_fingerprint != candle.context.provenance_fingerprint
+    mismatched = (
+        lambda: replace(candle, context=replace(candle.context, source_id=SOURCE)),
+        lambda: replace(candle, context=replace(candle.context, contract_id=CONTRACT)),
+        lambda: replace(
+            candle,
+            context=replace(
+                candle.context, generation=GenerationRef(S1E_SOURCE, Environment.PAPER, 2)
+            ),
+        ),
+        lambda: replace(candle, context=replace(candle.context, environment=Environment.REPLAY)),
+    )
+    for factory in mismatched:
+        with pytest.raises((FeatureError, ValueError)):
+            FeatureSample.from_candle(factory(), market_state=state)
+
+
+def test_imp_h005_fixture_replay_only_remains_supported() -> None:
+    candle = _candle(0, "10")
+    fixture = FeatureSample.from_candle(candle)
+    assert fixture.authority.is_fixture
+    assert fixture.environment is Environment.REPLAY
+    mutating = replace(fixture, high=DecimalValue.parse("99"))
+    assert mutating.high is not None
+    for environment in (Environment.LIVE, Environment.PAPER, Environment.SHADOW):
+        with pytest.raises(FeatureError):
+            FeatureAuthorityEvidence.fixture(
+                market_state_fingerprint="a" * 64, environment=environment
+            )
+        with pytest.raises(FeatureError):
+            FeatureSample.from_decimal("1", environment=environment)
+
+
+# ---------------------------------------------------------------------------
+# IMP-H006 per-constituent MTF authority binding
+# ---------------------------------------------------------------------------
+
+
+def _aligned_with(
+    candles: tuple[CandleBar, ...],
+    *,
+    authorities: tuple[FeatureAuthorityEvidence, ...] | None = None,
+    target_minutes: int = 5,
+    evaluation_time: datetime | None = None,
+) -> AlignedWindowEvidence:
+    return align_closed_1m_candles(
+        candles,
+        target_minutes,
+        evaluation_time=evaluation_time or NOW + timedelta(minutes=target_minutes),
+        authorities=authorities,
+    )
+
+
+def test_imp_h006_five_trusted_constituents_are_valid() -> None:
+    candles = _closed_candles()
+    aligned = _aligned_with(candles[:5])
+    assert aligned.validity is FeatureValidity.VALID
+    assert aligned.authority_evidence_fingerprints == tuple(
+        constituent_authority(candle).fingerprint for candle in candles[:5]
+    )
+    assert len(set(aligned.authority_evidence_fingerprints)) == 5
+
+
+def test_imp_h006_resource_degraded_constituent_restricts_without_invalidating() -> None:
+    candles = _closed_candles()
+    authorities = tuple(
+        constituent_authority(
+            candle,
+            resource=(
+                ResourceDisposition.DEGRADED if index == 3 else ResourceDisposition.AVAILABLE
+            ),
+        )
+        for index, candle in enumerate(candles[:5])
+    )
+    aligned = _aligned_with(candles[:5], authorities=authorities)
+    assert aligned.validity is FeatureValidity.VALID
+    assert aligned.high is not None
+    assert aligned.resource_restriction is FeatureAxisRestriction.RESTRICTIVE
+    assert aligned.lifecycle_restriction is FeatureAxisRestriction.NONE
+
+
+def test_imp_h006_lifecycle_ineligible_constituent_restricts_without_invalidating() -> None:
+    candles = _closed_candles()
+    authorities = tuple(
+        constituent_authority(
+            candle,
+            lifecycle=(
+                LifecycleRestriction.NEW_EXPOSURE_DISABLED
+                if index == 0
+                else LifecycleRestriction.NONE
+            ),
+        )
+        for index, candle in enumerate(candles[:5])
+    )
+    aligned = _aligned_with(candles[:5], authorities=authorities)
+    assert aligned.validity is FeatureValidity.VALID
+    assert aligned.lifecycle_restriction is FeatureAxisRestriction.RESTRICTIVE
+    assert aligned.resource_restriction is FeatureAxisRestriction.NONE
+
+
+@pytest.mark.parametrize(
+    ("trust", "expected"),
+    [
+        (MarketStateTrust.UNKNOWN, FeatureValidity.UNKNOWN),
+        (MarketStateTrust.RESYNC_REQUIRED, FeatureValidity.UNKNOWN),
+        (MarketStateTrust.UNTRUSTED, FeatureValidity.UNKNOWN),
+    ],
+)
+def test_imp_h006_unknown_constituent_is_not_washed_by_trusted(
+    trust: MarketStateTrust, expected: FeatureValidity
+) -> None:
+    candles = _closed_candles()
+    trusted = tuple(constituent_authority(candle) for candle in candles[:5])
+    assert _aligned_with(candles[:5], authorities=trusted).validity is FeatureValidity.VALID
+    mixed = tuple(
+        constituent_authority(candle, trust=trust) if index == 4 else item
+        for index, (candle, item) in enumerate(zip(candles[:5], trusted, strict=True))
+    )
+    restricted = _aligned_with(candles[:5], authorities=mixed)
+    assert restricted.validity is expected
+    assert restricted.fingerprint != _aligned_with(candles[:5], authorities=trusted).fingerprint
+
+
+def test_imp_h006_degraded_constituent_market_truth_stays_degraded() -> None:
+    candles = _closed_candles()
+    authorities = tuple(
+        constituent_authority(
+            candle,
+            trust=MarketStateTrust.DEGRADED if index == 2 else MarketStateTrust.TRUSTED,
+            reasons=(
+                (QualityReason.RESOURCE_DEGRADED,) if index == 2 else (QualityReason.FRESH_VALID,)
+            ),
+        )
+        for index, candle in enumerate(candles[:5])
+    )
+    aligned = _aligned_with(candles[:5], authorities=authorities)
+    assert aligned.validity is FeatureValidity.DEGRADED
+    assert aligned.constituent_market_state_trust is MarketStateTrust.DEGRADED
+
+
+def test_imp_h006_authority_sequence_mismatches_fail_closed() -> None:
+    candles = _closed_candles()
+    trusted = tuple(constituent_authority(candle) for candle in candles[:5])
+    with pytest.raises(FeatureEvaluationError):
+        _aligned_with(candles[:5], authorities=trusted[:4])
+    with pytest.raises(FeatureEvaluationError):
+        _aligned_with(candles[:5], authorities=trusted + (trusted[0],))
+    permuted = (trusted[1], trusted[0], *trusted[2:])
+    with pytest.raises(FeatureEvaluationError):
+        _aligned_with(candles[:5], authorities=permuted)
+    for change in (
+        {"source_id": StableId(kind=IdentityKind.EXCHANGE, value="other-venue")},
+        {"contract_id": StableId(kind=IdentityKind.INSTRUMENT, value="other-contract")},
+        {"environment": Environment.PAPER},
+        {"generation_fingerprint": "f" * 64},
+    ):
+        with pytest.raises((FeatureError, FeatureEvaluationError)):
+            broken = (replace(trusted[0], **change), *trusted[1:])
+            _aligned_with(candles[:5], authorities=broken)
+    non_authority = ("not-authority", *trusted[1:])
+    with pytest.raises(FeatureEvaluationError):
+        _aligned_with(candles[:5], authorities=non_authority)  # type: ignore[arg-type]
+
+
+def test_imp_h006_blanket_authority_is_removed_from_the_contract() -> None:
+    candles = _closed_candles()
+    with pytest.raises(TypeError):
+        align_closed_1m_candles(candles[:5], 5, authority=constituent_authority(candles[0]))  # type: ignore[call-arg]
+    with pytest.raises(FeatureEvaluationError):
+        align_closed_1m_candles(
+            candles[:5],
+            5,
+            authorities=constituent_authority(candles[0]),  # type: ignore[arg-type]
+        )
+
+
+def test_imp_h006_binding_mutation_changes_the_aligned_fingerprint() -> None:
+    candles = _closed_candles()
+    trusted = tuple(constituent_authority(candle) for candle in candles[:5])
+    baseline = _aligned_with(candles[:5], authorities=trusted)
+    corrected = (
+        *candles[:1],
+        replace(candles[1], close=DecimalValue.parse("12")),
+        *candles[2:5],
+    )
+    with pytest.raises(FeatureEvaluationError):
+        _aligned_with(corrected, authorities=trusted)
+    rebound = (
+        trusted[0],
+        constituent_authority(corrected[1]),
+        *trusted[2:],
+    )
+    assert _aligned_with(corrected, authorities=rebound).fingerprint != baseline.fingerprint
+    with pytest.raises(FeatureError):
+        replace(
+            trusted[2],
+            bound_evidence_fingerprint=trusted[3].bound_evidence_fingerprint,
+        )
+    swapped = (trusted[0], trusted[3], trusted[2], trusted[1], trusted[4])
+    with pytest.raises(FeatureEvaluationError):
+        _aligned_with(candles[:5], authorities=swapped)
+    reordered_candles = (candles[1], candles[0], *candles[2:5])
+    reordered = _aligned_with(reordered_candles, authorities=(trusted[1], trusted[0], *trusted[2:]))
+    assert reordered.fingerprint != baseline.fingerprint
+    assert reordered.validity is FeatureValidity.INVALID
+    revised_candles = (
+        *candles[:2],
+        replace(
+            candles[2],
+            revision=1,
+            predecessor_fingerprint=candles[2].fingerprint,
+        ),
+        *candles[3:5],
+    )
+    revised_authorities = (*trusted[:2], constituent_authority(revised_candles[2]), *trusted[3:])
+    assert (
+        _aligned_with(revised_candles, authorities=revised_authorities).fingerprint
+        != baseline.fingerprint
+    )
+
+
+# ---------------------------------------------------------------------------
+# IMP-H007 the benchmark and CI gate fail closed on every profile
+# ---------------------------------------------------------------------------
+
+_BENCHMARK_PROFILE_SHAPE = {
+    "MICRO": (1, 4096, 64),
+    "NOMINAL": (16, 8192, 256),
+    "STRESS": (32, 16384, 512),
+}
+
+
+def _benchmark_module():
+    import importlib.util
+
+    root = Path(__file__).resolve().parents[3]
+    spec = importlib.util.spec_from_file_location(
+        "s2a_benchmark_under_test", root / "scripts" / "benchmark_s2a.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _synthetic_benchmark_document(parity: dict[str, str]) -> dict[str, object]:
+    module = _benchmark_module()
+    profiles = []
+    for name, (contracts, candles, window) in _BENCHMARK_PROFILE_SHAPE.items():
+        passed = parity[name] == "PASS"
+        profiles.append(
+            {
+                "profile": name,
+                "contracts": contracts,
+                "closed_1m_candles_per_contract": candles,
+                "max_window": window,
+                "feature_ids": list(module.FEATURE_IDS),
+                "feature_evaluations": 8 * contracts,
+                "memory_probe_contracts": 1,
+                "window_buffer_depth": window,
+                "warmup_count": 1,
+                "restrictive_state_count": 0,
+                "no_lookahead_rejection_count": contracts,
+                "input_manifest_hash": "a" * 64,
+                "output_manifest_hash": "b" * 64,
+                "recursive_parity": parity[name],
+                "recursive_parity_fingerprint": "c" * 64,
+                "recursive_parity_mismatches": 0 if passed else 1,
+                "correctness": "PASS" if passed else "FAIL",
+                "bounded_completion": True,
+                "feature_evaluations_per_second": 1.0,
+                "replay_throughput_candles_per_second": 1.0,
+                "peak_memory_bytes": 1,
+                "per_feature_compute_latency_ns": {
+                    identifier: {"p50": 1.0, "p95": 1.0, "p99": 1.0, "max": 1.0}
+                    for identifier in module.FEATURE_IDS
+                },
+            }
+        )
+    return {"mode": "S2A_BASELINE_ESTABLISHMENT_V1", "profiles": profiles}
+
+
+def test_imp_h007_validator_accepts_a_fully_green_pair() -> None:
+    module = _benchmark_module()
+    good = _synthetic_benchmark_document({"MICRO": "PASS", "NOMINAL": "PASS", "STRESS": "PASS"})
+    module.validate_benchmark_documents(good, good)
+
+
+@pytest.mark.parametrize("profile", ["MICRO", "NOMINAL", "STRESS"])
+def test_imp_h007_validator_fails_closed_per_profile(profile: str) -> None:
+    module = _benchmark_module()
+    good = _synthetic_benchmark_document({"MICRO": "PASS", "NOMINAL": "PASS", "STRESS": "PASS"})
+    broken = _synthetic_benchmark_document(
+        {
+            "MICRO": "FAIL" if profile == "MICRO" else "PASS",
+            "NOMINAL": "FAIL" if profile == "NOMINAL" else "PASS",
+            "STRESS": "FAIL" if profile == "STRESS" else "PASS",
+        }
+    )
+    with pytest.raises(module.BenchmarkValidationError):
+        module.validate_benchmark_documents(broken, broken)
+    with pytest.raises(module.BenchmarkValidationError):
+        module.validate_benchmark_documents(broken, good)
+    with pytest.raises(module.BenchmarkValidationError):
+        module.validate_benchmark_documents(good, broken)
+
+
+def test_imp_h007_validator_rejects_missing_profiles_and_drift() -> None:
+    module = _benchmark_module()
+    good = _synthetic_benchmark_document({"MICRO": "PASS", "NOMINAL": "PASS", "STRESS": "PASS"})
+    duplicated = _synthetic_benchmark_document(
+        {"MICRO": "PASS", "NOMINAL": "PASS", "STRESS": "PASS"}
+    )
+    duplicated["profiles"] = duplicated["profiles"][:2] + duplicated["profiles"][1:2]
+    with pytest.raises(module.BenchmarkValidationError):
+        module.validate_benchmark_documents(duplicated, duplicated)
+    omitted = _synthetic_benchmark_document({"MICRO": "PASS", "NOMINAL": "PASS", "STRESS": "PASS"})
+    omitted["profiles"] = omitted["profiles"][:2]
+    with pytest.raises(module.BenchmarkValidationError):
+        module.validate_benchmark_documents(omitted, omitted)
+    drift = _synthetic_benchmark_document({"MICRO": "PASS", "NOMINAL": "PASS", "STRESS": "PASS"})
+    drift["profiles"][1]["output_manifest_hash"] = "d" * 64
+    with pytest.raises(module.BenchmarkValidationError):
+        module.validate_benchmark_documents(good, drift)

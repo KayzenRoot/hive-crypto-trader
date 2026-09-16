@@ -48,6 +48,7 @@ _SCALE_18 = Decimal("1e-18")
 _HASH = re.compile(r"^[0-9a-f]{64}$")
 _STATE_ATTESTATION: Final = object()
 _ALIGNED_ATTESTATION: Final = object()
+_AUTHORITY_ATTESTATION: Final = object()
 _TRUST_SEVERITY: Final = (
     MarketStateTrust.UNTRUSTED,
     MarketStateTrust.RESYNC_REQUIRED,
@@ -207,13 +208,90 @@ def _rsi_output(avg_gain: Decimal, avg_loss: Decimal) -> DecimalValue:
         return _canonical(Decimal(100) - (Decimal(100) / (Decimal(1) + avg_gain / avg_loss)))
 
 
-@dataclass(frozen=True, slots=True)
+def _value_evidence_material(
+    *,
+    fingerprint: str,
+    provenance_fingerprint: str,
+    source_id: StableId,
+    contract_id: StableId,
+    environment: Environment,
+    generation_fingerprint: str,
+    timeframe: Timeframe,
+    closed: bool,
+    event_time: datetime,
+    knowledge_time: datetime,
+    wall_receive_time: datetime,
+    interval_start: datetime | None,
+    interval_end: datetime | None,
+    value: DecimalValue | None,
+    high: DecimalValue | None,
+    low: DecimalValue | None,
+    close: DecimalValue | None,
+    quantity: Quantity | None,
+) -> dict[str, object]:
+    """Canonical S1F value-evidence material bound by non-fixture authority."""
+
+    return {
+        "value_evidence_version": FEATURE_AUTHORITY_VERSION,
+        "fingerprint": fingerprint,
+        "provenance": provenance_fingerprint,
+        "source": source_id.as_text(),
+        "contract": contract_id.as_text(),
+        "environment": environment.value,
+        "generation": generation_fingerprint,
+        "timeframe": timeframe.fingerprint,
+        "timeframe_version": timeframe.version,
+        "closed": closed,
+        "event_time": event_time.isoformat(),
+        "knowledge_time": knowledge_time.isoformat(),
+        "wall_receive_time": wall_receive_time.isoformat(),
+        "interval_start": interval_start.isoformat() if interval_start else None,
+        "interval_end": interval_end.isoformat() if interval_end else None,
+        "value": value.fingerprint if value else None,
+        "high": high.fingerprint if high else None,
+        "low": low.fingerprint if low else None,
+        "close": close.fingerprint if close else None,
+        "quantity": quantity.fingerprint if quantity else None,
+    }
+
+
+def _candle_value_evidence_material(candle: CandleBar) -> dict[str, object]:
+    context = candle.context
+    return _value_evidence_material(
+        fingerprint=candle.fingerprint,
+        provenance_fingerprint=context.provenance_fingerprint,
+        source_id=context.source_id,
+        contract_id=context.contract_id,
+        environment=context.environment,
+        generation_fingerprint=context.generation.fingerprint,
+        timeframe=candle.timeframe,
+        closed=candle.finality is Finality.CLOSED,
+        event_time=context.event_time,
+        knowledge_time=context.knowledge_time,
+        wall_receive_time=context.wall_receive_time,
+        interval_start=candle.start,
+        interval_end=candle.end,
+        value=candle.close,
+        high=candle.high,
+        low=candle.low,
+        close=candle.close,
+        quantity=candle.volume,
+    )
+
+
+@dataclass(frozen=True, slots=True, init=False)
 class FeatureAuthorityEvidence:
     """Read-only typed S1E authority evidence consumed by Module 8.
 
     Analytical truth, market-state trust, data authority, resource admission and
     universe lifecycle are separate axes.  This evidence carries all of them
     without granting any downstream action authority.
+
+    Non-fixture authority is evaluator-issued and content-bound: it can only be
+    derived from a canonical S1E ``MarketStateSnapshot`` (plus the governed
+    Module 29 admission seam where resource state is required), and it binds the
+    exact source, contract, environment, generation and S1F value evidence it
+    attests.  Synthetic authority is REPLAY-only and unmistakably marked.
     """
 
     market_state_fingerprint: str
@@ -224,9 +302,66 @@ class FeatureAuthorityEvidence:
     resource_disposition: ResourceDisposition
     resource_evidence_fingerprint: str
     lifecycle_restriction: LifecycleRestriction
-    is_fixture: bool = False
+    source_id: StableId
+    contract_id: StableId
+    environment: Environment
+    generation_fingerprint: str
+    bound_evidence_fingerprint: str | None
+    is_fixture: bool
+    _attestation: object = field(default=None, repr=False, compare=False)
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        raise FeatureError(
+            "FeatureAuthorityEvidence must be issued by from_market_state, from_candle or fixture"
+        )
+
+    def _is_attested(self) -> bool:
+        return self._attestation is _AUTHORITY_ATTESTATION
+
+    @classmethod
+    def _issue(
+        cls,
+        *,
+        market_state_fingerprint: str,
+        market_state_trust: MarketStateTrust,
+        data_authority_state: DataAuthorityState,
+        data_authority_fingerprint: str,
+        data_authority_reasons: tuple[QualityReason, ...],
+        resource_disposition: ResourceDisposition,
+        resource_evidence_fingerprint: str,
+        lifecycle_restriction: LifecycleRestriction,
+        source_id: StableId,
+        contract_id: StableId,
+        environment: Environment,
+        generation_fingerprint: str,
+        bound_evidence_fingerprint: str | None,
+        is_fixture: bool,
+    ) -> FeatureAuthorityEvidence:
+        instance = object.__new__(cls)
+        for name, value in (
+            ("market_state_fingerprint", market_state_fingerprint),
+            ("market_state_trust", market_state_trust),
+            ("data_authority_state", data_authority_state),
+            ("data_authority_fingerprint", data_authority_fingerprint),
+            ("data_authority_reasons", data_authority_reasons),
+            ("resource_disposition", resource_disposition),
+            ("resource_evidence_fingerprint", resource_evidence_fingerprint),
+            ("lifecycle_restriction", lifecycle_restriction),
+            ("source_id", source_id),
+            ("contract_id", contract_id),
+            ("environment", environment),
+            ("generation_fingerprint", generation_fingerprint),
+            ("bound_evidence_fingerprint", bound_evidence_fingerprint),
+            ("is_fixture", is_fixture),
+        ):
+            object.__setattr__(instance, name, value)
+        object.__setattr__(instance, "_attestation", _AUTHORITY_ATTESTATION)
+        instance.__post_init__()
+        return instance
 
     def __post_init__(self) -> None:
+        if not self._is_attested():
+            raise FeatureError("authority evidence is not evaluator-issued")
         _require_hash(self.market_state_fingerprint, "authority market-state fingerprint")
         if not isinstance(self.market_state_trust, MarketStateTrust):
             raise FeatureError("authority market-state trust is invalid")
@@ -247,8 +382,26 @@ class FeatureAuthorityEvidence:
         _require_hash(self.resource_evidence_fingerprint, "authority resource fingerprint")
         if not isinstance(self.lifecycle_restriction, LifecycleRestriction):
             raise FeatureError("authority lifecycle restriction is invalid")
+        if (
+            not isinstance(self.source_id, StableId)
+            or self.source_id.kind is not IdentityKind.EXCHANGE
+            or not isinstance(self.contract_id, StableId)
+            or self.contract_id.kind is not IdentityKind.INSTRUMENT
+        ):
+            raise FeatureError("authority source identities are invalid")
+        if not isinstance(self.environment, Environment):
+            raise FeatureError("authority environment is invalid")
+        _require_hash(self.generation_fingerprint, "authority generation fingerprint")
         if not isinstance(self.is_fixture, bool):
             raise FeatureError("authority fixture flag must be boolean")
+        if self.is_fixture:
+            if self.environment is not Environment.REPLAY:
+                raise FeatureError("synthetic authority is REPLAY-only")
+            if self.bound_evidence_fingerprint is not None:
+                _require_hash(self.bound_evidence_fingerprint, "authority bound value evidence")
+        else:
+            if self.bound_evidence_fingerprint is not None:
+                _require_hash(self.bound_evidence_fingerprint, "authority bound value evidence")
 
     @property
     def resource_restriction(self) -> FeatureAxisRestriction:
@@ -288,6 +441,11 @@ class FeatureAuthorityEvidence:
             "resource_disposition": self.resource_disposition.value,
             "resource_evidence_fingerprint": self.resource_evidence_fingerprint,
             "lifecycle_restriction": self.lifecycle_restriction.value,
+            "source": self.source_id.as_text(),
+            "contract": self.contract_id.as_text(),
+            "environment": self.environment.value,
+            "generation": self.generation_fingerprint,
+            "bound_evidence_fingerprint": self.bound_evidence_fingerprint,
             "is_fixture": self.is_fixture,
         }
 
@@ -295,13 +453,28 @@ class FeatureAuthorityEvidence:
     def fingerprint(self) -> str:
         return _hash(self.material)
 
+    def matches_identity(
+        self,
+        *,
+        source_id: StableId,
+        contract_id: StableId,
+        environment: Environment,
+        generation_fingerprint: str,
+    ) -> bool:
+        return (
+            self.source_id == source_id
+            and self.contract_id == contract_id
+            and self.environment is environment
+            and self.generation_fingerprint == generation_fingerprint
+        )
+
     @classmethod
     def from_market_state(
         cls,
         state: MarketStateSnapshot,
         *,
         resource: ResourceAdmissionEvidence | None = None,
-    ) -> Self:
+    ) -> FeatureAuthorityEvidence:
         """Derive read-only authority evidence from canonical S1E state."""
 
         if not isinstance(state, MarketStateSnapshot):
@@ -309,7 +482,7 @@ class FeatureAuthorityEvidence:
         if resource is not None and not isinstance(resource, ResourceAdmissionEvidence):
             raise FeatureError("canonical module 29 admission evidence is required")
         decision = state.data_authority
-        return cls(
+        return cls._issue(
             market_state_fingerprint=state.fingerprint,
             market_state_trust=state.trust,
             data_authority_state=decision.state,
@@ -333,6 +506,89 @@ class FeatureAuthorityEvidence:
                 else _hash({"resource": "ABSENT", "state": state.fingerprint})
             ),
             lifecycle_restriction=state.lifecycle_restriction,
+            source_id=state.source_id,
+            contract_id=state.contract_id,
+            environment=state.environment,
+            generation_fingerprint=state.generation.fingerprint,
+            bound_evidence_fingerprint=None,
+            is_fixture=False,
+        )
+
+    @classmethod
+    def from_candle(
+        cls,
+        candle: CandleBar,
+        state: MarketStateSnapshot,
+        *,
+        resource: ResourceAdmissionEvidence | None = None,
+    ) -> FeatureAuthorityEvidence:
+        """Bind canonical S1E authority to one exact S1F candle evidence."""
+
+        if not isinstance(candle, CandleBar):
+            raise FeatureError("CandleBar is required")
+        if not isinstance(state, MarketStateSnapshot):
+            raise FeatureError("canonical S1E market-state snapshot is required")
+        if (
+            state.source_id != candle.context.source_id
+            or state.contract_id != candle.context.contract_id
+            or state.environment is not candle.context.environment
+            or state.generation != candle.context.generation
+        ):
+            raise FeatureError("candle and market-state identity disagree")
+        base = cls.from_market_state(state, resource=resource)
+        return cls._issue(
+            market_state_fingerprint=base.market_state_fingerprint,
+            market_state_trust=base.market_state_trust,
+            data_authority_state=base.data_authority_state,
+            data_authority_fingerprint=base.data_authority_fingerprint,
+            data_authority_reasons=base.data_authority_reasons,
+            resource_disposition=base.resource_disposition,
+            resource_evidence_fingerprint=base.resource_evidence_fingerprint,
+            lifecycle_restriction=base.lifecycle_restriction,
+            source_id=base.source_id,
+            contract_id=base.contract_id,
+            environment=base.environment,
+            generation_fingerprint=base.generation_fingerprint,
+            bound_evidence_fingerprint=_hash(_candle_value_evidence_material(candle)),
+            is_fixture=False,
+        )
+
+    @classmethod
+    def fixture_for_candle(
+        cls,
+        candle: CandleBar,
+        *,
+        market_state_trust: MarketStateTrust = MarketStateTrust.TRUSTED,
+        data_authority_state: DataAuthorityState = DataAuthorityState.ALLOW_NEW_EXPOSURE,
+        data_authority_reasons: tuple[QualityReason, ...] = (QualityReason.FRESH_VALID,),
+        resource_disposition: ResourceDisposition = ResourceDisposition.AVAILABLE,
+        lifecycle_restriction: LifecycleRestriction = LifecycleRestriction.NONE,
+    ) -> FeatureAuthorityEvidence:
+        """Issue REPLAY-only authority bound to one exact 1m constituent."""
+
+        if not isinstance(candle, CandleBar):
+            raise FeatureError("CandleBar is required")
+        context = candle.context
+        if context.environment is not Environment.REPLAY:
+            raise FeatureError("per-constituent synthetic authority is REPLAY-only")
+        return cls.fixture(
+            market_state_fingerprint=_hash(
+                {
+                    "fixture": True,
+                    "candle": candle.fingerprint,
+                    "generation": context.generation.fingerprint,
+                }
+            ),
+            source_id=context.source_id,
+            contract_id=context.contract_id,
+            environment=context.environment,
+            generation_fingerprint=context.generation.fingerprint,
+            market_state_trust=market_state_trust,
+            data_authority_state=data_authority_state,
+            data_authority_reasons=data_authority_reasons,
+            resource_disposition=resource_disposition,
+            lifecycle_restriction=lifecycle_restriction,
+            bound_evidence_fingerprint=_hash(_candle_value_evidence_material(candle)),
         )
 
     @classmethod
@@ -340,15 +596,24 @@ class FeatureAuthorityEvidence:
         cls,
         *,
         market_state_fingerprint: str,
+        source_id: StableId | None = None,
+        contract_id: StableId | None = None,
+        environment: Environment = Environment.REPLAY,
+        generation_fingerprint: str | None = None,
         market_state_trust: MarketStateTrust = MarketStateTrust.TRUSTED,
         data_authority_state: DataAuthorityState = DataAuthorityState.ALLOW_NEW_EXPOSURE,
         data_authority_reasons: tuple[QualityReason, ...] = (QualityReason.FRESH_VALID,),
         resource_disposition: ResourceDisposition = ResourceDisposition.AVAILABLE,
         lifecycle_restriction: LifecycleRestriction = LifecycleRestriction.NONE,
-    ) -> Self:
+        bound_evidence_fingerprint: str | None = None,
+    ) -> FeatureAuthorityEvidence:
         """Replay-scoped synthetic authority; it can never claim live authority."""
 
-        return cls(
+        if environment is not Environment.REPLAY:
+            raise FeatureError("synthetic fixture authority is REPLAY-only")
+        source = source_id or StableId(kind=IdentityKind.EXCHANGE, value="fixture")
+        contract = contract_id or StableId(kind=IdentityKind.INSTRUMENT, value="fixture")
+        return cls._issue(
             market_state_fingerprint=market_state_fingerprint,
             market_state_trust=market_state_trust,
             data_authority_state=data_authority_state,
@@ -371,6 +636,14 @@ class FeatureAuthorityEvidence:
                 }
             ),
             lifecycle_restriction=lifecycle_restriction,
+            source_id=source,
+            contract_id=contract,
+            environment=environment,
+            generation_fingerprint=(
+                generation_fingerprint
+                or _hash({"fixture": True, "source": source.as_text(), "generation": 1})
+            ),
+            bound_evidence_fingerprint=bound_evidence_fingerprint,
             is_fixture=True,
         )
 
@@ -644,8 +917,53 @@ class FeatureSample:
             raise FeatureError("sample authority evidence is required")
         if self.market_state_fingerprint != self.authority.market_state_fingerprint:
             raise FeatureError("sample market state is not bound to its authority evidence")
-        if self.authority.is_fixture and self.environment is not Environment.REPLAY:
-            raise FeatureError("synthetic fixture authority is REPLAY-only")
+        if self.authority.is_fixture:
+            if self.environment is not Environment.REPLAY:
+                raise FeatureError("synthetic fixture authority is REPLAY-only")
+            if (
+                self.authority.bound_evidence_fingerprint is not None
+                and self.authority.bound_evidence_fingerprint != self.value_evidence_fingerprint
+            ):
+                raise FeatureError("sample material disagrees with its bound value evidence")
+        else:
+            if not self.authority.matches_identity(
+                source_id=self.source_id,
+                contract_id=self.contract_id,
+                environment=self.environment,
+                generation_fingerprint=self.generation_fingerprint,
+            ):
+                raise FeatureError("sample identity disagrees with its authority evidence")
+            if self.authority.bound_evidence_fingerprint != self.value_evidence_fingerprint:
+                raise FeatureError(
+                    "sample material disagrees with its bound canonical value evidence"
+                )
+
+    @property
+    def value_evidence_fingerprint(self) -> str:
+        """Content binding between a non-fixture sample and its authority."""
+
+        return _hash(
+            _value_evidence_material(
+                fingerprint=self.fingerprint,
+                provenance_fingerprint=self.provenance_fingerprint,
+                source_id=self.source_id,
+                contract_id=self.contract_id,
+                environment=self.environment,
+                generation_fingerprint=self.generation_fingerprint,
+                timeframe=self.timeframe,
+                closed=self.closed,
+                event_time=self.event_time,
+                knowledge_time=self.knowledge_time,
+                wall_receive_time=self.wall_receive_time,
+                interval_start=self.interval_start,
+                interval_end=self.interval_end,
+                value=self.value,
+                high=self.high,
+                low=self.low,
+                close=self.close,
+                quantity=self.quantity,
+            )
+        )
 
     @property
     def market_state_trust(self) -> MarketStateTrust:
@@ -740,6 +1058,10 @@ class FeatureSample:
             timeframe=frame,
             authority=FeatureAuthorityEvidence.fixture(
                 market_state_fingerprint=state,
+                source_id=source,
+                contract_id=contract,
+                environment=environment,
+                generation_fingerprint=generation,
                 market_state_trust=market_state_trust,
                 data_authority_state=data_authority_state,
                 data_authority_reasons=data_authority_reasons,
@@ -782,18 +1104,17 @@ class FeatureSample:
                         "event": context.originating_event_fingerprint,
                     }
                 ),
+                source_id=context.source_id,
+                contract_id=context.contract_id,
+                environment=context.environment,
+                generation_fingerprint=context.generation.fingerprint,
             )
         else:
             if not isinstance(market_state, MarketStateSnapshot):
                 raise FeatureError("canonical S1E market-state snapshot is required")
-            if (
-                market_state.source_id != context.source_id
-                or market_state.contract_id != context.contract_id
-                or market_state.environment is not context.environment
-                or market_state.generation != context.generation
-            ):
-                raise FeatureError("candle and market-state identity disagree")
-            authority = FeatureAuthorityEvidence.from_market_state(market_state, resource=resource)
+            authority = FeatureAuthorityEvidence.from_candle(
+                candle, market_state, resource=resource
+            )
         return cls(
             value=candle.close,
             fingerprint=candle.fingerprint,
@@ -2045,6 +2366,9 @@ class AlignedWindowEvidence:
     constituent_fingerprints: tuple[str, ...]
     constituent_provenance_fingerprints: tuple[str, ...]
     authority_evidence_fingerprints: tuple[str, ...]
+    authority_fold_fingerprint: str
+    data_authority_state: DataAuthorityState
+    constituent_market_state_trust: MarketStateTrust
     validity: FeatureValidity
     reason: str
     source_id: StableId | None
@@ -2114,6 +2438,11 @@ class AlignedWindowEvidence:
             _require_hash(item, "aligned constituent provenance")
         for item in self.authority_evidence_fingerprints:
             _require_hash(item, "aligned authority evidence")
+        _require_hash(self.authority_fold_fingerprint, "aligned authority fold")
+        if not isinstance(self.data_authority_state, DataAuthorityState):
+            raise FeatureError("aligned data-authority state is invalid")
+        if not isinstance(self.constituent_market_state_trust, MarketStateTrust):
+            raise FeatureError("aligned constituent market-state trust is invalid")
         if not isinstance(self.resource_restriction, FeatureAxisRestriction) or not isinstance(
             self.lifecycle_restriction, FeatureAxisRestriction
         ):
@@ -2140,6 +2469,9 @@ class AlignedWindowEvidence:
                 "constituents": self.constituent_fingerprints,
                 "constituent_provenance": self.constituent_provenance_fingerprints,
                 "authority_evidence": self.authority_evidence_fingerprints,
+                "authority_fold": self.authority_fold_fingerprint,
+                "data_authority_state": self.data_authority_state.value,
+                "constituent_market_state_trust": self.constituent_market_state_trust.value,
                 "validity": self.validity.value,
                 "reason": self.reason,
                 "source": self.source_id.as_text() if self.source_id else None,
@@ -2172,9 +2504,23 @@ def _aligned_bounds(start: datetime, target_minutes: int) -> tuple[datetime, dat
     return begin, begin + timedelta(seconds=seconds)
 
 
-def _aligned_resource_axis(
+def _fold_constituent_authority(
     authorities: Sequence[FeatureAuthorityEvidence],
-) -> tuple[FeatureAxisRestriction, FeatureAxisRestriction, MarketStateTrust]:
+) -> tuple[
+    MarketStateTrust,
+    DataAuthorityState,
+    FeatureAxisRestriction,
+    FeatureAxisRestriction,
+    str,
+]:
+    """Fold every exact constituent authority without upgrading any axis."""
+
+    if not authorities:
+        raise FeatureEvaluationError("per-constituent authority evidence is required")
+    trust = min((item.market_state_trust for item in authorities), key=_TRUST_SEVERITY.index)
+    data_authority = min(
+        (item.data_authority_state for item in authorities), key=_AUTHORITY_SEVERITY.index
+    )
     resource = (
         FeatureAxisRestriction.RESTRICTIVE
         if any(
@@ -2187,8 +2533,71 @@ def _aligned_resource_axis(
         if any(item.lifecycle_axis is FeatureAxisRestriction.RESTRICTIVE for item in authorities)
         else FeatureAxisRestriction.NONE
     )
+    fingerprint = _hash({"ordered_authority": [item.fingerprint for item in authorities]})
+    return trust, data_authority, resource, lifecycle, fingerprint
+
+
+def _constituent_market_truth_status(
+    authorities: Sequence[FeatureAuthorityEvidence],
+) -> tuple[FeatureValidity | None, str]:
+    """Governed H012 restriction from the folded constituent market truth."""
+
     trust = min((item.market_state_trust for item in authorities), key=_TRUST_SEVERITY.index)
-    return resource, lifecycle, trust
+    reasons = {reason for item in authorities for reason in item.data_authority_reasons}
+    if reasons & _INVALID_QUALITY_REASONS:
+        return FeatureValidity.INVALID, "CONTRADICTORY_OR_RETIRED_CONSTITUENT_MARKET_TRUTH"
+    if trust in {
+        MarketStateTrust.UNKNOWN,
+        MarketStateTrust.UNTRUSTED,
+        MarketStateTrust.RESYNC_REQUIRED,
+    } or (reasons & _UNKNOWN_QUALITY_REASONS):
+        return FeatureValidity.UNKNOWN, "CONSTITUENT_MARKET_STATE_UNTRUSTED"
+    if trust is MarketStateTrust.DEGRADED:
+        return FeatureValidity.DEGRADED, "CONSTITUENT_MARKET_STATE_DEGRADED"
+    return None, ""
+
+
+def _bound_constituent_authorities(
+    items: tuple[CandleBar, ...],
+    authorities: Sequence[FeatureAuthorityEvidence] | None,
+) -> tuple[FeatureAuthorityEvidence, ...]:
+    """Require one exact canonical authority binding per 1m constituent."""
+
+    if authorities is None:
+        if any(item.context.environment is not Environment.REPLAY for item in items):
+            raise FeatureEvaluationError(
+                "authoritative aligned windows require per-constituent authority evidence"
+            )
+        return tuple(FeatureAuthorityEvidence.fixture_for_candle(item) for item in items)
+    if isinstance(authorities, (str, bytes)) or not isinstance(authorities, Sequence):
+        raise FeatureEvaluationError("per-constituent authority evidence must be a sequence")
+    resolved = tuple(authorities)
+    if len(resolved) != len(items):
+        raise FeatureEvaluationError(
+            "per-constituent authority evidence must match the constituent count"
+        )
+    for candle, item in zip(items, resolved, strict=True):
+        if not isinstance(item, FeatureAuthorityEvidence):
+            raise FeatureEvaluationError("per-constituent authority evidence is not typed")
+        if not item._is_attested():
+            raise FeatureEvaluationError("per-constituent authority is not evaluator-issued")
+        context = candle.context
+        if not item.matches_identity(
+            source_id=context.source_id,
+            contract_id=context.contract_id,
+            environment=context.environment,
+            generation_fingerprint=context.generation.fingerprint,
+        ):
+            raise FeatureEvaluationError(
+                "per-constituent authority identity disagrees with its candle"
+            )
+        if item.is_fixture and context.environment is not Environment.REPLAY:
+            raise FeatureEvaluationError("synthetic per-constituent authority is REPLAY-only")
+        if item.bound_evidence_fingerprint != _hash(_candle_value_evidence_material(candle)):
+            raise FeatureEvaluationError(
+                "per-constituent authority is not bound to its exact candle evidence"
+            )
+    return resolved
 
 
 def align_closed_1m_candles(
@@ -2196,14 +2605,17 @@ def align_closed_1m_candles(
     target_minutes: int,
     *,
     evaluation_time: datetime | None = None,
-    authority: FeatureAuthorityEvidence | None = None,
+    authorities: Sequence[FeatureAuthorityEvidence] | None = None,
 ) -> AlignedWindowEvidence:
-    """Derive one exact 5m/15m window from complete CLOSED 1m constituents."""
+    """Derive one exact 5m/15m window from complete CLOSED 1m constituents.
+
+    Authority is bound per constituent: a single state can never blanket an
+    entire window, so an earlier degraded, unknown or restrictive constituent
+    cannot be hidden by a later trusted one.
+    """
 
     if target_minutes not in {5, 15}:
         raise FeatureEvaluationError("target timeframe must be 5 or 15 minutes")
-    if authority is not None and not isinstance(authority, FeatureAuthorityEvidence):
-        raise FeatureEvaluationError("aligned evidence requires typed authority evidence")
     target_frame = Timeframe(f"Min{target_minutes}", target_minutes * 60)
     items = tuple(candles)
     if not items:
@@ -2218,6 +2630,9 @@ def align_closed_1m_candles(
             constituent_fingerprints=(),
             constituent_provenance_fingerprints=(),
             authority_evidence_fingerprints=(),
+            authority_fold_fingerprint=_hash({"ordered_authority": []}),
+            data_authority_state=DataAuthorityState.ALLOW_NEW_EXPOSURE,
+            constituent_market_state_trust=MarketStateTrust.TRUSTED,
             validity=FeatureValidity.WARMUP,
             reason="NO_CONSTITUENTS",
             source_id=None,
@@ -2241,11 +2656,10 @@ def align_closed_1m_candles(
     start, end = _aligned_bounds(first.start, target_minutes)
     constituent_fingerprints = tuple(item.fingerprint for item in items)
     provenance_fingerprints = tuple(item.context.provenance_fingerprint for item in items)
-    authorities = tuple(
-        authority if authority is not None else FeatureSample.from_candle(item).authority
-        for item in items
+    resolved_authorities = _bound_constituent_authorities(items, authorities)
+    trust, data_authority, resource, lifecycle, authority_fold = _fold_constituent_authority(
+        resolved_authorities
     )
-    resource, lifecycle, trust = _aligned_resource_axis(authorities)
     base_kwargs: dict[str, Any] = dict(
         target_minutes=target_minutes,
         target_timeframe_fingerprint=target_frame.fingerprint,
@@ -2254,7 +2668,10 @@ def align_closed_1m_candles(
         constituents=items,
         constituent_fingerprints=constituent_fingerprints,
         constituent_provenance_fingerprints=provenance_fingerprints,
-        authority_evidence_fingerprints=tuple(item.fingerprint for item in authorities),
+        authority_evidence_fingerprints=tuple(item.fingerprint for item in resolved_authorities),
+        authority_fold_fingerprint=authority_fold,
+        data_authority_state=data_authority,
+        constituent_market_state_trust=trust,
         source_id=first.context.source_id,
         contract_id=first.context.contract_id,
         environment=first.context.environment,
@@ -2303,6 +2720,13 @@ def align_closed_1m_candles(
     if items != tuple(sorted(items, key=lambda item: item.start)):
         return AlignedWindowEvidence._from_evaluator(
             **base_kwargs, validity=FeatureValidity.INVALID, reason="OUT_OF_ORDER_CONSTITUENTS"
+        )
+    market_truth_status, market_truth_reason = _constituent_market_truth_status(
+        resolved_authorities
+    )
+    if market_truth_status in {FeatureValidity.INVALID, FeatureValidity.UNKNOWN}:
+        return AlignedWindowEvidence._from_evaluator(
+            **base_kwargs, validity=market_truth_status, reason=market_truth_reason
         )
     if len(items) != expected:
         validity = (
@@ -2368,7 +2792,7 @@ def align_closed_1m_candles(
             "volume": volume,
             "validity": (
                 FeatureValidity.DEGRADED
-                if trust is MarketStateTrust.DEGRADED
+                if market_truth_status is FeatureValidity.DEGRADED
                 else FeatureValidity.VALID
             ),
             "reason": "COMPLETE_COHERENT_ALIGNED_WINDOW",
@@ -2381,7 +2805,7 @@ def align_candles(
     target_minutes: int,
     *,
     evaluation_time: datetime | None = None,
-    authority: FeatureAuthorityEvidence | None = None,
+    authorities: Sequence[FeatureAuthorityEvidence] | None = None,
 ) -> AlignedWindowEvidence:
     """Short alias for the public deterministic MTF alignment operation."""
 
@@ -2389,7 +2813,7 @@ def align_candles(
         candles,
         target_minutes,
         evaluation_time=evaluation_time,
-        authority=authority,
+        authorities=authorities,
     )
 
 

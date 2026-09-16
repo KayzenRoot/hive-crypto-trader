@@ -15,10 +15,15 @@ trading.
 - branch: `implementation/HCT-IMP-0009-S2A`
 - implementation pull request: `#74`, kept OPEN and UNMERGED
 - `previousHead=a942cb0b02fdb6351ea4e3c0a53854279ab21366` (reviewed head that returned
-  `CORRECTION REQUIRED / CRITICAL 0 / HIGH 4`)
-- `correctedImplementationHead=4715b06fc1aafba87ead686655f5231d3f3f8b04` (head that
-  carries the IMP-H001 — IMP-H004 corrections and passed a fresh exact-head run)
-- `finalHead`: the exact-head pull request CI and PR #74 metadata below
+  `CORRECTION REQUIRED / CRITICAL 0 / HIGH 4`, review `5192500441`)
+- `reviewedHead=c8daaac3f3d733a59f0b71a2b9747cba723c4cd8` (reviewed head that returned
+  `CORRECTION REQUIRED / CRITICAL 0 / HIGH 3`, review `5217772587`)
+- prior correction head that carried IMP-H001 — IMP-H004 and passed a fresh exact-head
+  run: `4715b06fc1aafba87ead686655f5231d3f3f8b04`
+
+The exact final implementation head is bound externally by the PR #74 body and the
+external evidence receipt comment, not by this tracked file, so that no tracked file
+has to contain its own commit identity.
 - source context lock: `evidence/HCT-IMP-0009-S2A-CONTEXT-LOCK.md`
 - frozen source identities: 9/9 PASS
 - changed files: exactly the eight authorized S2A paths
@@ -182,18 +187,117 @@ Correction:
 - resource-degraded complete aligned evidence stays analytically `VALID` while
   carrying a separate restrictive resource axis.
 
-## Exact-head CI receipt
+## Exact-head CI receipts
 
-- corrected implementation head: `4715b06fc1aafba87ead686655f5231d3f3f8b04`
-- exact-head run: `35046100856`
-- exact-head job: `104636126625`
-- conclusion: `SUCCESS` on all 14 steps, including the corrected
-  `Publish exact-head implementation summary` step, which now writes literal
-  head/base/checkpoint/implementation values and asserts their presence
-  (`Exact-head summary material verified for head/base/checkpoint/implementation: PASS`)
+IMP-H001 — IMP-H004 corrected head `4715b06fc1aafba87ead686655f5231d3f3f8b04`:
+
+- exact-head run `35046100856` / job `104636126625` / `SUCCESS` on all 14 steps,
+  including the corrected `Publish exact-head implementation summary` step, which
+  writes literal head/base/checkpoint/implementation values and asserts their
+  presence (`Exact-head summary material verified for head/base/checkpoint/
+  implementation: PASS`)
 - no `command not found` lines remain in the exact-head step summary
-- pull request `#74` remains `OPEN`, non-draft, `MERGEABLE`, unmerged, base
-  `main@fecb97b6c9513a6dc0114d22c5e3768017411157`
+
+IMP-H001 — IMP-H004 reviewed head `c8daaac3f3d733a59f0b71a2b9747cba723c4cd8`:
+
+- exact-head run `35046413999` / job `104637078470` / `SUCCESS`
+
+Both receipts are static facts about prior heads. The IMP-H005 — IMP-H007 final head
+receipt is published in the PR #74 body and the external evidence receipt comment.
+Pull request `#74` remains `OPEN`, non-draft, `MERGEABLE`, unmerged, base
+`main@fecb97b6c9513a6dc0114d22c5e3768017411157`.
+
+## S2A implementation correction delta (IMP-H005 — IMP-H007)
+
+All three HIGH findings were corrected on the same pull request, without widening
+the approved Module 8 scope.
+
+| Finding | Severity | Author-side status |
+|---|---|---|
+| IMP-H005 non-fixture authority and value evidence are not caller-mintable | HIGH | `CLOSED_AUTHOR_SIDE_ONLY` |
+| IMP-H006 bind authority per 1m constituent before aggregation | HIGH | `CLOSED_AUTHOR_SIDE_ONLY` |
+| IMP-H007 benchmark and CI fail closed on every profile | HIGH | `CLOSED_AUTHOR_SIDE_ONLY` |
+
+`CLOSED_AUTHOR_SIDE_ONLY` records that the author-side correction, focused
+adversarial tests and all full gates pass. It is not independent closure and does
+not authorize merge.
+
+### IMP-H005 — canonical non-fixture authority and value binding
+
+- `FeatureAuthorityEvidence` is `init=False` and evaluator-issued through a private
+  attestation; direct construction and `dataclasses.replace` forgery fail closed, so
+  a caller can no longer mint `is_fixture=false` authority with arbitrary
+  `TRUSTED`, DataAuthority, resource or lifecycle material;
+- non-fixture authority is derived only from the canonical S1E
+  `MarketStateSnapshot` plus the governed Module 29 `ResourceAdmissionEvidence`
+  seam, and it binds source, contract, environment and generation identity;
+- `FeatureAuthorityEvidence.from_candle` additionally binds the exact S1F candle
+  value evidence (candle fingerprint, provenance, identity, timeframe, event,
+  knowledge and wall times, OHLCV and native quantity) into
+  `bound_evidence_fingerprint`;
+- a non-REPLAY `FeatureSample` must carry a bound canonical authority whose value
+  evidence fingerprint equals the sample's own recomputed material, so replacing
+  close/high/low/open/quantity/source/contract/generation/timeframe/times/fingerprint
+  on an authoritative sample fails closed instead of retaining the old attestation;
+- `FeatureSample.from_candle` remains the canonical non-fixture adapter and rejects
+  a market-state snapshot whose source, contract, environment or generation does not
+  match the candle;
+- synthetic authority remains available for algorithm tests through the clearly
+  namespaced `fixture` and `fixture_for_candle` constructors, is marked
+  `is_fixture=true`, is REPLAY-only, and is rejected in `PAPER`/`LIVE`/`SHADOW` and
+  on non-REPLAY samples.
+
+### IMP-H006 — per-constituent MTF authority binding
+
+- the single blanket `authority` argument was removed from
+  `align_closed_1m_candles` and `align_candles`; it is replaced by an ordered
+  `authorities` sequence with exactly one canonical binding per CLOSED 1m
+  constituent;
+- every constituent binding is verified for source, contract, environment,
+  generation and exact candle value evidence, so one state can no longer blanket a
+  window and an earlier degraded, unknown or restrictive constituent cannot be
+  hidden by a later trusted one;
+- when no sequence is supplied, REPLAY constituents derive their own synthetic
+  per-constituent authority; an authoritative (non-REPLAY) window without explicit
+  per-constituent authority fails closed;
+- market-state trust, data authority, resource restriction and lifecycle
+  restriction are folded across all exact constituents with the most restrictive
+  value, never upgraded, while analytical validity stays separate;
+- a constituent with `UNKNOWN`, `UNTRUSTED` or `RESYNC_REQUIRED` market truth makes
+  the derived result restrictive and cannot be washed by trusted constituents; a
+  constituent whose trust is `DEGRADED` yields `DEGRADED` only for a complete
+  coherent window;
+- the aligned fingerprint binds the ordered per-constituent authority fingerprints
+  plus the folded authority fingerprint, data-authority state and constituent
+  market-state trust, in the same order as the candle lineage.
+
+### IMP-H007 — fail-closed benchmark and CI gate
+
+- benchmark `correctness` is now `PASS` only when every mandatory invariant,
+  including recursive parity, passes; a parity failure marks that exact profile
+  `correctness=FAIL` and makes the benchmark return non-zero, while
+  `bounded_completion` remains an independent field and is never a substitute for
+  correctness;
+- a single validator (`validate_benchmark_documents`) checks every profile of both
+  consecutive documents: exact profile names `MICRO`, `NOMINAL`, `STRESS` with no
+  duplicates or omissions, frozen cardinalities, feature allowlist, per-profile
+  `recursive_parity=PASS`, zero mismatches, 64-hex parity fingerprint, positive
+  bounded timing/memory metrics, latency shape, and the deterministic projection
+  across the two runs;
+- the CI step now invokes that validator over both generated documents, so a
+  repeatable MICRO or NOMINAL parity failure can no longer stay green;
+- focused mutation-proof tests feed synthetic documents with MICRO parity `FAIL`,
+  then NOMINAL parity `FAIL`, then STRESS parity `FAIL`, and prove the validator
+  rejects both the self-compared and the mixed pair, so a STRESS `PASS` alone
+  cannot make the gate green.
+
+### IMP-H001 — IMP-H004 regression status
+
+All prior corrections remain closed author-side and were re-exercised by the same
+suite: shared batch/series step engine with scale-18 canonical recursive parity,
+evaluator-issued recursive state with identity binding and restore-by-recomputation,
+axis separation, and evaluator-issued aligned evidence. No regression was observed.
+
 
 ## Proof obligations
 
@@ -235,11 +339,11 @@ Profiles remain exactly MICRO/NOMINAL/STRESS with the frozen cardinalities. The
 memory number is a one-contract representative probe; these are baseline
 measurements, not production SLOs or profitability claims.
 
-| Profile | Contracts | Closed 1m/contract | Max window | Feature evals | Warmup | Restrictive | No-lookahead | Recursive parity |
-|---|---:|---:|---:|---:|---:|---:|---:|---|
-| MICRO | 1 | 4,096 | 64 | 8 | 81 | 0 | 1 | PASS (0 mismatches) |
-| NOMINAL | 16 | 8,192 | 256 | 128 | 1,296 | 0 | 16 | PASS (0 mismatches) |
-| STRESS | 32 | 16,384 | 512 | 256 | 2,592 | 96 | 32 | PASS (0 mismatches) |
+| Profile | Contracts | Closed 1m/contract | Max window | Feature evals | Warmup | Restrictive | No-lookahead | Recursive parity | Correctness |
+|---|---:|---:|---:|---:|---:|---:|---:|---|---|
+| MICRO | 1 | 4,096 | 64 | 8 | 81 | 0 | 1 | PASS (0 mismatches) | PASS |
+| NOMINAL | 16 | 8,192 | 256 | 128 | 1,296 | 0 | 16 | PASS (0 mismatches) | PASS |
+| STRESS | 32 | 16,384 | 512 | 256 | 2,592 | 96 | 32 | PASS (0 mismatches) | PASS |
 
 Input manifest hashes (unchanged from the pre-correction baseline):
 
@@ -249,15 +353,19 @@ Input manifest hashes (unchanged from the pre-correction baseline):
 
 Output manifest hashes (regenerated only after the corrected tests passed):
 
-- MICRO: `5d5367a0b6a6769b276a3780cd4d068176fcd02b5e927318f3061f4f3c97e204`
-- NOMINAL: `7a5cc38a7a9051476ea9f5ec1094227ceb05391998c4594eba8da3d05a58599a`
-- STRESS: `91f1cdfcc88ad1e12bb1d61cca25e472da5cd72506fc7d5a298cf530bab0131e`
+- MICRO: `e0ac994cc0bba8d2b61e7c5a68b1949185f239a7ff0700a0719a4563b34def3e`
+- NOMINAL: `3c75c5965c794ad803a6c9c08cce461a4efa973ec3b15d0af7f1ff81cfbe300b`
+- STRESS: `d048b39530cf84e1375cea83654b85b510b95da12a7e18e834e83f2d9cedfeec`
 
 Recursive-path parity fingerprints:
 
-- MICRO: `a941a0aa26c7ec86e919a4168492ad2118bb7d2c1df64a0dc9009e9f71f3ed6d`
-- NOMINAL: `b2e4cb155704b7e282607acff068a296206fa395e358809e3342a37b4e3f9278`
-- STRESS: `35ad4a699c7e1804f836440957a02c988583df4070081826937e4ded293d4b3e`
+- MICRO: `460e4989eb1976b95460de7b07ddcd197f42c99f47593a0374815e1e4dad6965`
+- NOMINAL: `d9d38b0db50c5b690aa3f7e7660a783f0e2d91f15eca34530e5b1d01e1e514ef`
+- STRESS: `874173d0058cd8e462ea5a12bc583dfa887720e1453f1103c3737ae7ba6d84d7`
+
+The output manifest and parity fingerprints changed relative to the IMP-H001 — IMP-H004
+head because authority material now binds per-constituent identity and the folded
+authority fingerprint; the input manifest hashes are unchanged.
 
 The deterministic profile projection (including `recursive_parity`,
 `recursive_parity_fingerprint` and `recursive_parity_mismatches`) was identical
@@ -267,16 +375,17 @@ and mixed-generation (`INVALID`) evidence.
 
 ## Local validation receipt
 
-- `python -m pytest -q apps/backend`: `361 passed`
-- S2A feature tests: `60 passed`
-- coverage: `90.59%` (gate `>= 90%`) over `5333` statements
+- `python -m pytest -q apps/backend`: `381 passed`
+- S2A feature tests: `80 passed` (includes the IMP-H005 — IMP-H007 adversarial matrix)
+- coverage: `90.37%` (gate `>= 90%`) over `5449` statements
 - ruff check on S2A source/tests/scripts: PASS
 - ruff format check on S2A source/tests/scripts: PASS
 - mypy on backend source: `Success: no issues found in 17 source files`
 - backend build: sdist and wheel built
 - pip-audit: no known vulnerabilities
 - S2A negative-capability scan: PASS
-- S2A MICRO/NOMINAL/STRESS benchmark: PASS, deterministic projection equal
+- S2A MICRO/NOMINAL/STRESS benchmark: PASS twice, validator PASS (per-profile parity,
+  cardinality, latency shape and deterministic projection across both runs)
 - frontend prior-stage gates: typecheck PASS, 13 tests PASS, lint PASS,
   generated-format PASS, build PASS, audit 0 vulnerabilities
 - `git diff --check`: clean
