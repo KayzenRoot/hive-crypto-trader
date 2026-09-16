@@ -1,55 +1,72 @@
-# UADS GEF V1 HEDS Delta Review Protocol — HCT
+# GEF Bootstrap V1.0.0 Universal Exact-Head Delta Review Protocol — HCT
 
 Status: `GOVERNED_CANDIDATE`
-Review mode: `HEDS_DELTA`
+Review mode: `GEF_EXACT_HEAD_DELTA`
 
 ## Pipeline
 
-`ANALYZE DELTA -> SOURCE CHECK -> INVALIDATED PROOFS -> SEMANTIC REVIEW -> GATE RECEIPTS -> EXACT-HEAD VERDICT`
+`LOCK BASE/HEAD → SOURCE CHECK → SCOPE/PRESERVATION AUDIT → INVALIDATED PROOFS → SEMANTIC DELTA REVIEW → GATE RECEIPTS → EXACT-HEAD VERDICT`
 
-## First candidate of an increment
+## First candidate
 
-The first review may inspect the full authorized delta, architecture boundary, evidence model and mandatory gate set.
+Review the complete authorized delta, source hierarchy, architecture/security boundary, evidence model, preservation constraints and mandatory gate set.
 
-## Subsequent correction reviews
+## Correction candidates
 
-Reviews become delta-first:
-1. lock exact base/head;
-2. compare against the last reviewed head;
-3. identify byte-identical files and changed validity inputs;
-4. carry forward only proofs whose complete dependency fingerprints remain compatible;
-5. invalidate affected proofs;
-6. inspect the semantic delta and newly invalidated areas;
-7. combine with current exact-head gate receipts;
-8. issue the governed verdict.
+Subsequent review is delta-first:
+1. bind the exact base/head and prior reviewed head;
+2. identify the correction delta;
+3. determine which prior proofs remain byte/validity compatible;
+4. invalidate affected proofs;
+5. review changed and invalidated semantic areas;
+6. combine only with current exact-head mandatory receipts;
+7. issue a fresh verdict.
 
-Accepted findings are not reopened without a new delta/validity change that invalidates their proof.
+Accepted findings are not reopened without a material validity change, but authorization itself is never carried forward.
 
-## Proof validity
+## Proof reuse
 
-A proof may be marked `CARRY_FORWARD` only when all material inputs match, including where relevant source file hashes/symbol hashes, contract/schema hashes, test code, toolchain/lockfiles, workflow/config/policy, OS/platform and canonical checkpoint/authorization state.
+A proof may be informative `CARRY_FORWARD` only when all material validity inputs still match, including source/symbol hashes where relevant, contracts/schemas, test code, toolchain/lockfiles, workflow/config/policy, platform and canonical checkpoint/authorization state.
 
 Otherwise mark `INVALIDATED`.
 
-During Shadow Assurance, carry-forward is informational and does not skip HCT-required hosted gates.
+While Shadow Assurance is ON, proof reuse never skips a mandatory HCT hosted gate.
 
-## Review concurrency
+## Preservation review
 
-HEDS semantic delta review may begin while CI runs. Final APPROVED status still waits for every mandatory exact-head A3 gate.
+For BROWNFIELD work, explicitly verify:
+- user work preserved;
+- no unauthorized rename/reorganization;
+- existing tests/CI/security not weakened;
+- no fabricated history/evidence;
+- no hidden scope expansion;
+- active unrelated PRs untouched.
 
 ## Verdicts
 
-Use the project-governed verdicts:
+Exactly one:
 - `APPROVED`
 - `CORRECTION REQUIRED`
 - `BLOCKED`
 
-For HCT HIGH_ASSURANCE, APPROVED requires unresolved CRITICAL=0 and HIGH=0 plus all required exact-head receipts.
+For HCT approval:
+- candidate SHA explicit;
+- mandatory exact-head checks complete and successful;
+- unresolved CRITICAL=0;
+- unresolved HIGH=0;
+- no scope/evidence/preservation/stale-head mismatch;
+- required review independence satisfied.
 
-## Receipt rule
+Any head change invalidates the approval for the new head.
 
-Run IDs/check results belong in PR comments/checks/artifacts or other external receipts. Avoid evidence-only commits that change the head after the gate was produced.
+## Independent review
 
-## Security
+Independence is governed by HCT policy. The review stream must reconstruct its verdict from repository evidence and not merely reuse the authoring stream's conclusion. Same GitHub account alone does not determine independence.
 
-HEDS Delta never carries forward authorization itself. A changed checkpoint, authorization scope, ceiling, secret policy or live/deployment gate automatically invalidates affected security/authority proofs.
+## Receipts
+
+External gate/review IDs belong in PR comments/checks/artifacts or separately governed post-merge promotion records. Avoid source commits whose only purpose is to store a CI run ID and thereby invalidate the head just tested.
+
+## Security/authority invalidation
+
+A changed checkpoint, authorization scope/ceiling, secret policy, deployment/live gate, or material security policy invalidates affected security/authority proofs automatically.

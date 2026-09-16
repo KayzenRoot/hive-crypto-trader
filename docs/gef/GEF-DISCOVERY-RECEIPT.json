@@ -1,0 +1,89 @@
+{
+  "schemaVersion": "GEF_REPOSITORY_DISCOVERY_RECEIPT_V1",
+  "workOrder": "HCT-GEF-ADOPT-0002",
+  "capturedAt": "2026-09-16",
+  "sourceArtifact": {
+    "name": "GEF-V1-UNIVERSAL-ADOPTION-PROMPT.pdf",
+    "sha256": "af1de7df4db966f1109992741191b58d3daccaa7d42a4bff218aaa63e80dc2f3"
+  },
+  "repository": {
+    "fullName": "KayzenRoot/hive-crypto-trader",
+    "repositoryId": 1366643720,
+    "visibility": "public",
+    "defaultBranch": "main",
+    "observedHead": "9e6014472df7723b21f9a1d7ab2aa207ac714ccc",
+    "branchProtectionObserved": false
+  },
+  "classification": "BROWNFIELD",
+  "currentCanonicalState": {
+    "checkpoint": "HCT-CP-0035",
+    "status": "IMPLEMENTATION_AUTHORIZED_S2B",
+    "riskClass": "HIGH_ASSURANCE",
+    "activeAuthorizedIncrement": "HCT-IMP-0011-S2B",
+    "activeImplementationPr": 78,
+    "implementationIssue": 77,
+    "authorizationCeiling": "NON_TRADING_STAGE_2_CANDLESTICK_PATTERN_FOUNDATION_ONLY",
+    "productionCredentialsAuthorized": false,
+    "productionDeploymentAuthorized": false,
+    "limitedLiveAuthorized": false,
+    "liveTradingAuthorized": false
+  },
+  "observedStructure": {
+    "sourceHierarchy": "docs/00-source-hierarchy.md",
+    "checkpointDoc": "docs/11-checkpoint.md",
+    "checkpointStore": "checkpoints/",
+    "decisions": "docs/10-decisions-ledger.md + adr/",
+    "scope": "docs/03-scope.md",
+    "requirements": "frozen composite baseline under docs/99-101 and manifest references",
+    "definitionOfDone": "docs/09-definition-of-done.md",
+    "architecture": "docs/04-architecture.md",
+    "security": "docs/05-security.md",
+    "testPlan": "docs/06-test-benchmark-plan.md",
+    "deployment": "docs/07-deployment.md",
+    "backlog": "docs/08-backlog.md",
+    "workOrders": "work-orders/",
+    "evidence": "evidence/",
+    "githubWorkflows": ".github/workflows/",
+    "promptPolicy": "docs/104-chat-delivery-and-prompt-artifact-policy.md",
+    "existingGef": "docs/gef/"
+  },
+  "toolchain": {
+    "backend": "Python 3.12 / uv / pytest / Ruff / mypy / build / pip-audit",
+    "frontend": "TypeScript / npm / React / Vite / Vitest / ESLint / Prettier"
+  },
+  "discoveryFindings": [
+    {
+      "id": "DISC-001",
+      "severity": "HIGH",
+      "finding": "Legacy GEF-CURRENT/PROJECT-PROFILE still describe the 2026-09-12 S0C adoption state and are stale relative to CP0035."
+    },
+    {
+      "id": "DISC-002",
+      "severity": "HIGH",
+      "finding": "gef-adoption-governance.yml hardcodes the obsolete first-adoption base and active S0C assumptions, so it cannot validate a Universal V1.0.0 upgrade from current main."
+    },
+    {
+      "id": "DISC-003",
+      "severity": "MEDIUM",
+      "finding": "docs/12 still states user-facing MD+PDF prompt delivery while the later governed docs/104 policy requires complete prompts to be PDF-only."
+    },
+    {
+      "id": "DISC-004",
+      "severity": "INFO",
+      "finding": "Existing GEF proof/test-impact/cache assets can be preserved as compatibility/shadow artifacts but old validity inputs must not be treated as current exact-head proof."
+    },
+    {
+      "id": "DISC-005",
+      "severity": "INFO",
+      "finding": "Open PR #78 is active HIGH_ASSURANCE S2B work and must remain outside this governance upgrade patch."
+    }
+  ],
+  "capabilityGaps": [
+    {
+      "id": "CAP-001",
+      "capability": "enforced branch protection on main",
+      "observed": false,
+      "treatment": "Record only; do not invent protection. Existing exact-head PR workflows and independent review remain required by HCT governance."
+    }
+  ]
+}

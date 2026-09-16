@@ -1,47 +1,89 @@
-# UADS GEF V1 Execution Protocol — HCT
+# GEF Bootstrap V1.0.0 Universal Execution Protocol — HCT
 
 Status: `GOVERNED_CANDIDATE`
 
-## Pipeline
+## Canonical lifecycle
 
-`REQUEST -> Source Drift Sentinel -> Task Class -> Context Radius -> UPIR/Task Manifest -> Decision Freeze Capsule -> Context Slice -> Patch Recipe -> Budgets -> SOURCE_MATCH -> bounded executor -> A0/A1/A2 -> one final publication -> A3 hosted gates + HEDS Delta -> exact-head verdict`
+`ANALYZE → SOURCE CHECK → NEXT NECESSARY INCREMENT → WORK ORDER → CONTEXT LOCK → PREFLIGHT → EXECUTOR → TESTS/EVIDENCE → PR → EXACT-HEAD AUDIT → CHECKPOINT DELTA → MERGE → NEXT`
 
-## Prompt-pack header
+No step grants authority beyond the current HCT checkpoint and Work Order.
 
-Every new implementation/correction prompt SHALL state project/repository, Work Order, PR/branch/base/head, task class, context radius, assurance level and prompt compiler version.
+## Source Check
 
-For HCT, the full executable pack remains a downloadable PDF.
+Before mutation establish:
+- repository identity;
+- canonical branch and exact base/head;
+- current checkpoint/production state;
+- applicable decisions, scope, frozen requirements, DoD, architecture and security policy;
+- current Work Order;
+- active PRs that must be preserved;
+- allowed patch surface;
+- capability gaps and source drift.
 
-## Required pack sections
+Mismatch produces `SOURCE_CONFLICT`.
 
-1. `ACCEPTED_AND_FROZEN`
-2. `OPEN_GOAL` or `ONLY_OPEN_FINDING`
-3. `ROOT_CAUSE / ENGINEERING_DECISION`
-4. `PATCH_MAP`
-5. `PRESCRIBED_ALGORITHM`
-6. `FORBIDDEN_SHORTCUTS`
-7. `REQUIRED_TESTS`
-8. `SEARCH_BUDGET`
-9. `PATCH_BUDGET`
-10. `RETRY_BUDGET`
-11. `LOCAL_ASSURANCE`
-12. `PUBLICATION`
-13. `MACHINE_OUTPUT`
-14. `STOP_CONDITION`
+## Work Order
 
-## SOURCE_MATCH
+Use one stable ID through branch, PR, evidence, corrections and checkpoint delta. Required semantics are governed by `docs/12-work-order-prompt-contract.md`.
 
-Before mutation the executor must prove repository identity, expected base/head/branch, checkpoint and Work Order identity, relevant frozen source versions and absence of unexpected drift in the allowed patch surface.
+## Context Lock
 
-Failure becomes `SOURCE_CONFLICT` or `BLOCKED_EVIDENCE`; it is not permission to explore broadly.
+Compile the smallest safe executor context. Use, when helpful:
+- Implementation Seed Tree;
+- File Intent Capsule;
+- Brownfield Patch Intent Capsule;
+- Executor Navigation Map;
+- Decision Closure Capsule;
+- Execution Waves;
+- Validation Reuse Plan;
+- Critical Path;
+- Marathon Execution Pack.
 
-## Correction Pack default
+The executor must not reconstruct frozen architecture from chat memory when the repository already contains authoritative sources.
 
-Small corrections should default to task class `T1` or `T2`, context radius `C0` or `C1`, 1–3 source files and 1–3 test files unless evidence requires expansion, a small search budget, one causal retry per failure mode before escalation and one final push when feasible.
+## Preflight
 
-## One-shot publication
+Verify:
+- `SOURCE_MATCH`;
+- exact expected Git identity;
+- no unauthorized dirty/candidate drift;
+- required tools/commands known;
+- test/evidence plan appropriate to risk;
+- rollback/recovery understood;
+- no product/live authorization widening.
 
-The executor should locally reach `COMPLETE_CANDIDATE`, then publish one final candidate push whenever practical. Gate receipts are attached outside source HEAD through GitHub checks/comments/artifacts.
+## Executor
+
+Mutate only the Work Order allowlist. Prefer bounded, causal changes and one final publication when practical. Stop rather than broaden scope silently.
+
+## Tests/Evidence
+
+Validation expands by risk:
+1. structural/static;
+2. focused;
+3. impacted dependencies;
+4. boundary/integration;
+5. risk-expansion;
+6. full candidate when required;
+7. hosted exact-head checks.
+
+Evidence binds Work Order, candidate SHA, commands/checks, results, failures/corrections, security observations and remaining risks. External run IDs stay in checks/comments/artifacts where possible.
+
+## PR and exact-head audit
+
+The PR must identify base/head, Work Order, scope, evidence and STOP condition.
+
+Final approval is prohibited until mandatory exact-head checks complete and the required independent review returns a verdict for that same head. Any head change requires re-audit.
+
+## Checkpoint Delta / Merge / Next
+
+The executor may propose a Checkpoint Delta but must not self-promote canonical truth where HCT requires independent approval.
+
+After approved merge:
+- verify default-branch state;
+- promote only the reviewed checkpoint/current-state delta;
+- compute the next legal increment from canonical truth;
+- generate the next PDF handoff in the same user-facing response when deterministic and authorized.
 
 ## STOP states
 
@@ -50,9 +92,9 @@ The executor should locally reach `COMPLETE_CANDIDATE`, then publish one final c
 - `SCOPE_EXPANSION_REQUIRED`
 - `BLOCKED_EVIDENCE`
 - `NEEDS_ARCHITECTURE`
+- `GEF_ADOPTION_EXACT_HEAD_EVIDENCE_REQUIRED`
+- `GEF_ADOPTION_BLOCKED_BY_CAPABILITY_GAP`
 
-The executor must not silently expand context or scope after a STOP state.
+## HCT execution firewall
 
-## HCT-specific execution firewall
-
-GEF does not alter HCT's authorization model. An executor can only mutate product code when the current canonical checkpoint explicitly authorizes that exact Work Order/scope/ceiling.
+Product code may be changed only when the current canonical checkpoint explicitly authorizes the exact Work Order and ceiling. GEF adoption itself does not grant product authority.

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "GEF_COLLISION_MAP_V1",
+  "workOrder": "HCT-GEF-ADOPT-0002",
+  "repository": "KayzenRoot/hive-crypto-trader",
+  "classification": "BROWNFIELD",
+  "entries": [
+    {"logicalNeed":"Project master/current state","existing":["docs/11-checkpoint.md","checkpoints/"],"classification":"EXISTS_PROJECT_AUTHORITY","action":"Reuse HCT checkpoint/current-state authority; do not create parallel project-state authority."},
+    {"logicalNeed":"Scope/requirements/architecture/DoD","existing":["docs/03-scope.md","docs/99-r12-frozen-requirements-baseline.md","docs/04-architecture.md","docs/09-definition-of-done.md"],"classification":"EXISTS_PROJECT_AUTHORITY","action":"Map and preserve."},
+    {"logicalNeed":"Decisions/ADRs","existing":["docs/10-decisions-ledger.md","adr/"],"classification":"EXISTS_PROJECT_AUTHORITY","action":"Map and preserve."},
+    {"logicalNeed":"Work Orders","existing":["work-orders/"],"classification":"EXISTS_COMPATIBLE","action":"Keep existing path and upgrade contract semantics rather than create .engineering/work-orders."},
+    {"logicalNeed":"Evidence","existing":["evidence/"],"classification":"EXISTS_COMPATIBLE","action":"Keep existing path; bind to exact head and external gate receipts."},
+    {"logicalNeed":"Context Locks","existing":["evidence/*-CONTEXT-LOCK.md","Work Order contracts"],"classification":"EXISTS_COMPATIBLE","action":"Continue existing pattern; universal GEF adds the Context Lock acceleration capsule vocabulary."},
+    {"logicalNeed":"Review/audits","existing":["docs/gef/GEF-REVIEW-PROTOCOL.md","GitHub independent review comments/checks"],"classification":"EXISTS_NEEDS_MERGE","action":"Upgrade to universal exact-head semantics while retaining HEDS Delta compatibility."},
+    {"logicalNeed":"GEF current/adoption state","existing":["docs/gef/GEF-ADOPTION.md","docs/gef/GEF-CURRENT.json","docs/gef/GEF-PROJECT-PROFILE.json"],"classification":"EXISTS_NEEDS_MERGE","action":"Refresh stale S0C-era fields and version to GEF Bootstrap V1.0.0 Universal."},
+    {"logicalNeed":"Prompt delivery","existing":["docs/12-work-order-prompt-contract.md","docs/104-chat-delivery-and-prompt-artifact-policy.md","prompts/README.md"],"classification":"COLLISION","action":"Resolve in favor of governed docs/104 PDF-only complete prompt delivery; keep repository Work Orders as Markdown canonical source."},
+    {"logicalNeed":"GEF adoption CI","existing":[".github/workflows/gef-adoption-governance.yml"],"classification":"EXISTS_NEEDS_MERGE","action":"Rebind to the current upgrade base and validate the bounded governance-only upgrade surface."},
+    {"logicalNeed":"Native Deterministic Work Plane runtime","existing":[],"classification":"DEFER","action":"No runtime automation added by this upgrade. Separate governed increment required if ROI and architecture justify it."},
+    {"logicalNeed":"Parallel .engineering tree","existing":[],"classification":"NOT_APPLICABLE","action":"Do not duplicate established HCT governance paths."}
+  ],
+  "preservationPlan": {
+    "runtimeCodeTouched": false,
+    "activePr78Touched": false,
+    "checkpointPromotedByCandidate": false,
+    "frozenRequirementsChanged": false,
+    "authorizationScopeChanged": false,
+    "productionAuthorityChanged": false
+  }
+}

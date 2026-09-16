@@ -1,50 +1,50 @@
 {
-  "schemaVersion": "GEF_CURRENT_V1",
-  "gefVersion": "UADS-GEF-V1",
-  "migrationState": "ADOPTION_PR_PENDING_REVIEW",
-  "baselineHead": "29dc6636360953941a7e4fb41a0876c5bc46dcd6",
-  "adoptionIssue": 43,
-  "adoptionPr": 44,
-  "adoptionBranch": "governance/UADS-GEF-V1-adoption",
-  "currentPromptMode": "GEF_V1",
-  "currentReviewMode": "HEDS_DELTA",
+  "schemaVersion": "GEF_CURRENT_V1_0_0",
+  "gefVersion": "GEF-BOOTSTRAP-V1.0.0-UNIVERSAL",
+  "migrationState": "UNIVERSAL_V1_UPGRADE_CANDIDATE_PENDING_EXACT_HEAD_REVIEW",
+  "adoptionWorkOrder": "HCT-GEF-ADOPT-0002",
+  "adoptionIssue": 79,
+  "adoptionBase": "9e6014472df7723b21f9a1d7ab2aa207ac714ccc",
+  "adoptionBranch": "governance/HCT-GEF-ADOPT-0002-universal-v1",
+  "sourceArtifact": {
+    "name": "GEF-V1-UNIVERSAL-ADOPTION-PROMPT.pdf",
+    "sha256": "af1de7df4db966f1109992741191b58d3daccaa7d42a4bff218aaa63e80dc2f3"
+  },
+  "projectClassification": "BROWNFIELD",
+  "currentPromptMode": "GEF_BOOTSTRAP_V1_UNIVERSAL",
+  "currentReviewMode": "GEF_EXACT_HEAD_DELTA",
   "shadowAssurance": "ON",
-  "lastIndependentlyApprovedImplementation": {
-    "workOrder": "HCT-IMP-0002-S0B",
-    "head": "38d697419e9ad1cabda293b6b9c090314e94f862",
-    "checkpoint": "HCT-CP-0018"
+  "canonicalCheckpoint": {
+    "id": "HCT-CP-0035",
+    "status": "IMPLEMENTATION_AUTHORIZED_S2B",
+    "riskClass": "HIGH_ASSURANCE"
   },
-  "activeWork": {
-    "workOrder": "HCT-IMP-0003-S0C",
-    "issue": 41,
-    "pullRequest": 42,
-    "baseSha": "29dc6636360953941a7e4fb41a0876c5bc46dcd6",
-    "headSha": "f41262a53a59295fecbe3506e774a9b8592ad0cb",
-    "status": "OPEN_UNMERGED",
-    "authorEvidence": {
-      "s0cQualityRun": 34699046327,
-      "s0aRegressionRun": 34699046325
-    },
-    "independentReview": "PENDING"
+  "activeProductWork": {
+    "workOrder": "HCT-IMP-0011-S2B",
+    "issue": 77,
+    "pullRequest": 78,
+    "status": "OPEN_UNMERGED_INDEPENDENT_REVIEW_REQUIRED"
   },
-  "openFindings": [
+  "authorityFirewall": {
+    "implementationAuthorizationScope": ["HCT-IMP-0011-S2B"],
+    "ceiling": "NON_TRADING_STAGE_2_CANDLESTICK_PATTERN_FOUNDATION_ONLY",
+    "productionCredentialsAuthorized": false,
+    "productionDeploymentAuthorized": false,
+    "limitedLiveAuthorized": false,
+    "liveTradingAuthorized": false
+  },
+  "legacyCompatibility": {
+    "previousGefVersion": "UADS-GEF-V1",
+    "hedsDeltaCompatible": true,
+    "proofCarryForwardAuthoritative": false,
+    "legacyBaselineHistoricalOnly": true
+  },
+  "capabilityGaps": [
     {
-      "id": "GEF-GAP-001",
-      "severity": "MEDIUM",
-      "subject": "Historical slice workflows may trigger on later backend changes and fail stale base assertions",
-      "action": "Address in separate CI-governance increment; do not modify active PR #42 from adoption PR"
-    },
-    {
-      "id": "GEF-GAP-002",
-      "severity": "LOW",
-      "subject": "Historical token/search/files-opened/executor-seconds telemetry unavailable",
-      "action": "Start collection from next GEF Work Order"
+      "id": "CAP-001",
+      "subject": "main branch protection observed disabled at adoption baseline",
+      "treatment": "do not invent enforcement; exact-head PR checks and independent review remain governed requirements"
     }
   ],
-  "caches": {
-    "failureFingerprintCache": "docs/gef/GEF-KNOWLEDGE-CACHE.json",
-    "negativeCapabilityCache": "docs/gef/GEF-KNOWLEDGE-CACHE.json",
-    "architectureQuestionCache": "docs/gef/GEF-KNOWLEDGE-CACHE.json"
-  },
-  "nextAction": "Independently review PR #44 and merge only after exact-head adoption governance passes; keep PR #42 on its existing HCT review path."
+  "nextAction": "Open the bounded universal-adoption PR, obtain exact-head gef-adoption-governance success, then require a fresh independent review of that exact head before merge."
 }

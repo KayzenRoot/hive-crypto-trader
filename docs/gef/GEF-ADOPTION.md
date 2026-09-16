@@ -1,100 +1,95 @@
-# UADS GEF V1 Adoption — Hive Crypto Trader
+# GEF Bootstrap V1.0.0 Universal Adoption — Hive Crypto Trader
 
-Status: `PREPARED_PENDING_INDEPENDENT_REVIEW`
-GEF version: `UADS-GEF-V1`
-Project mode: `PARTIALLY_GOVERNED`
-Project fingerprint: `sha256:28ad059f859668b3447b58db4f45ecc09111b79d886f83ec60000b2ad72162bc`
-Baseline head: `main@29dc6636360953941a7e4fb41a0876c5bc46dcd6`
-Adoption branch: `governance/UADS-GEF-V1-adoption`
-Adoption issue: `#43`
-Adoption PR: `#44`
-Active functional work preserved: `PR #42 / Issue #41 / implementation/HCT-IMP-0003-S0C`
+Status: `UPGRADE_CANDIDATE_PENDING_EXACT_HEAD_REVIEW`
+GEF version: `GEF-BOOTSTRAP-V1.0.0-UNIVERSAL`
+Project classification: `BROWNFIELD`
+Adoption Work Order: `HCT-GEF-ADOPT-0002`
+Adoption Issue: `#79`
+Adoption base: `main@9e6014472df7723b21f9a1d7ab2aa207ac714ccc`
+Active product work preserved: `PR #78 / Issue #77 / HCT-IMP-0011-S2B`
+Source artifact SHA-256: `af1de7df4db966f1109992741191b58d3daccaa7d42a4bff218aaa63e80dc2f3`
 
 ## Purpose
 
-Adopt UADS GEF V1 as a process, prompt-compilation, evidence and delta-review layer without replacing or weakening HCT's existing governance.
+Upgrade HCT's previously merged `UADS-GEF-V1` overlay to the universal GEF Bootstrap V1.0.0 model while preserving all stricter HCT governance and all active user work.
 
-GEF is subordinate to the canonical HCT source hierarchy. It does not authorize product work, change a Work Order, change a checkpoint, widen an authorization ceiling, or convert an unknown state into allow.
+The universal GEF layer optimizes discovery, Context Lock compilation, Work Order execution, evidence and delta review. It is subordinate to the HCT source hierarchy and cannot authorize product work, change checkpoint authority, widen a Work Order, or grant production/live authority.
 
-## Classification
+## Brownfield result
 
-`PARTIALLY_GOVERNED`
+HCT is not reshaped into a template. Existing canonical structures are reused:
 
-HCT already has checkpoints, frozen requirements, Work Orders, ADRs, exact-head CI, independent HIGH_ASSURANCE review, bounded implementation authorization and PDF-only executor prompts. GEF adds task classification, context-radius control, budget governors, Machine Evidence, proof carry-forward/invalidation, HEDS Delta review, telemetry and deterministic-work-plane contracts.
+- checkpoint/current state: `docs/11-checkpoint.md` + `checkpoints/`;
+- decisions: `docs/10-decisions-ledger.md` + `adr/`;
+- scope/requirements/DoD/architecture/security: existing governed docs;
+- Work Orders: `work-orders/`;
+- evidence/context locks: `evidence/`;
+- exact-head CI: `.github/workflows/`;
+- user-facing handoff: `docs/104-chat-delivery-and-prompt-artifact-policy.md`.
 
-## Preserved canonical process
+No parallel `.engineering/` tree is introduced.
 
-- Default branch: `main`.
-- Canonical baseline at adoption start: `29dc6636360953941a7e4fb41a0876c5bc46dcd6`.
-- Current checkpoint at adoption start: `HCT-CP-0019 / IMPLEMENTATION_AUTHORIZED_S0C`.
-- Existing source hierarchy remains authoritative.
-- `docs/104-chat-delivery-and-prompt-artifact-policy.md` remains authoritative and keeps complete executor/reviewer prompts PDF-only.
-- Existing HIGH_ASSURANCE rule remains: exact-head gates plus independent review before governed merge/promotion.
-- Active PR #42 remains untouched by this adoption PR.
-- Existing production credential, deployment, limited-live and live-trading authorization flags are not changed by GEF adoption.
+## Universal operating loop
 
-## Immediate GEF operating mode
+`ANALYZE → SOURCE CHECK → NEXT NECESSARY INCREMENT → WORK ORDER → CONTEXT LOCK → PREFLIGHT → EXECUTOR → TESTS/EVIDENCE → PR → EXACT-HEAD AUDIT → CHECKPOINT DELTA → MERGE → NEXT`
 
-New prompt and correction artifacts SHALL use task classes `T0/T1/T2/T3`, context radius `C0..C4`, Decision Freeze Capsule, Context Slice, Patch Map/Patch Recipe, explicit Search/Patch/Retry budgets, `SOURCE_MATCH`, A0/A1/A2 local assurance, A3 hosted gates, compact Machine Evidence, exact-head HEDS Delta review and governed STOP states.
-
-Current prompt mode: `GEF_V1`
-Current review mode: `HEDS_DELTA`
+Current prompt mode: `GEF_BOOTSTRAP_V1_UNIVERSAL`
+Current review mode: `GEF_EXACT_HEAD_DELTA`
 Shadow Assurance: `ON`
 
-Shadow Assurance means GEF may reduce prompt/context/report overhead immediately, but test skipping and proof carry-forward are advisory only until enough shadow cycles prove no loss of assurance.
+HEDS Delta concepts from the first adoption remain compatible, but the universal lifecycle and exact-head acceptance contract are now the umbrella model.
 
-## Existing-to-GEF compatibility map
+## Preserved HCT invariants
 
-| Existing HCT mechanism | GEF mapping |
-|---|---|
-| checkpoint/latest + docs/11 | Source Drift Sentinel / Current State |
-| Work Order | UPIR / Task Manifest |
-| ADR / Decisions Ledger | Decision Freeze Capsule |
-| bounded changed-file surface | Patch Map + Patch Budget |
-| exact-head workflows | A3 Gate Receipts |
-| evidence markdown | Human projection of Machine Evidence |
-| independent HIGH_ASSURANCE review | A4 / HEDS semantic assurance |
-| correction review cycles | HEDS Delta + invalidated proofs |
-| PDF-only prompt policy | GEF Execution/Correction Pack delivered as PDF |
+- Source hierarchy remains authoritative.
+- Complete executor/reviewer prompts remain PDF-only for user-facing delivery.
+- HIGH_ASSURANCE changes retain exact-head hosted gates plus independent review.
+- Proof carry-forward/test skipping remains advisory while Shadow Assurance is ON.
+- `UNKNOWN -> ALLOW` is forbidden.
+- Production credentials/deployment/limited-live/live trading remain separately governed.
+- Active product PR #78 is outside the adoption patch.
+- Current checkpoint remains `HCT-CP-0035` until a separately reviewed post-merge delta is promoted.
 
-## Adoption Gap Matrix
+## Discovery/collision receipts
 
-| CURRENT | TARGET | MIGRATION ACTION | RISK | OWNER |
-|---|---|---|---|---|
-| Work Orders are detailed but prompt packs can repeat repository history | Compiled GEF Execution/Correction Packs | Use task class, context radius, frozen decisions and bounded patch recipe in all new prompts | LOW | ChatGPT/HEDS |
-| Exact-head CI exists | Gate Receipt model | Record exact-head run/check outside source head and reference it from Machine Evidence/HEDS | LOW | HEDS/GitHub |
-| Evidence mostly narrative Markdown | Machine Evidence first | Introduce GEF evidence schema; keep human report as derived view | MEDIUM | Executor/HEDS |
-| Review is rigorous but often full re-read | HEDS Delta | First review broad; later reviews delta-first with proof invalidation | MEDIUM | HEDS |
-| No formal proof dependency map | Proof Map | Start conservative map; all carry-forward remains shadow-only initially | MEDIUM | HEDS |
-| No source-to-test impact manifest | Test Impact Map | Seed from current workflows/tests; keep inference conservative | MEDIUM | Engineering |
-| No deterministic budget governor | Search/Patch/Retry budgets | Require budgets in new prompt packs; stop on material overrun | LOW | Prompt compiler |
-| No native DWP runtime | Deterministic Work Plane | Start with contracts/manifests only; add scripts later in a separate governed increment when ROI is proven | LOW | Future GEF automation |
-| No measured token/time baseline | Telemetry baseline with UNKNOWN fields | Record known CI/test data and mark unavailable metrics UNKNOWN; start collection next Work Order | LOW | Runtime/executor |
-| Historical workflow path filters can trigger stale slice gates | Impact-aware hosted gates | Track as explicit gap; do not rewrite active S0C in adoption PR | MEDIUM | Future CI governance |
+- `docs/gef/GEF-DISCOVERY-RECEIPT.json`
+- `docs/gef/GEF-COLLISION-MAP.json`
+- `docs/gef/GEF-V1-UNIVERSAL-ADOPTION-CONTRACT.md`
 
-## Native DWP decision
+The key upgrade gaps discovered were stale legacy GEF current/profile state, an obsolete old-adoption CI base, a docs/12 vs docs/104 delivery contradiction, and stale proof/cache validity inputs.
 
-No native DWP script is added in this adoption PR. That would add automation behavior while PR #42 is active and could expand scope unnecessarily. Contracts for Machine Evidence, proof validity, budgets and receipts are prepared now. Native automation is a separate future governed increment.
+## Capability gap
 
-## GEF ADOPTION RESULT
+`main` was observed without enforced branch protection at the adoption baseline. This is recorded as a capability gap. The migration does not claim protection exists and does not weaken existing PR/exact-head/independent-review policy.
 
-project: `Hive Crypto Trader`
-mode: `PARTIALLY_GOVERNED`
-projectFingerprint: `sha256:28ad059f859668b3447b58db4f45ecc09111b79d886f83ec60000b2ad72162bc`
-baselineHead: `29dc6636360953941a7e4fb41a0876c5bc46dcd6`
-adoptionBranch: `governance/UADS-GEF-V1-adoption`
-pr: `#44`
-filesCreated: `docs/gef/* plus .github/workflows/gef-adoption-governance.yml`
-filesAdapted: `none; existing canonical files preserved`
-currentPromptMode: `GEF_V1`
-currentReviewMode: `HEDS_DELTA`
-shadowAssurance: `ON`
-existingGates: `planning-freeze governance; implementation authorization gates; s0a-quality; s0b-quality; active s0c-quality`
-gaps: `native DWP not yet implemented; token/search/time telemetry unavailable historically; proof carry-forward not yet authoritative; historical workflow impact filters require later cleanup`
-risks: `proof reuse must stay shadow-only; GEF must not override HCT authorization/checkpoint semantics`
-nextAction: `independently review PR #44; merge only after exact-head GEF adoption governance passes; keep PR #42 on its existing review path`
-status: `READY_WITH_GAPS`
+## Compatibility with legacy GEF assets
+
+The following legacy assets remain usable as compatibility/shadow inputs only where their validity inputs still match:
+
+- `GEF-PROOF-MAP.json`
+- `GEF-TEST-IMPACT.json`
+- `GEF-KNOWLEDGE-CACHE.json`
+- `GEF-EVIDENCE-SPEC.md`
+
+Old baseline facts are historical evidence, not current exact-head proof.
+
+## Adoption acceptance gate
+
+The upgrade may merge only when:
+
+1. the PR base remains the locked adoption base;
+2. the changed paths remain within the Work Order allowlist;
+3. all required JSON and GEF artifacts validate;
+4. exact-head `gef-adoption-governance` succeeds;
+5. independent review of that exact head returns `APPROVED`;
+6. unresolved CRITICAL=0 and HIGH=0;
+7. no product/runtime/checkpoint/frozen-requirement drift exists.
+
+After merge, verify the default branch and promote only a separately reviewed governance/current-state delta. The S2B product authorization must not be consumed or widened by GEF adoption.
 
 ## STOP CONDITION
 
-This adoption is complete for preparation when the docs/governance PR is open, exact-head adoption checks pass, active functional work remains untouched, and independent review is requested. Do not merge this structural adoption without HCT review/gates.
+Current candidate state: `GEF_ADOPTION_EXACT_HEAD_EVIDENCE_REQUIRED`.
+
+Finished state is only:
+`GEF_V1_ADOPTED_READY_FOR_GOVERNED_DEVELOPMENT`.
