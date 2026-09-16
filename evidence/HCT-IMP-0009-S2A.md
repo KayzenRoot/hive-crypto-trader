@@ -16,7 +16,9 @@ trading.
 - implementation pull request: `#74`, kept OPEN and UNMERGED
 - `previousHead=a942cb0b02fdb6351ea4e3c0a53854279ab21366` (reviewed head that returned
   `CORRECTION REQUIRED / CRITICAL 0 / HIGH 4`)
-- `finalHead`: recorded by the exact-head pull request CI and PR metadata below
+- `correctedImplementationHead=4715b06fc1aafba87ead686655f5231d3f3f8b04` (head that
+  carries the IMP-H001 — IMP-H004 corrections and passed a fresh exact-head run)
+- `finalHead`: the exact-head pull request CI and PR #74 metadata below
 - source context lock: `evidence/HCT-IMP-0009-S2A-CONTEXT-LOCK.md`
 - frozen source identities: 9/9 PASS
 - changed files: exactly the eight authorized S2A paths
@@ -179,6 +181,19 @@ Correction:
   available constituents and the evaluation boundary deterministically;
 - resource-degraded complete aligned evidence stays analytically `VALID` while
   carrying a separate restrictive resource axis.
+
+## Exact-head CI receipt
+
+- corrected implementation head: `4715b06fc1aafba87ead686655f5231d3f3f8b04`
+- exact-head run: `35046100856`
+- exact-head job: `104636126625`
+- conclusion: `SUCCESS` on all 14 steps, including the corrected
+  `Publish exact-head implementation summary` step, which now writes literal
+  head/base/checkpoint/implementation values and asserts their presence
+  (`Exact-head summary material verified for head/base/checkpoint/implementation: PASS`)
+- no `command not found` lines remain in the exact-head step summary
+- pull request `#74` remains `OPEN`, non-draft, `MERGEABLE`, unmerged, base
+  `main@fecb97b6c9513a6dc0114d22c5e3768017411157`
 
 ## Proof obligations
 
