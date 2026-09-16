@@ -1,13 +1,4 @@
-#`S2B-PO-13` paired-constituent adversarial tests: a valid `CandleBar` plus
-`FeatureSample.from_candle` of that same candle passes; the same sample paired with a
-different `CandleBar` fails; a `CandleBar` with a forged or mutated `open` while reusing the
-sample fails by fingerprint mismatch; the same OHLC with only `open` changed fails; a
-mismatched sample or candle source, contract, environment, generation, timeframe, interval,
-finality or revision fails; an unpaired raw `CandleBar` fails in non-REPLAY; an unpaired
-`FeatureSample` fails because `open` cannot be proven or consumed; caller-supplied authority
-or an arbitrary fingerprint fails; `REPLAY` fixture pairing remains explicitly `REPLAY`-only;
-cross-pair reorder, duplicate, non-contiguous window or mixed identity remains `INVALID`.
- HCT-IMPL-AUTH-0011 — S2B Candlestick Pattern Foundation Authorization Candidate
+# HCT-IMPL-AUTH-0011 - S2B Candlestick Pattern Foundation Authorization Candidate
 
 Status: `PENDING_INDEPENDENT_HIGH_ASSURANCE_REVIEW`
 Risk: `HIGH_ASSURANCE`
@@ -462,3 +453,13 @@ rejected; non-canonical alignment rejected; cross-timeframe constituent mixture 
 through the evaluator-issued S2A `FeatureSample.from_candle` and `FeatureAuthorityEvidence`;
 one later snapshot cannot blanket earlier bars; raw candle plus caller-supplied trust strings
 or hashes is rejected; `REPLAY` fixtures cannot cross into `PAPER`/`LIVE`/`SHADOW`.
+
+`S2B-PO-13` paired-constituent adversarial tests: a valid `CandleBar` plus
+`FeatureSample.from_candle` of that same candle passes; the same sample paired with a
+different `CandleBar` fails; a `CandleBar` with a forged or mutated `open` while reusing the
+sample fails by fingerprint mismatch; the same OHLC with only `open` changed fails; a
+mismatched sample or candle source, contract, environment, generation, timeframe, interval,
+finality or revision fails; an unpaired raw `CandleBar` fails in non-REPLAY; an unpaired
+`FeatureSample` fails because `open` cannot be proven or consumed; caller-supplied authority
+or an arbitrary fingerprint fails; `REPLAY` fixture pairing remains explicitly `REPLAY`-only;
+cross-pair reorder, duplicate, non-contiguous window or mixed identity remains `INVALID`.

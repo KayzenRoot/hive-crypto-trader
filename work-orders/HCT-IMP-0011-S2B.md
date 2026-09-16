@@ -486,7 +486,6 @@ rejected; non-canonical alignment rejected; cross-timeframe constituent mixture 
 through the evaluator-issued S2A `FeatureSample.from_candle` and `FeatureAuthorityEvidence`;
 one later snapshot cannot blanket earlier bars; raw candle plus caller-supplied trust strings
 or hashes is rejected; `REPLAY` fixtures cannot cross into `PAPER`/`LIVE`/`SHADOW`.
-## REQUIRED EXECUTOR REPORT
 
 `S2B-PO-13` paired-constituent adversarial tests: a valid `CandleBar` plus
 `FeatureSample.from_candle` of that same candle passes; the same sample paired with a
@@ -497,6 +496,10 @@ finality or revision fails; an unpaired raw `CandleBar` fails in non-REPLAY; an 
 `FeatureSample` fails because `open` cannot be proven or consumed; caller-supplied authority
 or an arbitrary fingerprint fails; `REPLAY` fixture pairing remains explicitly `REPLAY`-only;
 cross-pair reorder, duplicate, non-contiguous window or mixed identity remains `INVALID`.
+
+## REQUIRED EXECUTOR REPORT
+
+
 `repositorySync`, `sourceMatch`, `canonicalMain`, `checkpoint`, `implementationHead`,
 `changedFiles`, `exactPatternSet`, `patternSetFinite`, `chartStructureDisposition`,
 `numericPolicy`, `candleEquations`, `timeframeAllowlist`, `fingerprintDeterminism`,

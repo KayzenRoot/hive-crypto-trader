@@ -418,6 +418,68 @@ jobs:
           print("Traceability, Module 9 scope integrity, candlestick semantics and match separation: PASS")
           PY
 
+      - name: Validate governance document structure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import re
+          from pathlib import Path
+
+          EM = "\u2014"
+          expected_first_line = {
+              "docs/136-implementation-authorization-s2b-candidate.md":
+                  "# HCT-IMPL-AUTH-0011 - S2B Candlestick Pattern Foundation Authorization Candidate",
+              "work-orders/HCT-IMPL-AUTH-0011.md":
+                  f"# HCT-IMPL-AUTH-0011 {EM} S2B Candlestick Pattern Foundation Authorization",
+              "work-orders/HCT-IMP-0011-S2B.md":
+                  f"# HCT-IMP-0011-S2B {EM} S2B Candlestick Pattern Foundation",
+          }
+          # The section that must begin only after PO-13 is complete; None means the
+          # proof-obligations section is the final section of the document.
+          next_section = {
+              "docs/136-implementation-authorization-s2b-candidate.md": None,
+              "work-orders/HCT-IMPL-AUTH-0011.md": "AUTHORITY FIREWALL",
+              "work-orders/HCT-IMP-0011-S2B.md": "REQUIRED EXECUTOR REPORT",
+          }
+          proof_heading = re.compile(r"^## (?:PROOF OBLIGATIONS|Proof obligations)\s*$", re.M)
+          major_heading = re.compile(r"^## (?!#)(.+?)\s*$", re.M)
+
+          for path, first_line in expected_first_line.items():
+              text = Path(path).read_text()
+              lines = text.splitlines()
+              assert lines[0] == first_line, (path, "first line", lines[0])
+              assert text.count("`S2B-PO-13`") == 1, (path, "PO-13 must occur exactly once")
+
+              proof = proof_heading.search(text)
+              assert proof, (path, "proof obligations heading")
+              po12 = text.find("`S2B-PO-12`")
+              po13 = text.find("`S2B-PO-13`")
+              assert po12 != -1 and po13 != -1, (path, "proof obligations")
+
+              following = major_heading.search(text, proof.end())
+              if next_section[path] is None:
+                  boundary = following.start() if following else len(text)
+              else:
+                  named = re.compile(
+                      rf"^## {re.escape(next_section[path])}\s*$", re.M
+                  ).search(text)
+                  assert named, (path, "named following section", next_section[path])
+                  boundary = named.start()
+              assert proof.start() < po12 < po13 < boundary, (
+                  path, "structural ordering", proof.start(), po12, po13, boundary
+              )
+
+          candidate = Path("docs/136-implementation-authorization-s2b-candidate.md").read_text()
+          assert not candidate.startswith("#`S2B-PO-13`"), "candidate begins with PO-13"
+          assert candidate.splitlines()[0].startswith("# "), "content before the candidate title"
+          assert "`S2B-PO-13`" not in candidate.split(expected_first_line[
+              "docs/136-implementation-authorization-s2b-candidate.md"
+          ], 1)[0], "proof prose appears before the candidate title"
+
+          print("Canonical titles, unique PO-13, proof-section containment and heading order: PASS")
+          PY
+
       - name: Publish S2B authorization governance summary
         shell: bash
         run: |
@@ -442,6 +504,11 @@ jobs:
           printf -- '- %s\n' 'matchValiditySeparation=PASS' >> "${summary}"
           printf -- '- %s\n' 'constituentPairContract=PASS' >> "${summary}"
           printf -- '- %s\n' 'openBinding=PASS' >> "${summary}"
+          printf -- '- %s\n' 'h007DocumentStructure=PASS' >> "${summary}"
+          printf -- '- %s\n' 'candidateTitleFirstLine=PASS' >> "${summary}"
+          printf -- '- %s\n' 'po13UniqueAllDocs=PASS' >> "${summary}"
+          printf -- '- %s\n' 'po13InsideProofSection=PASS' >> "${summary}"
+          printf -- '- %s\n' 'headingOrder=PASS' >> "${summary}"
           printf -- '- %s\n' 'implementationAuthorized=false' >> "${summary}"
           printf -- '- %s\n' 'productionCredentials=false' >> "${summary}"
           printf -- '- %s\n' 'productionDeployment=false' >> "${summary}"
