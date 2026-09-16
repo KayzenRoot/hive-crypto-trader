@@ -1,15 +1,15 @@
 # Checkpoint
 
-Checkpoint ID: `HCT-CP-0034`
-Status: `S2A_IMPLEMENTATION_APPROVED_MERGED`
+Checkpoint ID: `HCT-CP-0035`
+Status: `IMPLEMENTATION_AUTHORIZED_S2B`
 Canonical branch: `main`
 Risk class: `HIGH_ASSURANCE`
 Functional product planning: `FROZEN`
 Planning Freeze checkpoint: `HCT-CP-0014 / PLANNING_FREEZE_APPROVED`
 Completed implementation slices: `HCT-IMP-0001-S0A`, `HCT-IMP-0002-S0B`, `HCT-IMP-0003-S0C`, `HCT-IMP-0004-S1A`, `HCT-IMP-0005-S1B`, `HCT-IMP-0006-S1C`, `HCT-IMP-0007-S1D`, `HCT-IMP-0008-S1E`, `HCT-IMP-0010-S1F`, `HCT-IMP-0009-S2A`
-Current implementation authorization: `NONE`
-Implementation authorization scope: `[]`
-Implementation authorization ceiling: `NONE_PENDING_NEXT_GOVERNED_AUTHORIZATION`
+Current implementation authorization: `HCT-IMP-0011-S2B`
+Implementation authorization scope: `[HCT-IMP-0011-S2B]`
+Implementation authorization ceiling: `NON_TRADING_STAGE_2_CANDLESTICK_PATTERN_FOUNDATION_ONLY`
 
 ## Current canonical authority
 R12 Planning Freeze remains approved and authoritative. The frozen composite requirements baseline remains governed by `docs/99-r12-frozen-requirements-baseline.md`, `docs/100-r12-requirements-traceability-and-no-loss-proof.md`, the exact nine requirement source blobs recorded by that baseline, and `docs/101-r12-freeze-governance-change-control-and-deferred-decisions.md`.
@@ -24,7 +24,52 @@ Completed and independently approved implementation slices are:
 - `HCT-IMP-0007-S1D - Quota/WebSocket Backpressure Governor Foundation`;
 - `HCT-IMP-0008-S1E - Market Truth Foundation`.
 
-`HCT-CP-0028` records the approved and merged completion of `HCT-IMP-0007-S1D`. `HCT-CP-0029` recorded the separate S1E implementation authorization. `HCT-CP-0030` records the approved and merged completion of `HCT-IMP-0008-S1E`. `HCT-CP-0031` authorized the bounded S1F implementation slice. `HCT-CP-0032` records the independently approved and merged completion of `HCT-IMP-0010-S1F`, consumes that implementation authority and leaves no implementation slice active. `HCT-CP-0033` records the expected-head merge and independent approval of `HCT-IMPL-AUTH-0009`, and authorized only `HCT-IMP-0009-S2A` under the non-trading Stage-2 deterministic feature/indicator foundation ceiling. `HCT-CP-0034` records the independently approved and expected-head merged completion of `HCT-IMP-0009-S2A`, consumes the CP0033 implementation authorization and leaves no implementation slice active.
+`HCT-CP-0028` records the approved and merged completion of `HCT-IMP-0007-S1D`. `HCT-CP-0029` recorded the separate S1E implementation authorization. `HCT-CP-0030` records the approved and merged completion of `HCT-IMP-0008-S1E`. `HCT-CP-0031` authorized the bounded S1F implementation slice. `HCT-CP-0032` records the independently approved and merged completion of `HCT-IMP-0010-S1F`, consumes that implementation authority and leaves no implementation slice active. `HCT-CP-0033` records the expected-head merge and independent approval of `HCT-IMPL-AUTH-0009`, and authorized only `HCT-IMP-0009-S2A` under the non-trading Stage-2 deterministic feature/indicator foundation ceiling. `HCT-CP-0034` records the independently approved and expected-head merged completion of `HCT-IMP-0009-S2A`, consumes the CP0033 implementation authorization and leaves no implementation slice active. `HCT-CP-0035` records the expected-head merge and independent approval of `HCT-IMPL-AUTH-0011`, and authorizes only `HCT-IMP-0011-S2B` under the non-trading Stage-2 candlestick pattern foundation ceiling.
+
+## S2B implementation authorization provenance
+Authorization Issue: `#75`
+Authorization PR: `#76`
+Implementation Issue: `#77`
+
+Authorization base:
+`c198a99167fa571802b16f6daf77b253a2b100b0`
+
+Exact independently approved authorization head:
+`49935bacb6ba2f7a3a06dc864468a331feaa1588`
+
+Governed authorization merge commit:
+`1ed699b6e313d097a51dab21d1d40727e4dab850`
+
+The GitHub HIGH_ASSURANCE review receipt is bound to the exact authorization head. Receipt: `5223699417`; verdict: `APPROVED`; unresolved CRITICAL: `0`; unresolved HIGH: `0`; `S2B-H001` through `S2B-H015`: `CLOSED`. The receipt accepts the authorization candidate only and does not itself authorize implementation, credentials, deployment, limited-live or live trading.
+
+Governance acceptance evidence:
+- PR #76 comment `5698967679`;
+- Issue #75 comment `5698968073`.
+
+Exact hosted authorization evidence:
+- workflow: `HCT-IMPL-AUTH-0011 S2B Authorization Governance`;
+- run: `35104539003`;
+- check/job: `s2b-authorization-governance / 104822207060`;
+- exact head: `49935bacb6ba2f7a3a06dc864468a331feaa1588`;
+- event: `pull_request`;
+- result: `completed / success`.
+
+Full approval/promotion record: `docs/137-s2b-implementation-authorization-and-checkpoint-promotion.md`.
+
+The authorization candidate changed exactly four governance files and was merged with expected-head protection. The approved authorization head remains the sole candidate identity; the merge commit is the canonical main ancestor used for CP0035 promotion.
+
+## HCT-CP-0035 authorization boundary
+CP0035 authorizes exactly one implementation increment:
+
+- `implementation_authorized=true`;
+- `implementation_authorization_scope=[HCT-IMP-0011-S2B]`;
+- `implementation_authorization_ceiling=NON_TRADING_STAGE_2_CANDLESTICK_PATTERN_FOUNDATION_ONLY`;
+- `production_credentials_authorized=false`;
+- `production_deployment_authorized=false`;
+- `limited_live_authorized=false`;
+- `live_trading_authorized=false`.
+
+Executability follows the frozen lifecycle: this authorization checkpoint, then a fresh post-CP0035 Context Lock, then bounded implementation, then exact-head CI and a complete Evidence Bundle, then a fresh independent HIGH_ASSURANCE review of the exact implementation head before any implementation merge. The chart/market-structure follow-on slice, regime, scanner, strategy/catalog/signal, microstructure and every later module remain unauthorized.
 
 ## S2A implementation authorization provenance
 Authorization Issue: `#68`
@@ -337,7 +382,7 @@ Planning Freeze remains approved through `HCT-CP-0014`, with frozen source ident
 Historical S0A-S1A workflows contain old whole-tree/path/base assumptions and may fail when later authorized backend paths trigger them. This remains a separate CI-maintenance concern. S1D implementation evidence must execute required prior-stage regressions directly rather than treating those historical workflow statuses as substitute proof.
 
 ## Next necessary action
-Prepare only the bounded S2B candlestick and chart pattern governance candidate `HCT-IMPL-AUTH-0011` / `HCT-IMP-0011-S2B` against the exact post-CP0034 canonical main, keeping it to the four governance files, with exact-head governance CI and a fresh independent HIGH_ASSURANCE review before any S2B authorization or implementation. No S2B runtime implementation, later module, credentials, private APIs, persistence, deployment, limited-live or live trading is authorized.
+Capture a fresh S2B Context Lock against the exact post-CP0035 canonical main, then implement only `HCT-IMP-0011-S2B` from a new bounded implementation branch. Stop with the implementation PR OPEN and UNMERGED after a fresh exact-head CI run and a complete Evidence Bundle, and require a fresh independent HIGH_ASSURANCE review of the exact implementation head before any implementation merge. The required chart/market-structure follow-on slice, regime, scanner, strategy/signal and all later stages remain unauthorized. Do not configure credentials, private APIs, persistence, deployment, limited-live or live trading.
 
 ## Global chat and prompt delivery policy
 All HCT chats and executor/reviewer handoffs SHALL follow `docs/104-chat-delivery-and-prompt-artifact-policy.md`.
