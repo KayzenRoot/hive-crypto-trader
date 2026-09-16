@@ -5,7 +5,7 @@ Risk: `HIGH_ASSURANCE`
 Canonical base: `main@c198a99167fa571802b16f6daf77b253a2b100b0`
 Current checkpoint: `HCT-CP-0034 / S2A_IMPLEMENTATION_APPROVED_MERGED`
 Proposed implementation: `HCT-IMP-0011-S2B`
-Authorization issue: assigned by the hosted governance Issue for this candidate
+Authorization issue: `#75`
 Governance branch: `governance/HCT-IMPL-AUTH-0011-S2B`
 Author-side governance preflight: `AUTHOR_SIDE_GOVERNANCE_PREFLIGHT_NOT_INDEPENDENT_APPROVAL`
 

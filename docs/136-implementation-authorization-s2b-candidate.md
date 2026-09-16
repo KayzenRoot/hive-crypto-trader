@@ -8,7 +8,7 @@ Recompile marker: `DERIVED_FROM_POST_CP0034_MAIN`
 Proposed authorization increment: `HCT-IMPL-AUTH-0011`
 Proposed implementation slice: `HCT-IMP-0011-S2B`
 Scope name: `Candlestick & Chart Pattern Foundation`
-Authorization Issue: assigned by the hosted governance Issue for this candidate
+Authorization Issue: `#75`
 Governance branch: `governance/HCT-IMPL-AUTH-0011-S2B`
 Author-side governance preflight: `AUTHOR_SIDE_GOVERNANCE_PREFLIGHT_NOT_INDEPENDENT_APPROVAL`
 
