@@ -447,6 +447,12 @@ jobs:
               "S2B_PREDECESSOR_SCOPE=same_pattern_id;definition_version;source;contract;environment;timeframe;window_start;window_end",
               "S2B_PREDECESSOR_NONE_ONLY_WHEN_NO_EARLIER_EVIDENCE=TRUE",
               "S2B_REVISION_CHAIN=NO_SKIP_NO_FORK_NO_OVERWRITE",
+              "S2B_AUTHORIZATION_REVIEW_GATE=EXACT_AUTHORIZATION_HEAD_INDEPENDENT_APPROVAL_BEFORE_AUTHORIZATION_MERGE",
+              "S2B_AUTHORIZATION_CHECKPOINT_GATE=SEPARATE_CHECKPOINT_AUTHORIZES_HCT-IMP-0011-S2B_ONLY",
+              "S2B_IMPLEMENTATION_EXECUTABLE_AFTER=AUTHORIZED_CHECKPOINT_AND_FRESH_POST_CHECKPOINT_CONTEXT_LOCK",
+              "S2B_IMPLEMENTATION_STOP=OPEN_UNMERGED_AFTER_EXACT_HEAD_CI_AND_COMPLETE_EVIDENCE_BUNDLE",
+              "S2B_IMPLEMENTATION_REVIEW_GATE=EXACT_IMPLEMENTATION_HEAD_INDEPENDENT_APPROVAL_BEFORE_IMPLEMENTATION_MERGE",
+              "S2B_NO_PREIMPLEMENTATION_IMPLEMENTATION_HEAD_REVIEW=TRUE",
           )
           for document in (candidate, authorization, implementation):
               for marker in shared:
@@ -461,8 +467,36 @@ jobs:
           assert "S2B_AXIS_SEPARATION=FeatureValidity" not in combined, (
               "superseded FeatureValidity axis marker must be rejected"
           )
-          assert "S2B_AXIS_SEPARATION=PatternValidity;MarketStateTrust;DataAuthority;"
-          "ResourceRestriction;UniverseLifecycleRestriction" in combined
+          # S2B-H015: no circular executability gate. An implementation head cannot exist
+          # before implementation runs, so pre-implementation implementation-head approval
+          # must be rejected explicitly.
+          circular_fragment = (
+              "executable only after its own authorization checkpoint is promoted and a fresh "
+              "independent HIGH_ASSURANCE review accepts the exact implementation head"
+          )
+          assert circular_fragment not in combined, "circular executability gate must be rejected"
+          assert "S2B_NO_PREIMPLEMENTATION_IMPLEMENTATION_HEAD_REVIEW=TRUE" in combined
+          assert "never a precondition of" in combined
+          authorization_gate = combined.index(
+              "S2B_AUTHORIZATION_REVIEW_GATE="
+              "EXACT_AUTHORIZATION_HEAD_INDEPENDENT_APPROVAL_BEFORE_AUTHORIZATION_MERGE"
+          )
+          checkpoint_gate = combined.index("S2B_AUTHORIZATION_CHECKPOINT_GATE=")
+          executability_gate = combined.index("S2B_IMPLEMENTATION_EXECUTABLE_AFTER=")
+          implementation_step = combined.index(
+              "`HCT-IMP-0011-S2B` is implemented, producing exact-head CI"
+          )
+          evidence_bundle = combined.index("Evidence Bundle;", implementation_step)
+          review_step = combined.index(
+              "stop with the implementation PR OPEN and UNMERGED", implementation_step
+          )
+          assert authorization_gate < checkpoint_gate < executability_gate
+          assert executability_gate < implementation_step < evidence_bundle < review_step
+          local_axis_marker = (
+              "S2B_AXIS_SEPARATION=PatternValidity;MarketStateTrust;DataAuthority;"
+              "ResourceRestriction;UniverseLifecycleRestriction"
+          )
+          assert local_axis_marker in combined, "corrected PatternValidity axis marker missing"
 
           # 8. no capability-creating construct; exclusion prose remains legitimate.
           for forbidden in (
@@ -590,6 +624,10 @@ jobs:
           printf -- '- %s\n' 'idempotentEvidence=PASS' >> "${summary}"
           printf -- '- %s\n' 'duplicateOverlapConflictSemantics=PASS' >> "${summary}"
           printf -- '- %s\n' 'predecessorChainSemantics=PASS' >> "${summary}"
+          printf -- '- %s\n' 'h015ExecutionLifecycle=PASS' >> "${summary}"
+          printf -- '- %s\n' 'noCircularExecutabilityGate=PASS' >> "${summary}"
+          printf -- '- %s\n' 'contextLockBeforeImplementation=PASS' >> "${summary}"
+          printf -- '- %s\n' 'implementationReviewBeforeMerge=PASS' >> "${summary}"
           printf -- '- %s\n' 'implementationAuthorized=false' >> "${summary}"
           printf -- '- %s\n' 'productionCredentials=false' >> "${summary}"
           printf -- '- %s\n' 'productionDeployment=false' >> "${summary}"

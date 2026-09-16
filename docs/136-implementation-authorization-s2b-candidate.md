@@ -78,6 +78,39 @@ recorded by `HCT-CP-0034`. Module 9 patterns are the next dependency.
 - `HCT-CP-0034` authority: `implementation_authorized=false`, empty scope,
   `NONE_PENDING_NEXT_GOVERNED_AUTHORIZATION`.
 
+## GOVERNED EXECUTION LIFECYCLE
+
+`S2B_AUTHORIZATION_REVIEW_GATE=EXACT_AUTHORIZATION_HEAD_INDEPENDENT_APPROVAL_BEFORE_AUTHORIZATION_MERGE`
+
+`S2B_AUTHORIZATION_CHECKPOINT_GATE=SEPARATE_CHECKPOINT_AUTHORIZES_HCT-IMP-0011-S2B_ONLY`
+
+`S2B_IMPLEMENTATION_EXECUTABLE_AFTER=AUTHORIZED_CHECKPOINT_AND_FRESH_POST_CHECKPOINT_CONTEXT_LOCK`
+
+`S2B_IMPLEMENTATION_STOP=OPEN_UNMERGED_AFTER_EXACT_HEAD_CI_AND_COMPLETE_EVIDENCE_BUNDLE`
+
+`S2B_IMPLEMENTATION_REVIEW_GATE=EXACT_IMPLEMENTATION_HEAD_INDEPENDENT_APPROVAL_BEFORE_IMPLEMENTATION_MERGE`
+
+`S2B_NO_PREIMPLEMENTATION_IMPLEMENTATION_HEAD_REVIEW=TRUE`
+
+The governed order is fixed:
+
+1. governance candidate review — an independent HIGH_ASSURANCE review accepts the exact
+   authorization head;
+2. authorization — expected-head merge of the governance PR, followed by a separate
+   authorization checkpoint for `HCT-IMP-0011-S2B` only;
+3. executability — this Work Order becomes executable after that authorization checkpoint and
+   a fresh post-checkpoint Context Lock;
+4. implementation — only `HCT-IMP-0011-S2B` is implemented, producing exact-head CI and the
+   Evidence Bundle;
+5. implementation review — stop with the implementation PR OPEN and UNMERGED, then an
+   independent HIGH_ASSURANCE review accepts the exact implementation head before any
+   implementation merge.
+
+The authorization checkpoint identifier is assigned by the later authorization/promotion step
+only after the authorization PR is independently approved. It is deliberately not fabricated
+here, no implementation Issue is created and no implementation checkpoint is promoted by this
+document.
+
 ## Objective
 
 Freeze exact candlestick pattern scope, candle equations, boundary semantics, Decimal
