@@ -407,6 +407,143 @@ revert the S2B producer and registry and return consumers to S2A/S1F inputs with
 mutating upstream S1E/S1F/S2A truth; historical `PatternEvidence` is append-only and no
 migration or persistence authority is granted.
 
+## FROZEN BENCHMARK WORKLOAD AND METHOD
+
+`S2B_BENCHMARK_MODE=S2B_BASELINE_ESTABLISHMENT_V1`
+
+`S2B_BENCHMARK_FIXTURE_VERSION=S2B_PATTERN_FIXTURE_V1`
+
+`S2B_BENCHMARK_SEED=0`
+
+`S2B_BENCHMARK_TIMEFRAMES=Min1,Min5,Min15`
+
+`S2B_BENCHMARK_PATTERNS=P-DC-001,P-MB-001,P-EC-001,P-EC-002,P-MS-001,P-ES-001`
+
+`S2B_BENCHMARK_PROFILES=MICRO,NOMINAL,STRESS`
+
+`S2B_BENCHMARK_PROFILE_MICRO=1:2048`
+
+`S2B_BENCHMARK_PROFILE_NOMINAL=8:4096`
+
+`S2B_BENCHMARK_PROFILE_STRESS=16:8192`
+
+`S2B_BENCHMARK_RANDOMNESS=NONE`
+
+`S2B_BENCHMARK_NETWORK=NONE`
+
+Benchmark targets are not canonical until the workload assumptions and the benchmark
+method are defined. This contract is normative; the profile names alone are not.
+`S2B_BENCHMARK_PROFILE_<name>=<contracts>:<closed_pairs_per_contract_per_timeframe>`.
+
+| Profile | Contracts | CLOSED pairs / contract / timeframe | Required content |
+|---|---:|---:|---|
+| `MICRO` | `1` | `2048` | all six patterns across `Min1`/`Min5`/`Min15`; deterministic valid and valid-non-match corpus |
+| `NOMINAL` | `8` | `4096` | all six patterns across all three timeframes; positive, negative and boundary cases with deterministic restrictive-state counts |
+| `STRESS` | `16` | `8192` | all six patterns and timeframes plus a deterministic adversarial corpus: late knowledge, correction/revision, mixed generation or environment, non-contiguous or reordered pairs, resource-degraded and lifecycle-restricted cases |
+
+No uncontrolled wall-clock randomness and no network or provider dependency is permitted in
+fixture generation or evaluation.
+
+Measurements: pattern evaluations per second; `p50`/`p95`/`p99`/`max` evaluation latency
+broken down by pattern family and timeframe; replay throughput; peak and steady memory;
+active window-buffer depth; counts by `PatternValidity` and by `PatternMatchState`;
+no-lookahead rejections; and a deterministic output-manifest SHA-256.
+
+Each profile runs twice from the same fixture manifest and seed, and the deterministic
+projection must be identical across both runs. Profile correctness is `PASS` only when every
+expected match, non-match and indeterminate outcome, every pair and authority invariant,
+every no-lookahead rule and every evidence fingerprint are correct and the mismatch count is
+zero. A correctness failure makes the benchmark command and CI fail non-zero. Timing and
+memory numbers are baseline evidence, not product SLOs. The benchmark records runtime,
+dependency and build identity, hardware profile, fixture generator version, seed, profile
+cardinalities and result hashes.
+
+## FROZEN VERSION, DIRECTION AND FINGERPRINT SEMANTICS
+
+`S2B_PATTERN_ALGORITHM_VERSION=S2B_STANDARD_CANDLESTICK_PATTERNS_V1`
+
+`S2B_PATTERN_DEFINITION_VERSION=1`
+
+`S2B_PATTERN_DIRECTIONS=BULLISH,BEARISH,NEUTRAL,NONE,UNKNOWN`
+
+`S2B_FINGERPRINT_VERSION=S2B_SHA256_CANONICAL_JSON_V1`
+
+`S2B_FINGERPRINT_SERIALIZATION=UTF8_JSON_ENSURE_ASCII_TRUE_SORT_KEYS_TRUE_SEPARATORS_COMMA_COLON`
+
+Each of the six authorized canonical pattern IDs is definition version `1` under the
+algorithm above. Any change to an equation, threshold, polarity, bar cardinality, gap policy,
+timeframe, Decimal policy, direction or validity semantic requires a new `PatternVersion`.
+
+`PatternDefinition`/`PatternVersion` identity binds algorithm version, pattern ID, definition
+version, family, bar cardinality, exact equations, thresholds and equality semantics, Decimal
+policy and the structural timeframe allowlist.
+
+`PatternDirection=BULLISH,BEARISH,NEUTRAL,NONE,UNKNOWN` with exact semantics:
+
+- `MATCHED` `P-DC-001` => `NEUTRAL`;
+- `MATCHED` `P-MB-001` => `BULLISH` when `close > open`, `BEARISH` when `close < open`;
+- `MATCHED` `P-EC-001` => `BULLISH`; `MATCHED` `P-EC-002` => `BEARISH`;
+- `MATCHED` `P-MS-001` => `BULLISH`; `MATCHED` `P-ES-001` => `BEARISH`;
+- `NOT_MATCHED` => `NONE` regardless of the candidate pattern ID;
+- `INDETERMINATE` => `UNKNOWN`.
+
+Direction is behaviorally material and fingerprint-visible. Fingerprints use
+`S2B_SHA256_CANONICAL_JSON_V1`: canonical serialization as UTF-8 JSON with
+`ensure_ascii=true`, `sort_keys=true`, comma/colon separators with no spaces, and no
+non-finite or binary-float material. The `PatternEvidence` fingerprint binds fingerprint
+version, `PatternDefinition` fingerprint, match state, direction, validity, every authority
+and restriction axis, structural timeframe identity, exact ordered `CandleBar` fingerprints,
+exact ordered `FeatureSample`/authority fingerprints, window, event, knowledge and
+wall-receive times, generation, environment, source and contract, revision and predecessor
+lineage, and the evaluation boundary. The fingerprint is recomputed from material and is
+never accepted as caller truth.
+
+## FROZEN VALIDITY FOLD PRECEDENCE
+
+`S2B_VALIDITY_FOLD_PRECEDENCE=INVALID>UNKNOWN>WARMUP>DEGRADED>VALID`
+
+`S2B_RESOURCE_LIFECYCLE_DO_NOT_DOWNGRADE=TRUE`
+
+The fold is applied after pair validation and before match evaluation, and a stronger state
+dominates every weaker state:
+
+| Priority | `PatternValidity` | Normative condition |
+|---:|---|---|
+| 1 | `INVALID` | any structural or provenance contradiction: malformed pair, impossible OHLC, unsupported or wrong timeframe identity, duplicate, reorder, overlap or non-contiguous window, mixed source/contract/environment/generation, retired generation or contradictory lineage |
+| 2 | `UNKNOWN` | no `INVALID`, but a required value, authority or state is unavailable, unprovable, stale or expired, `GAP`/`RESYNC_REQUIRED`/`SEQUENCE_UNPROVABLE`/`CLOCK_UNTRUSTED`, a zero-range primitive, or otherwise analytically unknowable at the evaluation boundary |
+| 3 | `WARMUP` | no `INVALID` or `UNKNOWN`, but a required future constituent close or knowledge boundary has not occurred, or exact bar cardinality is not yet mature |
+| 4 | `DEGRADED` | complete coherent computable analytical evidence exists, but at least one governed analytical truth or input is explicitly degraded |
+| 5 | `VALID` | complete coherent admissible analytical evidence with no stronger condition |
+
+`ResourceRestriction` and `UniverseLifecycleRestriction` remain separate axes and do not by
+themselves downgrade otherwise `VALID` analytical pattern truth. `DataAuthority` and
+`MarketStateTrust` remain separate but may make analytical evidence `UNKNOWN` or `INVALID`
+only through governed truth and admissibility semantics, and no later constituent upgrades an
+earlier restrictive state. Compatibility is unchanged: `VALID`/`DEGRADED` implies `MATCHED`
+or `NOT_MATCHED`, while `WARMUP`/`UNKNOWN`/`INVALID` implies `INDETERMINATE`.
+
+## EVALUATOR-ISSUED PATTERN EVIDENCE
+
+`S2B_PATTERN_EVIDENCE_ISSUANCE=EVALUATOR_ISSUED_PRIVATE_ATTESTATION`
+
+`S2B_PATTERN_EVIDENCE_FORGERY=FAIL_CLOSED`
+
+Authoritative `PatternEvidence` is evaluator-issued through a private attestation
+(`init=False` or equivalent) or, failing that, performs complete recomputation and content
+validation strong enough that caller minting is impossible; evaluator-issued is preferred.
+The evaluator receives one frozen `PatternDefinition`/`PatternVersion` plus the exact ordered
+validated constituent pairs and the evaluation boundary, and it computes the validity fold,
+match state, direction, timestamps, lineage, predecessor relation and fingerprint.
+
+Callers may not directly choose `MATCHED`, `NOT_MATCHED`, `INDETERMINATE`, direction,
+validity, event, knowledge or wall-receive time, window boundaries, constituent lineage,
+definition fingerprint or evidence fingerprint. `dataclasses.replace` and copy-style mutation
+of authoritative `PatternEvidence` must fail attestation or content validation. Direct
+construction of plausible `MATCHED` evidence without evaluator attestation fails, and
+tampered direction, timestamps, lineage, pattern version, pair order or fingerprint fails.
+Correction or revision creates new evaluator-issued `PatternEvidence` with new predecessor
+and fingerprint lineage, and historical evidence is immutable.
+
 ## PROOF OBLIGATIONS
 
 `S2B-PO-01` finite exact allowlist and version collision protection;
@@ -461,6 +598,22 @@ finality or revision fails; an unpaired raw `CandleBar` fails in non-REPLAY; an 
 `FeatureSample` fails because `open` cannot be proven or consumed; caller-supplied authority
 or an arbitrary fingerprint fails; `REPLAY` fixture pairing remains explicitly `REPLAY`-only;
 cross-pair reorder, duplicate, non-contiguous window or mixed identity remains `INVALID`.
+
+`S2B-PO-14` benchmark profile and method tests: exact MICRO/NOMINAL/STRESS cardinalities, all
+timeframes and all six patterns present, per-run fixture manifest determinism, two-run
+deterministic projection equality, and a fail-closed synthetic profile failure.
+
+`S2B-PO-15` version, direction and fingerprint golden vectors, including
+`NOT_MATCHED => NONE`, `INDETERMINATE => UNKNOWN` and recomputed canonical fingerprints.
+
+`S2B-PO-16` validity-fold precedence matrix covering mixed simultaneous conditions:
+`INVALID` dominates `UNKNOWN` and `WARMUP`, `UNKNOWN` dominates `WARMUP`, analytically
+`VALID` plus resource-restrictive remains `VALID`, and analytically `VALID` plus
+lifecycle-restrictive remains `VALID`.
+
+`S2B-PO-17` PatternEvidence attestation and forgery tests: direct constructor, `replace` and
+tamper, caller-selected match state, direction, times or fingerprint, and mismatched
+definition or pair lineage are all rejected.
 
 ## AUTHORITY FIREWALL
 

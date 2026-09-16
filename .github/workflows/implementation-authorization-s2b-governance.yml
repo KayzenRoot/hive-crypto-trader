@@ -343,10 +343,30 @@ jobs:
           # 6. proof obligations and rollback semantics
           for marker in (
               "S2B-PO-01", "S2B-PO-09", "S2B-PO-10", "S2B-PO-11", "S2B-PO-12", "S2B-PO-13",
+              "S2B-PO-14", "S2B-PO-15", "S2B-PO-16", "S2B-PO-17",
               "negative-valid", "boundary-equality", "zero-range", "timeframe-rejection", "rollback",
               "wrong duration", "non-canonical alignment",
               "forged or mutated `open`", "unpaired raw `CandleBar`", "unpaired `FeatureSample`",
               "different `CandleBar` fails",
+              "pattern evaluations per second",
+              "`p50`/`p95`/`p99`/`max` evaluation latency",
+              "replay throughput",
+              "peak and steady memory",
+              "active window-buffer depth",
+              "counts by `PatternValidity` and by `PatternMatchState`",
+              "no-lookahead rejections",
+              "deterministic output-manifest SHA-256",
+              "identical across both runs",
+              "fail non-zero",
+              "baseline evidence, not product SLOs",
+              "`ensure_ascii=true`, `sort_keys=true`, comma/colon separators with no spaces",
+              "`NOT_MATCHED` => `NONE`",
+              "`INDETERMINATE` => `UNKNOWN`",
+              "`INVALID` dominates `UNKNOWN` and `WARMUP`",
+              "`UNKNOWN` dominates `WARMUP`",
+              "resource-restrictive remains `VALID`",
+              "lifecycle-restrictive remains `VALID`",
+              "never accepted as caller truth",
           ):
               assert marker in combined, marker
 
@@ -380,6 +400,27 @@ jobs:
               "S2B_PAIR_AUTHORITY_SOURCE=EVALUATOR_ISSUED_FEATURE_SAMPLE",
               "S2B_PAIR_FINGERPRINT_EQUALITY=sample.fingerprint==candle.fingerprint",
               "S2B_PAIR_OPEN_BINDING=CANDLEBAR_FINGERPRINT_COMMITS_OPEN",
+              "S2B_BENCHMARK_MODE=S2B_BASELINE_ESTABLISHMENT_V1",
+              "S2B_BENCHMARK_FIXTURE_VERSION=S2B_PATTERN_FIXTURE_V1",
+              "S2B_BENCHMARK_SEED=0",
+              "S2B_BENCHMARK_TIMEFRAMES=Min1,Min5,Min15",
+              "S2B_BENCHMARK_PATTERNS=P-DC-001,P-MB-001,P-EC-001,P-EC-002,P-MS-001,P-ES-001",
+              "S2B_BENCHMARK_PROFILES=MICRO,NOMINAL,STRESS",
+              "S2B_BENCHMARK_PROFILE_MICRO=1:2048",
+              "S2B_BENCHMARK_PROFILE_NOMINAL=8:4096",
+              "S2B_BENCHMARK_PROFILE_STRESS=16:8192",
+              "S2B_BENCHMARK_RANDOMNESS=NONE",
+              "S2B_BENCHMARK_NETWORK=NONE",
+              "S2B_PATTERN_ALGORITHM_VERSION=S2B_STANDARD_CANDLESTICK_PATTERNS_V1",
+              "S2B_PATTERN_DEFINITION_VERSION=1",
+              "S2B_PATTERN_DIRECTIONS=BULLISH,BEARISH,NEUTRAL,NONE,UNKNOWN",
+              "S2B_FINGERPRINT_VERSION=S2B_SHA256_CANONICAL_JSON_V1",
+              "S2B_FINGERPRINT_SERIALIZATION=UTF8_JSON_ENSURE_ASCII_TRUE_SORT_KEYS_TRUE_SEPARATORS_COMMA_COLON",
+              "S2B_VALIDITY_FOLD_PRECEDENCE=INVALID>UNKNOWN>WARMUP>DEGRADED>VALID",
+              "S2B_RESOURCE_LIFECYCLE_DO_NOT_DOWNGRADE=TRUE",
+              "S2B_PATTERN_EVIDENCE_ISSUANCE=EVALUATOR_ISSUED_PRIVATE_ATTESTATION",
+              "S2B_PATTERN_EVIDENCE_FORGERY=FAIL_CLOSED",
+              "S2B-PO-14", "S2B-PO-15", "S2B-PO-16", "S2B-PO-17",
           )
           for document in (candidate, authorization, implementation):
               for marker in shared:
@@ -509,6 +550,10 @@ jobs:
           printf -- '- %s\n' 'po13UniqueAllDocs=PASS' >> "${summary}"
           printf -- '- %s\n' 'po13InsideProofSection=PASS' >> "${summary}"
           printf -- '- %s\n' 'headingOrder=PASS' >> "${summary}"
+          printf -- '- %s\n' 'benchmarkWorkloadFrozen=PASS' >> "${summary}"
+          printf -- '- %s\n' 'evidenceVersionDirectionFingerprint=PASS' >> "${summary}"
+          printf -- '- %s\n' 'validityFoldPrecedence=PASS' >> "${summary}"
+          printf -- '- %s\n' 'evaluatorIssuedPatternEvidence=PASS' >> "${summary}"
           printf -- '- %s\n' 'implementationAuthorized=false' >> "${summary}"
           printf -- '- %s\n' 'productionCredentials=false' >> "${summary}"
           printf -- '- %s\n' 'productionDeployment=false' >> "${summary}"
