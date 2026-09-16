@@ -1,17 +1,22 @@
-name: UADS GEF V1 Adoption Governance
+name: GEF Bootstrap V1.0.0 Universal Adoption Governance
 
 on:
   pull_request:
     branches: [main]
     paths:
       - "docs/gef/**"
+      - "docs/12-work-order-prompt-contract.md"
+      - "prompts/README.md"
+      - "work-orders/HCT-GEF-ADOPT-0002.md"
+      - "evidence/HCT-GEF-ADOPT-0002.md"
       - ".github/workflows/gef-adoption-governance.yml"
 
 permissions:
   contents: read
 
 env:
-  GEF_BASELINE_SHA: 29dc6636360953941a7e4fb41a0876c5bc46dcd6
+  GEF_UPGRADE_BASE_SHA: 9e6014472df7723b21f9a1d7ab2aa207ac714ccc
+  GEF_SOURCE_SHA256: af1de7df4db966f1109992741191b58d3daccaa7d42a4bff218aaa63e80dc2f3
 
 jobs:
   gef-adoption-governance:
@@ -24,30 +29,30 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Assert exact raw head and adoption base
+      - name: Assert exact raw head and locked upgrade base
         shell: bash
         run: |
           set -euo pipefail
           test "${{ github.event_name }}" = "pull_request"
           test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
-          test "${{ github.event.pull_request.base.sha }}" = "$GEF_BASELINE_SHA"
-          test "$(git merge-base "$GEF_BASELINE_SHA" HEAD)" = "$GEF_BASELINE_SHA"
+          test "${{ github.event.pull_request.base.sha }}" = "$GEF_UPGRADE_BASE_SHA"
+          test "$(git merge-base "$GEF_UPGRADE_BASE_SHA" HEAD)" = "$GEF_UPGRADE_BASE_SHA"
 
-      - name: Enforce governance-only adoption diff
+      - name: Enforce bounded governance-only upgrade diff
         shell: bash
         run: |
           set -euo pipefail
-          changed="$(git diff --name-only "$GEF_BASELINE_SHA...HEAD")"
+          changed="$(git diff --name-only "$GEF_UPGRADE_BASE_SHA...HEAD")"
           printf '%s\n' "$changed"
-          invalid="$(printf '%s\n' "$changed" | grep -Ev '^(docs/gef/|\.github/workflows/gef-adoption-governance\.yml$)' || true)"
+          invalid="$(printf '%s\n' "$changed" | grep -Ev '^(docs/gef/|docs/12-work-order-prompt-contract\.md$|prompts/README\.md$|work-orders/HCT-GEF-ADOPT-0002\.md$|evidence/HCT-GEF-ADOPT-0002\.md$|\.github/workflows/gef-adoption-governance\.yml$)' || true)"
           if [ -n "$invalid" ]; then
-            echo "GEF adoption PR changed non-governance files:"
+            echo "Universal GEF adoption changed unauthorized paths:"
             echo "$invalid"
             exit 1
           fi
-          git diff --check "$GEF_BASELINE_SHA...HEAD"
+          git diff --check "$GEF_UPGRADE_BASE_SHA...HEAD"
 
-      - name: Validate required GEF artifacts
+      - name: Validate required Universal GEF artifacts
         shell: bash
         run: |
           set -euo pipefail
@@ -63,6 +68,11 @@ jobs:
             docs/gef/GEF-PROOF-MAP.json
             docs/gef/GEF-TEST-IMPACT.json
             docs/gef/GEF-KNOWLEDGE-CACHE.json
+            docs/gef/GEF-V1-UNIVERSAL-ADOPTION-CONTRACT.md
+            docs/gef/GEF-DISCOVERY-RECEIPT.json
+            docs/gef/GEF-COLLISION-MAP.json
+            work-orders/HCT-GEF-ADOPT-0002.md
+            evidence/HCT-GEF-ADOPT-0002.md
           )
           for f in "${required[@]}"; do
             test -s "$f"
@@ -75,33 +85,39 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-
           for path in Path("docs/gef").glob("*.json"):
               with path.open("r", encoding="utf-8") as fh:
                   json.load(fh)
               print(f"valid json: {path}")
           PY
 
-      - name: Validate compatibility and shadow assurance
+      - name: Validate universal version and HCT authority bindings
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq 'PARTIALLY_GOVERNED' docs/gef/GEF-ADOPTION.md
-          grep -Fq 'READY_WITH_GAPS' docs/gef/GEF-ADOPTION.md
-          grep -Fq 'Shadow Assurance: `ON`' docs/gef/GEF-ADOPTION.md
-          grep -Fq 'PDF-only' docs/gef/GEF-ADOPTION.md
+          grep -Fq 'GEF-BOOTSTRAP-V1.0.0-UNIVERSAL' docs/gef/GEF-ADOPTION.md
+          grep -Fq "$GEF_SOURCE_SHA256" docs/gef/GEF-V1-UNIVERSAL-ADOPTION-CONTRACT.md
+          grep -Fq '"projectClassification": "BROWNFIELD"' docs/gef/GEF-CURRENT.json
+          grep -Fq '"id": "HCT-CP-0035"' docs/gef/GEF-CURRENT.json
+          grep -Fq '"pullRequest": 78' docs/gef/GEF-CURRENT.json
           grep -Fq '"shadowAssurance": "ON"' docs/gef/GEF-CURRENT.json
-          grep -Fq '"carryForwardAuthoritative": false' docs/gef/GEF-PROOF-MAP.json
+          grep -Fq 'PDF-only' docs/gef/GEF-ADOPTION.md
+          grep -Fq 'PDF-only' docs/12-work-order-prompt-contract.md
+          grep -Fq 'PDF artifacts only' prompts/README.md || grep -Fq 'PDF artifacts' prompts/README.md
 
-      - name: Verify active S0C work was not mixed into adoption
+      - name: Verify active product work and canonical checkpoints are untouched
         shell: bash
         run: |
           set -euo pipefail
-          ! git diff --name-only "$GEF_BASELINE_SHA...HEAD" | grep -Eq '^(apps/|packages/|scripts/|adr/|evidence/|checkpoints/|work-orders/)'
+          changed="$(git diff --name-only "$GEF_UPGRADE_BASE_SHA...HEAD")"
+          ! printf '%s\n' "$changed" | grep -Eq '^(apps/|packages/|scripts/|adr/|checkpoints/)'
+          ! printf '%s\n' "$changed" | grep -Eq '^evidence/HCT-IMP-0011-S2B'
+          ! printf '%s\n' "$changed" | grep -Eq '^work-orders/HCT-IMP-0011-S2B\.md$'
+          ! printf '%s\n' "$changed" | grep -Eq '^docs/(02-requirements|03-scope|04-architecture|05-security|09-definition-of-done|10-decisions-ledger|11-checkpoint|99-r12-frozen-requirements-baseline|100-r12-requirements-traceability-and-no-loss-proof|101-r12-freeze-governance-change-control-and-deferred-decisions)\.md$'
 
       - name: Governance summary
         run: |
-          echo "GEF V1 adoption package is governance-only and exact-head validated."
-          echo "This workflow is pull_request-only; manual dispatch cannot produce this governance receipt."
-          echo "Shadow Assurance is ON; existing mandatory HCT gates remain authoritative."
-          echo "Active functional PR #42 is intentionally untouched."
+          echo "GEF Bootstrap V1.0.0 Universal brownfield upgrade is exact-head validated."
+          echo "This workflow is PR-only and locked to the adoption base."
+          echo "Shadow Assurance remains ON; HCT exact-head and independent-review requirements remain authoritative."
+          echo "Active HCT-IMP-0011-S2B PR #78 is intentionally outside this patch."

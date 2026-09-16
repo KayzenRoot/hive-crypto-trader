@@ -1,10 +1,11 @@
 {
-  "schemaVersion": "GEF_PROJECT_PROFILE_V1",
-  "gefVersion": "UADS-GEF-V1",
+  "schemaVersion": "GEF_PROJECT_PROFILE_V1_0_0",
+  "gefVersion": "GEF-BOOTSTRAP-V1.0.0-UNIVERSAL",
   "project": {
     "name": "Hive Crypto Trader",
     "code": "HCT",
-    "mode": "PARTIALLY_GOVERNED"
+    "classification": "BROWNFIELD",
+    "riskClass": "HIGH_ASSURANCE"
   },
   "repository": {
     "provider": "github",
@@ -12,41 +13,27 @@
     "repositoryId": 1366643720,
     "defaultBranch": "main",
     "visibility": "public",
-    "baselineHead": "29dc6636360953941a7e4fb41a0876c5bc46dcd6",
-    "fingerprintBasis": "github:KayzenRoot/hive-crypto-trader|repo_id:1366643720|default_branch:main",
-    "projectFingerprint": "sha256:28ad059f859668b3447b58db4f45ecc09111b79d886f83ec60000b2ad72162bc"
+    "adoptionBaselineHead": "9e6014472df7723b21f9a1d7ab2aa207ac714ccc"
   },
   "canonicalPaths": {
     "checkpoint": "checkpoints/workstreams/planning/latest.json",
     "checkpointDoc": "docs/11-checkpoint.md",
     "sourceHierarchy": "docs/00-source-hierarchy.md",
+    "scope": "docs/03-scope.md",
+    "requirements": "docs/99-r12-frozen-requirements-baseline.md + docs/100-r12-requirements-traceability-and-no-loss-proof.md + referenced frozen blobs",
     "definitionOfDone": "docs/09-definition-of-done.md",
+    "architecture": "docs/04-architecture.md",
+    "security": "docs/05-security.md",
     "decisionsLedger": "docs/10-decisions-ledger.md",
-    "promptPolicy": "docs/104-chat-delivery-and-prompt-artifact-policy.md",
     "adrs": "adr/",
     "workOrders": "work-orders/",
     "evidence": "evidence/",
-    "contracts": "packages/contracts/openapi.json"
+    "promptPolicy": "docs/104-chat-delivery-and-prompt-artifact-policy.md",
+    "gef": "docs/gef/"
   },
   "toolchain": {
-    "backend": {
-      "language": "Python",
-      "version": "3.12",
-      "packageManager": "uv",
-      "frameworks": ["FastAPI 0.141.1", "Pydantic 2.13.5"],
-      "test": "pytest 9.1.1 / pytest-cov 7.1.0",
-      "lint": "Ruff 0.16.7",
-      "typecheck": "mypy 2.3.1 strict"
-    },
-    "frontend": {
-      "language": "TypeScript 5.9.3",
-      "runtime": "Node 24.18.0 in CI",
-      "packageManager": "npm",
-      "frameworks": ["React 19.3.0", "Vite 8.3.0"],
-      "test": "Vitest 5.0.0",
-      "lint": "ESLint 10.10.0",
-      "format": "Prettier 3.9.6"
-    }
+    "backend": {"language":"Python","version":"3.12","packageManager":"uv","test":"pytest","lint":"ruff","typecheck":"mypy","audit":"pip-audit"},
+    "frontend": {"language":"TypeScript","packageManager":"npm","framework":"React/Vite","test":"Vitest","lint":"ESLint","format":"Prettier"}
   },
   "commands": {
     "contractGenerationCheck": "python scripts/generate_contracts.py --check",
@@ -65,27 +52,26 @@
     "frontendAudit": "npm audit --audit-level=high --omit=optional"
   },
   "assurance": {
-    "defaultRiskClass": "HIGH_ASSURANCE",
     "exactHeadRequired": true,
     "independentReviewRequired": true,
     "shadowAssurance": "ON",
-    "promptDelivery": "PDF_ONLY"
+    "promptDelivery": "PDF_ONLY",
+    "unknownToAllowForbidden": true
   },
   "capabilities": {
     "planningFreeze": true,
     "boundedImplementationAuthorization": true,
     "exactHeadCI": true,
-    "independentReview": true,
+    "independentReviewPolicy": true,
     "machineEvidenceNativeRuntime": false,
     "proofCarryForwardAuthoritative": false,
-    "hedsDelta": "ADOPTING"
+    "universalGef": "ADOPTING"
   },
   "activeWork": {
-    "issue": 41,
-    "pullRequest": 42,
-    "branch": "implementation/HCT-IMP-0003-S0C",
-    "head": "f41262a53a59295fecbe3506e774a9b8592ad0cb",
+    "workOrder": "HCT-IMP-0011-S2B",
+    "issue": 77,
+    "pullRequest": 78,
     "status": "OPEN_UNMERGED_INDEPENDENT_REVIEW_REQUIRED"
   },
-  "promptCompilerVersion": "UADS-GEF-V1"
+  "promptCompilerVersion": "GEF-BOOTSTRAP-V1.0.0-UNIVERSAL"
 }
