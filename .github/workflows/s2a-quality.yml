@@ -208,10 +208,12 @@ jobs:
               assert item["feature_evaluations_per_second"] > 0 and item["replay_throughput_candles_per_second"] > 0
               assert item["no_lookahead_rejection_count"] > 0
               assert item["warmup_count"] > 0 and item["peak_memory_bytes"] > 0
-              assert len(item["output_manifest_hash"]) == 64
-              assert set(item["per_feature_compute_latency_ns"]) == set(item["feature_ids"])
-              for latency in item["per_feature_compute_latency_ns"].values():
-                  assert set(latency) == {"p50", "p95", "p99", "max"}
+          assert item["recursive_parity"] == "PASS"
+          assert item["recursive_parity_mismatches"] == 0
+          assert len(item["recursive_parity_fingerprint"]) == 64
+          assert set(item["per_feature_compute_latency_ns"]) == set(item["feature_ids"])
+          for latency in item["per_feature_compute_latency_ns"].values():
+              assert set(latency) == {"p50", "p95", "p99", "max"}
           deterministic_fields = (
               "profile",
               "contracts",
@@ -226,6 +228,9 @@ jobs:
               "no_lookahead_rejection_count",
               "input_manifest_hash",
               "output_manifest_hash",
+              "recursive_parity",
+              "recursive_parity_fingerprint",
+              "recursive_parity_mismatches",
               "correctness",
               "bounded_completion",
           )
@@ -262,16 +267,29 @@ jobs:
 
       - name: Publish exact-head implementation summary
         shell: bash
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          {
-            echo "## HCT-IMP-0009-S2A exact-head evidence"
-            echo "- head: \\`${{ github.event.pull_request.head.sha }}\\`"
-            echo "- base: \\`${EXECUTION_BASE_SHA}\\`"
-            echo "- checkpoint: \\`${CHECKPOINT_ID}\\`"
-            echo "- implementation: \\`${IMPLEMENTATION_ID}\\`"
-            echo "- implementation_authorized: true (bounded non-trading ceiling)"
-            echo "- production_credentials_authorized: false"
-            echo "- production_deployment_authorized: false"
-            echo "- limited_live_authorized: false"
-            echo "- live_trading_authorized: false"
-          } >> "$GITHUB_STEP_SUMMARY"
+          set -euo pipefail
+          summary="${RUNNER_TEMP}/s2a-summary.md"
+          : > "${summary}"
+          printf -- '%s\n' '## HCT-IMP-0009-S2A exact-head evidence' >> "${summary}"
+          printf -- '- head: `%s`\n' "${HEAD_SHA}" >> "${summary}"
+          printf -- '- base: `%s`\n' "${EXECUTION_BASE_SHA}" >> "${summary}"
+          printf -- '- checkpoint: `%s`\n' "${CHECKPOINT_ID}" >> "${summary}"
+          printf -- '- implementation: `%s`\n' "${IMPLEMENTATION_ID}" >> "${summary}"
+          printf -- '- %s\n' 'implementation_authorized: true (bounded non-trading ceiling)' >> "${summary}"
+          printf -- '- %s\n' 'production_credentials_authorized: false' >> "${summary}"
+          printf -- '- %s\n' 'production_deployment_authorized: false' >> "${summary}"
+          printf -- '- %s\n' 'limited_live_authorized: false' >> "${summary}"
+          printf -- '- %s\n' 'live_trading_authorized: false' >> "${summary}"
+          grep -Fq -- "${HEAD_SHA}" "${summary}"
+          grep -Fq -- "${EXECUTION_BASE_SHA}" "${summary}"
+          grep -Fq -- "${CHECKPOINT_ID}" "${summary}"
+          grep -Fq -- "${IMPLEMENTATION_ID}" "${summary}"
+          test "$(grep -Fc -- "${HEAD_SHA}" "${summary}")" -ge 1
+          test "$(grep -Fc -- "${EXECUTION_BASE_SHA}" "${summary}")" -ge 1
+          test "$(grep -Fc -- "${CHECKPOINT_ID}" "${summary}")" -ge 1
+          test "$(grep -Fc -- "${IMPLEMENTATION_ID}" "${summary}")" -ge 1
+          cat "${summary}" >> "${GITHUB_STEP_SUMMARY}"
+          echo "Exact-head summary material verified for head/base/checkpoint/implementation: PASS"

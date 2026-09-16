@@ -79,3 +79,28 @@ No network/provider transport, credentials, private APIs, signing, persistence, 
 `contextLock=PASS`
 
 The next permitted action is bounded Module 8 foundation implementation on this branch. Source drift or scope expansion requires STOP; the implementation PR must remain OPEN and UNMERGED for fresh independent HIGH_ASSURANCE review.
+
+## Correction handoff (IMP-H001 — IMP-H004)
+
+This append records the S2A correction handoff required by the author-side
+correction delta. It does not change any locked source identity above.
+
+- reviewed head: `a942cb0b02fdb6351ea4e3c0a53854279ab21366`
+  (independent review `5192500441`, `CORRECTION REQUIRED`, CRITICAL 0 / HIGH 4);
+- execution base remains `fecb97b6c9513a6dc0114d22c5e3768017411157`;
+- checkpoint remains `HCT-CP-0033 / IMPLEMENTATION_AUTHORIZED_S2A`;
+- authorization remains `HCT-IMPL-AUTH-0009`, scope `HCT-IMP-0009-S2A` only;
+- corrected findings: `IMP-H001`, `IMP-H002`, `IMP-H003`, `IMP-H004`, all
+  recorded as `CLOSED_AUTHOR_SIDE_ONLY` in `evidence/HCT-IMP-0009-S2A.md`;
+- the frozen nine R12 requirement blobs, the exact eight-feature allowlist,
+  `FEATURE_DECIMAL_V1`, the H008–H013 governance semantics, the CP0033
+  authorization ceiling, the negative-capability boundary and all prior-stage
+  regressions remain unchanged and unmodified;
+- no governance, checkpoint, work-order, frozen-requirement, dependency-lock,
+  S1E or S1F source file was modified by this correction;
+- the correction stayed inside the existing eight-file boundary;
+- the final corrected head is recorded by the exact-head pull request CI and the
+  PR #74 metadata; the pull request remains OPEN and UNMERGED.
+
+`correctionHandoff=PASS`
+

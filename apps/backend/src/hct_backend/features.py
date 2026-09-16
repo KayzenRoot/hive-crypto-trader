@@ -10,13 +10,22 @@ import hashlib
 import json
 import re
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation, localcontext
 from enum import StrEnum
 from typing import Any, Final, Self
 
 from hct_backend.contracts import Environment, IdentityKind, StableId
+from hct_backend.market_truth import (
+    DataAuthorityState,
+    LifecycleRestriction,
+    MarketStateSnapshot,
+    MarketStateTrust,
+    QualityReason,
+    ResourceAdmissionEvidence,
+    ResourceDisposition,
+)
 from hct_backend.s1f_numeric import (
     DecimalValue,
     NumericFailureReason,
@@ -33,9 +42,62 @@ from hct_backend.s1f_values import (
 FEATURE_ALGORITHM_VERSION: Final = "S2A_STANDARD_FEATURES_V1"
 FEATURE_DECIMAL_POLICY_VERSION: Final = "FEATURE_DECIMAL_V1"
 RECURSIVE_STATE_VERSION: Final = "S2A_ACCUMULATOR_STATE_V1"
+FEATURE_AUTHORITY_VERSION: Final = "S2A_AUTHORITY_EVIDENCE_V1"
 DERIVED_MTF_PROVENANCE: Final = "DERIVED_ANALYTICAL_V1"
 _SCALE_18 = Decimal("1e-18")
 _HASH = re.compile(r"^[0-9a-f]{64}$")
+_STATE_ATTESTATION: Final = object()
+_ALIGNED_ATTESTATION: Final = object()
+_TRUST_SEVERITY: Final = (
+    MarketStateTrust.UNTRUSTED,
+    MarketStateTrust.RESYNC_REQUIRED,
+    MarketStateTrust.UNKNOWN,
+    MarketStateTrust.DEGRADED,
+    MarketStateTrust.TRUSTED,
+)
+_AUTHORITY_SEVERITY: Final = (
+    DataAuthorityState.EMERGENCY,
+    DataAuthorityState.RECONCILIATION_ONLY,
+    DataAuthorityState.REDUCE_ONLY,
+    DataAuthorityState.NO_NEW_EXPOSURE,
+    DataAuthorityState.DEGRADED_NEW_EXPOSURE,
+    DataAuthorityState.ALLOW_NEW_EXPOSURE,
+)
+_RESOURCE_SEVERITY: Final = (
+    ResourceDisposition.DENIED,
+    ResourceDisposition.UNKNOWN,
+    ResourceDisposition.DEGRADED,
+    ResourceDisposition.AVAILABLE,
+)
+_LIFECYCLE_SEVERITY: Final = (
+    LifecycleRestriction.NEW_EXPOSURE_DISABLED,
+    LifecycleRestriction.ELIGIBILITY_UNKNOWN,
+    LifecycleRestriction.NONE,
+)
+_UNKNOWN_QUALITY_REASONS: Final = frozenset(
+    {
+        QualityReason.STALE,
+        QualityReason.EXPIRED,
+        QualityReason.GAP,
+        QualityReason.DUPLICATE,
+        QualityReason.OUT_OF_ORDER,
+        QualityReason.SEQUENCE_UNPROVABLE,
+        QualityReason.CLOCK_DRIFT,
+        QualityReason.CLOCK_JUMP,
+        QualityReason.CLOCK_UNTRUSTED,
+        QualityReason.SCHEMA_QUARANTINED,
+        QualityReason.MISSING_PROVENANCE,
+        QualityReason.MISSING_GENERATION,
+        QualityReason.UNSYNCHRONIZED,
+    }
+)
+_INVALID_QUALITY_REASONS: Final = frozenset(
+    {
+        QualityReason.RETIRED_GENERATION,
+        QualityReason.CROSS_CHANNEL_CONTRADICTION,
+    }
+)
+_RESTRICTIVE_QUALITY_REASONS: Final = _UNKNOWN_QUALITY_REASONS | _INVALID_QUALITY_REASONS
 _FEATURE_IDS = frozenset(
     {
         "F-RET-001",
@@ -75,13 +137,26 @@ class FeatureValidity(StrEnum):
     DEGRADED = "DEGRADED"
 
 
+class FeatureAxisRestriction(StrEnum):
+    """Restriction axis kept separate from analytical FeatureValidity."""
+
+    NONE = "NONE"
+    RESTRICTIVE = "RESTRICTIVE"
+
+
 def _hash(material: object) -> str:
     encoded = json.dumps(material, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
+def _is_hash(value: object) -> bool:
+    """Exact lowercase SHA-256 fingerprint test."""
+
+    return isinstance(value, str) and _HASH.fullmatch(value) is not None
+
+
 def _require_hash(value: str, label: str) -> None:
-    if not isinstance(value, str) or _HASH.fullmatch(value) is None:
+    if not _is_hash(value):
         raise FeatureError(f"{label} must be a lowercase SHA-256 fingerprint")
 
 
@@ -89,10 +164,6 @@ def _utc(value: datetime, label: str) -> datetime:
     if not isinstance(value, datetime) or value.tzinfo is None or value.utcoffset() is None:
         raise FeatureError(f"{label} must be timezone-aware")
     return value.astimezone(UTC)
-
-
-def _enum_text(value: object) -> str:
-    return str(getattr(value, "value", value))
 
 
 def _canonical(value: Decimal) -> DecimalValue:
@@ -119,6 +190,189 @@ def _mean(values: Sequence[Decimal]) -> Decimal:
         context.prec = 76
         context.rounding = ROUND_HALF_EVEN
         return sum(values, Decimal(0)) / Decimal(len(values))
+
+
+def _rsi_output(avg_gain: Decimal, avg_loss: Decimal) -> DecimalValue:
+    """Canonical Wilder RSI output for the given average gain and loss."""
+
+    if avg_gain == 0 and avg_loss == 0:
+        return _canonical(Decimal(50))
+    if avg_loss == 0:
+        return _canonical(Decimal(100))
+    if avg_gain == 0:
+        return _canonical(Decimal(0))
+    with localcontext() as context:
+        context.prec = 76
+        context.rounding = ROUND_HALF_EVEN
+        return _canonical(Decimal(100) - (Decimal(100) / (Decimal(1) + avg_gain / avg_loss)))
+
+
+@dataclass(frozen=True, slots=True)
+class FeatureAuthorityEvidence:
+    """Read-only typed S1E authority evidence consumed by Module 8.
+
+    Analytical truth, market-state trust, data authority, resource admission and
+    universe lifecycle are separate axes.  This evidence carries all of them
+    without granting any downstream action authority.
+    """
+
+    market_state_fingerprint: str
+    market_state_trust: MarketStateTrust
+    data_authority_state: DataAuthorityState
+    data_authority_fingerprint: str
+    data_authority_reasons: tuple[QualityReason, ...]
+    resource_disposition: ResourceDisposition
+    resource_evidence_fingerprint: str
+    lifecycle_restriction: LifecycleRestriction
+    is_fixture: bool = False
+
+    def __post_init__(self) -> None:
+        _require_hash(self.market_state_fingerprint, "authority market-state fingerprint")
+        if not isinstance(self.market_state_trust, MarketStateTrust):
+            raise FeatureError("authority market-state trust is invalid")
+        if not isinstance(self.data_authority_state, DataAuthorityState):
+            raise FeatureError("authority data-authority state is invalid")
+        _require_hash(self.data_authority_fingerprint, "authority decision fingerprint")
+        if not isinstance(self.data_authority_reasons, tuple) or not self.data_authority_reasons:
+            raise FeatureError("authority reasons are required")
+        if any(not isinstance(item, QualityReason) for item in self.data_authority_reasons):
+            raise FeatureError("authority reasons must be governed quality reasons")
+        if (
+            tuple(sorted(set(self.data_authority_reasons), key=lambda item: item.value))
+            != self.data_authority_reasons
+        ):
+            raise FeatureError("authority reasons must be unique and ordered")
+        if not isinstance(self.resource_disposition, ResourceDisposition):
+            raise FeatureError("authority resource disposition is invalid")
+        _require_hash(self.resource_evidence_fingerprint, "authority resource fingerprint")
+        if not isinstance(self.lifecycle_restriction, LifecycleRestriction):
+            raise FeatureError("authority lifecycle restriction is invalid")
+        if not isinstance(self.is_fixture, bool):
+            raise FeatureError("authority fixture flag must be boolean")
+
+    @property
+    def resource_restriction(self) -> FeatureAxisRestriction:
+        if self.resource_disposition is ResourceDisposition.AVAILABLE:
+            return FeatureAxisRestriction.NONE
+        return FeatureAxisRestriction.RESTRICTIVE
+
+    @property
+    def lifecycle_axis(self) -> FeatureAxisRestriction:
+        if self.lifecycle_restriction is LifecycleRestriction.NONE:
+            return FeatureAxisRestriction.NONE
+        return FeatureAxisRestriction.RESTRICTIVE
+
+    @property
+    def restrictive_reasons(self) -> tuple[QualityReason, ...]:
+        return tuple(
+            reason
+            for reason in self.data_authority_reasons
+            if reason in _RESTRICTIVE_QUALITY_REASONS
+        )
+
+    @property
+    def market_truth_restrictive(self) -> bool:
+        return self.market_state_trust is not MarketStateTrust.TRUSTED or bool(
+            self.restrictive_reasons
+        )
+
+    @property
+    def material(self) -> dict[str, object]:
+        return {
+            "authority_version": FEATURE_AUTHORITY_VERSION,
+            "market_state_fingerprint": self.market_state_fingerprint,
+            "market_state_trust": self.market_state_trust.value,
+            "data_authority_state": self.data_authority_state.value,
+            "data_authority_fingerprint": self.data_authority_fingerprint,
+            "data_authority_reasons": [item.value for item in self.data_authority_reasons],
+            "resource_disposition": self.resource_disposition.value,
+            "resource_evidence_fingerprint": self.resource_evidence_fingerprint,
+            "lifecycle_restriction": self.lifecycle_restriction.value,
+            "is_fixture": self.is_fixture,
+        }
+
+    @property
+    def fingerprint(self) -> str:
+        return _hash(self.material)
+
+    @classmethod
+    def from_market_state(
+        cls,
+        state: MarketStateSnapshot,
+        *,
+        resource: ResourceAdmissionEvidence | None = None,
+    ) -> Self:
+        """Derive read-only authority evidence from canonical S1E state."""
+
+        if not isinstance(state, MarketStateSnapshot):
+            raise FeatureError("canonical S1E market-state snapshot is required")
+        if resource is not None and not isinstance(resource, ResourceAdmissionEvidence):
+            raise FeatureError("canonical module 29 admission evidence is required")
+        decision = state.data_authority
+        return cls(
+            market_state_fingerprint=state.fingerprint,
+            market_state_trust=state.trust,
+            data_authority_state=decision.state,
+            data_authority_fingerprint=_hash(
+                {
+                    "state": decision.state.value,
+                    "reasons": [item.value for item in decision.reasons],
+                    "affected_actions": [item.value for item in decision.affected_actions],
+                    "explanatory_score": decision.explanatory_score,
+                }
+            ),
+            data_authority_reasons=tuple(
+                sorted(set(decision.reasons), key=lambda item: item.value)
+            ),
+            resource_disposition=(
+                resource.disposition if resource is not None else ResourceDisposition.UNKNOWN
+            ),
+            resource_evidence_fingerprint=(
+                resource.decision_fingerprint
+                if resource is not None
+                else _hash({"resource": "ABSENT", "state": state.fingerprint})
+            ),
+            lifecycle_restriction=state.lifecycle_restriction,
+        )
+
+    @classmethod
+    def fixture(
+        cls,
+        *,
+        market_state_fingerprint: str,
+        market_state_trust: MarketStateTrust = MarketStateTrust.TRUSTED,
+        data_authority_state: DataAuthorityState = DataAuthorityState.ALLOW_NEW_EXPOSURE,
+        data_authority_reasons: tuple[QualityReason, ...] = (QualityReason.FRESH_VALID,),
+        resource_disposition: ResourceDisposition = ResourceDisposition.AVAILABLE,
+        lifecycle_restriction: LifecycleRestriction = LifecycleRestriction.NONE,
+    ) -> Self:
+        """Replay-scoped synthetic authority; it can never claim live authority."""
+
+        return cls(
+            market_state_fingerprint=market_state_fingerprint,
+            market_state_trust=market_state_trust,
+            data_authority_state=data_authority_state,
+            data_authority_fingerprint=_hash(
+                {
+                    "fixture": True,
+                    "state": data_authority_state.value,
+                    "reasons": [item.value for item in data_authority_reasons],
+                }
+            ),
+            data_authority_reasons=tuple(
+                sorted(set(data_authority_reasons), key=lambda item: item.value)
+            ),
+            resource_disposition=resource_disposition,
+            resource_evidence_fingerprint=_hash(
+                {
+                    "fixture": True,
+                    "resource": resource_disposition.value,
+                    "state": market_state_fingerprint,
+                }
+            ),
+            lifecycle_restriction=lifecycle_restriction,
+            is_fixture=True,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -330,14 +584,13 @@ class FeatureSample:
     market_state_fingerprint: str
     provenance_fingerprint: str
     timeframe: Timeframe
+    authority: FeatureAuthorityEvidence
     interval_start: datetime | None = None
     interval_end: datetime | None = None
     high: DecimalValue | None = None
     low: DecimalValue | None = None
     close: DecimalValue | None = None
     quantity: Quantity | None = None
-    market_state_trust: str = "TRUSTED"
-    upstream_fidelity: str = "TRUSTED"
 
     def __post_init__(self) -> None:
         _require_hash(self.fingerprint, "sample fingerprint")
@@ -387,14 +640,32 @@ class FeatureSample:
             or self.quantity.unit is not QuantityUnit.CONTRACTS_PROVIDER_NATIVE_V1
         ):
             raise FeatureError("sample quantity must use provider-native contracts")
-        trust = _enum_text(self.market_state_trust)
-        fidelity = _enum_text(self.upstream_fidelity)
-        if trust not in {"TRUSTED", "DEGRADED", "UNKNOWN", "UNTRUSTED", "RESYNC_REQUIRED"}:
-            raise FeatureError("unknown market-state trust")
-        if fidelity not in {"TRUSTED", "RESOURCE_DEGRADED", "INELIGIBLE"}:
-            raise FeatureError("unknown upstream fidelity")
-        object.__setattr__(self, "market_state_trust", trust)
-        object.__setattr__(self, "upstream_fidelity", fidelity)
+        if not isinstance(self.authority, FeatureAuthorityEvidence):
+            raise FeatureError("sample authority evidence is required")
+        if self.market_state_fingerprint != self.authority.market_state_fingerprint:
+            raise FeatureError("sample market state is not bound to its authority evidence")
+        if self.authority.is_fixture and self.environment is not Environment.REPLAY:
+            raise FeatureError("synthetic fixture authority is REPLAY-only")
+
+    @property
+    def market_state_trust(self) -> MarketStateTrust:
+        return self.authority.market_state_trust
+
+    @property
+    def resource_disposition(self) -> ResourceDisposition:
+        return self.authority.resource_disposition
+
+    @property
+    def resource_restriction(self) -> FeatureAxisRestriction:
+        return self.authority.resource_restriction
+
+    @property
+    def lifecycle_axis(self) -> FeatureAxisRestriction:
+        return self.authority.lifecycle_axis
+
+    @property
+    def data_authority_state(self) -> DataAuthorityState:
+        return self.authority.data_authority_state
 
     @classmethod
     def from_decimal(
@@ -413,8 +684,16 @@ class FeatureSample:
         wall_receive_time: datetime | None = None,
         closed: bool = True,
         timeframe: Timeframe | None = None,
-        upstream_fidelity: str = "TRUSTED",
+        market_state_trust: MarketStateTrust = MarketStateTrust.TRUSTED,
+        data_authority_state: DataAuthorityState = DataAuthorityState.ALLOW_NEW_EXPOSURE,
+        data_authority_reasons: tuple[QualityReason, ...] = (QualityReason.FRESH_VALID,),
+        resource_disposition: ResourceDisposition = ResourceDisposition.AVAILABLE,
+        lifecycle_restriction: LifecycleRestriction = LifecycleRestriction.NONE,
     ) -> Self:
+        """Build a synthetic scalar fixture; fixtures are REPLAY-only."""
+
+        if environment is not Environment.REPLAY:
+            raise FeatureError("synthetic fixture samples are REPLAY-only")
         parsed = value if isinstance(value, DecimalValue) else DecimalValue.parse(value)
         source = source_id or StableId(kind=IdentityKind.EXCHANGE, value="fixture")
         contract = contract_id or StableId(kind=IdentityKind.INSTRUMENT, value="fixture")
@@ -459,37 +738,83 @@ class FeatureSample:
             market_state_fingerprint=state,
             provenance_fingerprint=provenance,
             timeframe=frame,
+            authority=FeatureAuthorityEvidence.fixture(
+                market_state_fingerprint=state,
+                market_state_trust=market_state_trust,
+                data_authority_state=data_authority_state,
+                data_authority_reasons=data_authority_reasons,
+                resource_disposition=resource_disposition,
+                lifecycle_restriction=lifecycle_restriction,
+            ),
             interval_start=event,
             interval_end=event + timedelta(seconds=frame.duration_seconds),
             close=parsed,
-            upstream_fidelity=upstream_fidelity,
         )
 
     @classmethod
-    def from_candle(cls, candle: CandleBar, *, upstream_fidelity: str = "TRUSTED") -> Self:
+    def from_candle(
+        cls,
+        candle: CandleBar,
+        *,
+        market_state: MarketStateSnapshot | None = None,
+        resource: ResourceAdmissionEvidence | None = None,
+    ) -> Self:
+        """Bind an S1F candle to canonical S1E authority evidence.
+
+        A non-REPLAY candle can never be admitted without the matching canonical
+        market-state snapshot; the S1F provenance fingerprint is never reused as
+        market-state identity.
+        """
+
         if not isinstance(candle, CandleBar):
             raise FeatureError("CandleBar is required")
+        context = candle.context
+        if market_state is None:
+            if context.environment is not Environment.REPLAY:
+                raise FeatureError(
+                    "authoritative candle samples require canonical S1E market-state evidence"
+                )
+            authority = FeatureAuthorityEvidence.fixture(
+                market_state_fingerprint=_hash(
+                    {
+                        "fixture": True,
+                        "provenance": context.provenance_fingerprint,
+                        "event": context.originating_event_fingerprint,
+                    }
+                ),
+            )
+        else:
+            if not isinstance(market_state, MarketStateSnapshot):
+                raise FeatureError("canonical S1E market-state snapshot is required")
+            if (
+                market_state.source_id != context.source_id
+                or market_state.contract_id != context.contract_id
+                or market_state.environment is not context.environment
+                or market_state.generation != context.generation
+            ):
+                raise FeatureError("candle and market-state identity disagree")
+            authority = FeatureAuthorityEvidence.from_market_state(market_state, resource=resource)
         return cls(
             value=candle.close,
             fingerprint=candle.fingerprint,
-            event_time=candle.context.event_time,
-            knowledge_time=candle.context.knowledge_time,
-            wall_receive_time=candle.context.wall_receive_time,
+            event_time=context.event_time,
+            knowledge_time=context.knowledge_time,
+            wall_receive_time=context.wall_receive_time,
             closed=candle.finality is Finality.CLOSED,
-            source_id=candle.context.source_id,
-            contract_id=candle.context.contract_id,
-            environment=candle.context.environment,
-            generation_fingerprint=candle.context.generation.fingerprint,
-            market_state_fingerprint=candle.context.provenance_fingerprint,
-            provenance_fingerprint=candle.context.provenance_fingerprint,
+            source_id=context.source_id,
+            contract_id=context.contract_id,
+            environment=context.environment,
+            generation_fingerprint=context.generation.fingerprint,
+            market_state_fingerprint=authority.market_state_fingerprint,
+            provenance_fingerprint=context.provenance_fingerprint,
             timeframe=candle.timeframe,
+            authority=authority,
             interval_start=candle.start,
             interval_end=candle.end,
             high=candle.high,
             low=candle.low,
             close=candle.close,
             quantity=candle.volume,
-            upstream_fidelity=upstream_fidelity,
         )
 
     @property
@@ -515,39 +840,156 @@ class FeatureSample:
                 "low": self.low.fingerprint if self.low else None,
                 "close": self.close.fingerprint if self.close else None,
                 "quantity": self.quantity.fingerprint if self.quantity else None,
-                "trust": self.market_state_trust,
-                "fidelity": self.upstream_fidelity,
+                "authority": self.authority.fingerprint,
+                "market_state_trust": self.authority.market_state_trust.value,
+                "data_authority": self.authority.data_authority_state.value,
+                "resource_restriction": self.authority.resource_restriction.value,
+                "lifecycle_restriction": self.authority.lifecycle_axis.value,
             }
         )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class RecursiveAccumulatorState:
-    """Serialized, canonical state for deterministic recursive replay."""
+    """Evaluator-issued canonical state for deterministic recursive replay.
 
+    The state binds the exact feature/algorithm/Decimal-policy, source,
+    contract, environment, generation and timeframe context, the predecessor
+    state fingerprint and the ordered input, market-state and authority lineage
+    it consumed.  Only the evaluator can issue a resumable state; direct
+    construction and unaudited deserialization stay inert and fail closed.
+    """
+
+    feature_id: str
+    feature_version: int
     feature_fingerprint: str
-    algorithm_version: str
+    source_field: str
     parameter_n: int
+    timeframe_fingerprint: str
+    timeframe_version: int
+    algorithm_version: str
+    decimal_policy_version: str
+    source_id: StableId
+    contract_id: StableId
+    environment: Environment
+    source_generation_fingerprint: str
     components: tuple[DecimalValue, ...]
     previous_input: DecimalValue | None
     previous_close: DecimalValue | None
     processed_samples: int
     lineage: tuple[str, ...]
     market_state_lineage: tuple[str, ...]
-    source_generation_fingerprint: str
-    environment: Environment
+    authority_lineage: tuple[str, ...]
+    carried_market_state_trust: MarketStateTrust
+    carried_data_authority_state: DataAuthorityState
+    carried_resource_restriction: FeatureAxisRestriction
+    carried_lifecycle_restriction: FeatureAxisRestriction
+    carried_evidence_fingerprint: str
+    previous_state_fingerprint: str | None
     event_time: datetime
     knowledge_time: datetime
     wall_receive_time: datetime
     window_start: datetime
     window_end: datetime
+    _attestation: object = field(default=None, repr=False, compare=False)
 
-    def __post_init__(self) -> None:
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        raise FeatureError("RecursiveAccumulatorState must be issued by the feature evaluator")
+
+    def _is_attested(self) -> bool:
+        return self._attestation is _STATE_ATTESTATION
+
+    @classmethod
+    def _from_evaluator(
+        cls,
+        *,
+        feature: FeatureVersion,
+        sample: FeatureSample,
+        components: tuple[DecimalValue, ...],
+        previous_input: DecimalValue | None,
+        previous_close: DecimalValue | None,
+        processed_samples: int,
+        lineage: tuple[str, ...],
+        market_state_lineage: tuple[str, ...],
+        authority_lineage: tuple[str, ...],
+        carried_market_state_trust: MarketStateTrust,
+        carried_data_authority_state: DataAuthorityState,
+        carried_resource_restriction: FeatureAxisRestriction,
+        carried_lifecycle_restriction: FeatureAxisRestriction,
+        carried_evidence_fingerprint: str,
+        previous_state_fingerprint: str | None,
+        validated_lineage_prefix: int,
+        event_time: datetime,
+        knowledge_time: datetime,
+        wall_receive_time: datetime,
+        window_start: datetime,
+        window_end: datetime,
+    ) -> RecursiveAccumulatorState:
+        instance = object.__new__(cls)
+        for name, value in (
+            ("feature_id", feature.canonical_id),
+            ("feature_version", feature.version),
+            ("feature_fingerprint", feature.fingerprint),
+            ("source_field", feature.definition.source_field),
+            ("parameter_n", feature.parameter_n or 2),
+            ("timeframe_fingerprint", sample.timeframe.fingerprint),
+            ("timeframe_version", sample.timeframe.version),
+            ("algorithm_version", RECURSIVE_STATE_VERSION),
+            ("decimal_policy_version", FEATURE_DECIMAL_POLICY_VERSION),
+            ("source_id", sample.source_id),
+            ("contract_id", sample.contract_id),
+            ("environment", sample.environment),
+            ("source_generation_fingerprint", sample.generation_fingerprint),
+            ("components", components),
+            ("previous_input", previous_input),
+            ("previous_close", previous_close),
+            ("processed_samples", processed_samples),
+            ("lineage", lineage),
+            ("market_state_lineage", market_state_lineage),
+            ("authority_lineage", authority_lineage),
+            ("carried_market_state_trust", carried_market_state_trust),
+            ("carried_data_authority_state", carried_data_authority_state),
+            ("carried_resource_restriction", carried_resource_restriction),
+            ("carried_lifecycle_restriction", carried_lifecycle_restriction),
+            ("carried_evidence_fingerprint", carried_evidence_fingerprint),
+            ("previous_state_fingerprint", previous_state_fingerprint),
+            ("event_time", event_time),
+            ("knowledge_time", knowledge_time),
+            ("wall_receive_time", wall_receive_time),
+            ("window_start", window_start),
+            ("window_end", window_end),
+        ):
+            object.__setattr__(instance, name, value)
+        object.__setattr__(instance, "_attestation", _STATE_ATTESTATION)
+        instance.__post_init__(validated_lineage_prefix=validated_lineage_prefix)
+        return instance
+
+    def __post_init__(self, *, validated_lineage_prefix: int = 0) -> None:
+        if (
+            isinstance(validated_lineage_prefix, bool)
+            or not isinstance(validated_lineage_prefix, int)
+            or validated_lineage_prefix < 0
+            or validated_lineage_prefix >= len(self.lineage)
+        ):
+            raise FeatureError("state validated lineage prefix is invalid")
+        if self.feature_id not in _FEATURE_IDS:
+            raise FeatureError("state feature ID is outside the exact S2A allowlist")
+        if isinstance(self.feature_version, bool) or self.feature_version < 1:
+            raise FeatureError("state feature version is invalid")
         _require_hash(self.feature_fingerprint, "state feature fingerprint")
+        if not isinstance(self.source_field, str) or not self.source_field:
+            raise FeatureError("state source field is required")
         if self.algorithm_version != RECURSIVE_STATE_VERSION:
             raise FeatureError("unsupported recursive state version")
-        if isinstance(self.parameter_n, bool) or self.parameter_n < 2:
+        if self.decimal_policy_version != FEATURE_DECIMAL_POLICY_VERSION:
+            raise FeatureError("unsupported recursive state Decimal policy")
+        if isinstance(self.parameter_n, bool) or not isinstance(self.parameter_n, int):
             raise FeatureError("state N is invalid")
+        if self.parameter_n < 2:
+            raise FeatureError("state N is invalid")
+        _require_hash(self.timeframe_fingerprint, "state timeframe fingerprint")
+        if isinstance(self.timeframe_version, bool) or self.timeframe_version < 1:
+            raise FeatureError("state timeframe version is invalid")
         if not all(
             isinstance(value, DecimalValue) and value.material_scale == 18
             for value in self.components
@@ -559,22 +1001,50 @@ class RecursiveAccumulatorState:
             raise FeatureError("previous close must be canonical scale 18")
         if isinstance(self.processed_samples, bool) or self.processed_samples < 1:
             raise FeatureError("state sample count is invalid")
-        if not self.lineage or any(_HASH.fullmatch(item) is None for item in self.lineage):
+        if not self.lineage or any(
+            not _is_hash(item) for item in self.lineage[validated_lineage_prefix:]
+        ):
             raise FeatureError("state lineage is invalid")
         if len(set(self.lineage)) != len(self.lineage):
             raise FeatureError("state lineage must be ordered and unique")
         if not self.market_state_lineage or any(
-            _HASH.fullmatch(item) is None for item in self.market_state_lineage
+            not _is_hash(item) for item in self.market_state_lineage[validated_lineage_prefix:]
         ):
             raise FeatureError("state market-state lineage is invalid")
         if len(self.market_state_lineage) != len(self.lineage):
             raise FeatureError("state lineage and market-state lineage lengths differ")
+        if not self.authority_lineage or any(
+            not _is_hash(item) for item in self.authority_lineage[validated_lineage_prefix:]
+        ):
+            raise FeatureError("state authority lineage is invalid")
+        if len(self.authority_lineage) != len(self.lineage):
+            raise FeatureError("state lineage and authority lineage lengths differ")
+        if not isinstance(self.carried_market_state_trust, MarketStateTrust):
+            raise FeatureError("state carried market-state trust is invalid")
+        if not isinstance(self.carried_data_authority_state, DataAuthorityState):
+            raise FeatureError("state carried data-authority state is invalid")
+        if not isinstance(
+            self.carried_resource_restriction, FeatureAxisRestriction
+        ) or not isinstance(self.carried_lifecycle_restriction, FeatureAxisRestriction):
+            raise FeatureError("state carried restriction axes are invalid")
+        _require_hash(self.carried_evidence_fingerprint, "state carried authority evidence")
+        if self.processed_samples != len(self.lineage):
+            raise FeatureError("state sample count does not match its consumed lineage")
+        if self.previous_state_fingerprint is not None:
+            _require_hash(self.previous_state_fingerprint, "state predecessor fingerprint")
         _require_hash(self.source_generation_fingerprint, "state generation")
+        if (
+            not isinstance(self.source_id, StableId)
+            or self.source_id.kind is not IdentityKind.EXCHANGE
+            or not isinstance(self.contract_id, StableId)
+            or self.contract_id.kind is not IdentityKind.INSTRUMENT
+        ):
+            raise FeatureError("state source identities are invalid")
         if not isinstance(self.environment, Environment):
             raise FeatureError("state environment is invalid")
         event = _utc(self.event_time, "state event time")
         knowledge = _utc(self.knowledge_time, "state knowledge time")
-        wall = _utc(self.wall_receive_time, "state wall time")
+        wall = _utc(self.wall_receive_time, "state wall receive time")
         start = _utc(self.window_start, "state window start")
         end = _utc(self.window_end, "state window end")
         if knowledge > wall or end < start:
@@ -585,15 +1055,39 @@ class RecursiveAccumulatorState:
         object.__setattr__(self, "window_start", start)
         object.__setattr__(self, "window_end", end)
 
+    def matches(self, feature: FeatureVersion, first: FeatureSample) -> bool:
+        """Require the current first input to match the state context exactly."""
+
+        return (
+            self._is_attested()
+            and self.feature_fingerprint == feature.fingerprint
+            and self.feature_id == feature.canonical_id
+            and self.feature_version == feature.version
+            and self.parameter_n == (feature.parameter_n or 2)
+            and self.source_id == first.source_id
+            and self.contract_id == first.contract_id
+            and self.environment is first.environment
+            and self.source_generation_fingerprint == first.generation_fingerprint
+            and self.timeframe_fingerprint == first.timeframe.fingerprint
+        )
+
     @property
     def fingerprint(self) -> str:
         return _hash(self.to_dict(include_fingerprint=False))
 
     def to_dict(self, *, include_fingerprint: bool = True) -> dict[str, Any]:
         material: dict[str, Any] = {
+            "feature_id": self.feature_id,
+            "feature_version": self.feature_version,
             "feature_fingerprint": self.feature_fingerprint,
-            "algorithm_version": self.algorithm_version,
+            "source_field": self.source_field,
             "parameter_n": self.parameter_n,
+            "timeframe_fingerprint": self.timeframe_fingerprint,
+            "timeframe_version": self.timeframe_version,
+            "algorithm_version": self.algorithm_version,
+            "decimal_policy_version": self.decimal_policy_version,
+            "source": self.source_id.as_text(),
+            "contract": self.contract_id.as_text(),
             "components": [value.canonical_text for value in self.components],
             "component_scales": [value.material_scale for value in self.components],
             "previous_input": self.previous_input.canonical_text if self.previous_input else None,
@@ -601,6 +1095,13 @@ class RecursiveAccumulatorState:
             "processed_samples": self.processed_samples,
             "lineage": self.lineage,
             "market_state_lineage": self.market_state_lineage,
+            "authority_lineage": self.authority_lineage,
+            "carried_market_state_trust": self.carried_market_state_trust.value,
+            "carried_data_authority_state": self.carried_data_authority_state.value,
+            "carried_resource_restriction": self.carried_resource_restriction.value,
+            "carried_lifecycle_restriction": self.carried_lifecycle_restriction.value,
+            "carried_evidence_fingerprint": self.carried_evidence_fingerprint,
+            "previous_state_fingerprint": self.previous_state_fingerprint,
             "source_generation_fingerprint": self.source_generation_fingerprint,
             "environment": self.environment.value,
             "event_time": self.event_time.isoformat(),
@@ -618,6 +1119,13 @@ class RecursiveAccumulatorState:
 
     @classmethod
     def deserialize(cls, raw: str | Mapping[str, Any]) -> Self:
+        """Rebuild an inert, unattested state from serialized material.
+
+        The reconstructed material is revalidated and its self-fingerprint is
+        recomputed, so tampering is detected.  The result is not evaluator-issued
+        and cannot be resumed from until it is revalidated against recomputation.
+        """
+
         payload = json.loads(raw) if isinstance(raw, str) else dict(raw)
         with localcontext() as context:
             context.prec = 76
@@ -640,27 +1148,65 @@ class RecursiveAccumulatorState:
                 if payload.get("previous_close") is not None
                 else None
             )
-        state = cls(
-            feature_fingerprint=payload["feature_fingerprint"],
-            algorithm_version=payload["algorithm_version"],
-            parameter_n=payload["parameter_n"],
-            components=components,
-            previous_input=previous_input,
-            previous_close=previous_close,
-            processed_samples=payload["processed_samples"],
-            lineage=tuple(payload["lineage"]),
-            market_state_lineage=tuple(payload["market_state_lineage"]),
-            source_generation_fingerprint=payload["source_generation_fingerprint"],
-            environment=Environment(payload["environment"]),
-            event_time=datetime.fromisoformat(payload["event_time"]),
-            knowledge_time=datetime.fromisoformat(payload["knowledge_time"]),
-            wall_receive_time=datetime.fromisoformat(payload["wall_receive_time"]),
-            window_start=datetime.fromisoformat(payload["window_start"]),
-            window_end=datetime.fromisoformat(payload["window_end"]),
-        )
-        if payload.get("state_fingerprint") != state.fingerprint:
+        source_id = StableId.parse(payload["source"])
+        contract_id = StableId.parse(payload["contract"])
+        if (
+            source_id.kind is not IdentityKind.EXCHANGE
+            or contract_id.kind is not IdentityKind.INSTRUMENT
+        ):
+            raise FeatureError("serialized state identities have the wrong kind")
+        instance = object.__new__(cls)
+        for name, value in (
+            ("feature_id", payload["feature_id"]),
+            ("feature_version", payload["feature_version"]),
+            ("feature_fingerprint", payload["feature_fingerprint"]),
+            ("source_field", payload["source_field"]),
+            ("parameter_n", payload["parameter_n"]),
+            ("timeframe_fingerprint", payload["timeframe_fingerprint"]),
+            ("timeframe_version", payload["timeframe_version"]),
+            ("algorithm_version", payload["algorithm_version"]),
+            ("decimal_policy_version", payload["decimal_policy_version"]),
+            ("source_id", source_id),
+            ("contract_id", contract_id),
+            ("environment", Environment(payload["environment"])),
+            ("source_generation_fingerprint", payload["source_generation_fingerprint"]),
+            ("components", components),
+            ("previous_input", previous_input),
+            ("previous_close", previous_close),
+            ("processed_samples", payload["processed_samples"]),
+            ("lineage", tuple(payload["lineage"])),
+            ("market_state_lineage", tuple(payload["market_state_lineage"])),
+            ("authority_lineage", tuple(payload["authority_lineage"])),
+            (
+                "carried_market_state_trust",
+                MarketStateTrust(payload["carried_market_state_trust"]),
+            ),
+            (
+                "carried_data_authority_state",
+                DataAuthorityState(payload["carried_data_authority_state"]),
+            ),
+            (
+                "carried_resource_restriction",
+                FeatureAxisRestriction(payload["carried_resource_restriction"]),
+            ),
+            (
+                "carried_lifecycle_restriction",
+                FeatureAxisRestriction(payload["carried_lifecycle_restriction"]),
+            ),
+            ("carried_evidence_fingerprint", payload["carried_evidence_fingerprint"]),
+            ("previous_state_fingerprint", payload.get("previous_state_fingerprint")),
+            ("event_time", datetime.fromisoformat(payload["event_time"])),
+            ("knowledge_time", datetime.fromisoformat(payload["knowledge_time"])),
+            ("wall_receive_time", datetime.fromisoformat(payload["wall_receive_time"])),
+            ("window_start", datetime.fromisoformat(payload["window_start"])),
+            ("window_end", datetime.fromisoformat(payload["window_end"])),
+        ):
+            object.__setattr__(instance, name, value)
+        object.__setattr__(instance, "_attestation", None)
+        instance.__post_init__()
+        if payload.get("state_fingerprint") != instance.fingerprint:
             raise FeatureError("recursive state fingerprint mismatch")
-        return state
+        return instance
 
 
 @dataclass(frozen=True, slots=True)
@@ -685,7 +1231,11 @@ class FeatureValue:
     sample_count: int
     required_sample_count: int
     lineage: tuple[str, ...]
-    upstream_fidelity: str
+    market_state_trust: MarketStateTrust
+    data_authority_state: DataAuthorityState
+    authority_evidence_fingerprint: str
+    resource_restriction: FeatureAxisRestriction
+    lifecycle_restriction: FeatureAxisRestriction
     recursive_state: RecursiveAccumulatorState | None = None
 
     def __post_init__(self) -> None:
@@ -728,10 +1278,17 @@ class FeatureValue:
             raise FeatureError("feature lineage is missing or duplicated")
         for item in self.lineage:
             _require_hash(item, "feature lineage entry")
-        fidelity = _enum_text(self.upstream_fidelity)
-        if fidelity not in {"TRUSTED", "RESOURCE_DEGRADED", "INELIGIBLE"}:
-            raise FeatureError("feature fidelity is invalid")
-        object.__setattr__(self, "upstream_fidelity", fidelity)
+        if not isinstance(self.market_state_trust, MarketStateTrust):
+            raise FeatureError("feature market-state trust is invalid")
+        if not isinstance(self.data_authority_state, DataAuthorityState):
+            raise FeatureError("feature data-authority state is invalid")
+        if not isinstance(self.authority_evidence_fingerprint, str):
+            raise FeatureError("feature authority evidence fingerprint is invalid")
+        _require_hash(self.authority_evidence_fingerprint, "feature authority evidence")
+        if not isinstance(self.resource_restriction, FeatureAxisRestriction) or not isinstance(
+            self.lifecycle_restriction, FeatureAxisRestriction
+        ):
+            raise FeatureError("feature restriction axes are invalid")
         if (
             isinstance(self.sample_count, bool)
             or not isinstance(self.sample_count, int)
@@ -768,7 +1325,11 @@ class FeatureValue:
                 "sample_count": self.sample_count,
                 "required_sample_count": self.required_sample_count,
                 "lineage": self.lineage_manifest_fingerprint,
-                "fidelity": self.upstream_fidelity,
+                "market_state_trust": self.market_state_trust.value,
+                "data_authority_state": self.data_authority_state.value,
+                "authority_evidence": self.authority_evidence_fingerprint,
+                "resource_restriction": self.resource_restriction.value,
+                "lifecycle_restriction": self.lifecycle_restriction.value,
                 "recursive_state": self.recursive_state.fingerprint
                 if self.recursive_state
                 else None,
@@ -800,6 +1361,18 @@ class FeatureSnapshot:
             for value in self.values
         ):
             raise FeatureError("snapshot values do not share one source identity")
+        axes = {
+            (
+                value.market_state_trust,
+                value.data_authority_state,
+                value.authority_evidence_fingerprint,
+                value.resource_restriction,
+                value.lifecycle_restriction,
+            )
+            for value in self.values
+        }
+        if len(axes) != 1:
+            raise FeatureError("snapshot values do not share one authority axis identity")
         object.__setattr__(
             self, "evaluation_time", _utc(self.evaluation_time, "snapshot evaluation time")
         )
@@ -813,6 +1386,20 @@ class FeatureSnapshot:
                 "generation": self.source_generation_fingerprint,
                 "environment": self.environment.value,
                 "evaluation_time": self.evaluation_time.isoformat(),
+                "axes": tuple(
+                    sorted(
+                        {
+                            (
+                                value.market_state_trust.value,
+                                value.data_authority_state.value,
+                                value.authority_evidence_fingerprint,
+                                value.resource_restriction.value,
+                                value.lifecycle_restriction.value,
+                            )
+                            for value in self.values
+                        }
+                    )
+                ),
             }
         )
 
@@ -840,24 +1427,92 @@ def _coerce_samples(
     return tuple(result)
 
 
+def _authority_summary(
+    samples: Sequence[FeatureSample],
+    prior: RecursiveAccumulatorState | None = None,
+) -> tuple[
+    MarketStateTrust,
+    DataAuthorityState,
+    FeatureAxisRestriction,
+    FeatureAxisRestriction,
+    str,
+]:
+    """Take the most restrictive axis value across inputs; never upgrade.
+
+    When a predecessor state is present its carried axes are folded in, so a
+    resume cannot widen market-state trust, data authority, resource admission
+    or universe lifecycle eligibility.
+    """
+
+    trust = min(
+        (sample.authority.market_state_trust for sample in samples),
+        key=_TRUST_SEVERITY.index,
+    )
+    authority = min(
+        (sample.authority.data_authority_state for sample in samples),
+        key=_AUTHORITY_SEVERITY.index,
+    )
+    resource = (
+        FeatureAxisRestriction.RESTRICTIVE
+        if any(
+            sample.authority.resource_restriction is FeatureAxisRestriction.RESTRICTIVE
+            for sample in samples
+        )
+        else FeatureAxisRestriction.NONE
+    )
+    lifecycle = (
+        FeatureAxisRestriction.RESTRICTIVE
+        if any(
+            sample.authority.lifecycle_axis is FeatureAxisRestriction.RESTRICTIVE
+            for sample in samples
+        )
+        else FeatureAxisRestriction.NONE
+    )
+    evidence: dict[str, object] = {"ordered": [sample.authority.fingerprint for sample in samples]}
+    if prior is not None:
+        trust = min((trust, prior.carried_market_state_trust), key=_TRUST_SEVERITY.index)
+        authority = min(
+            (authority, prior.carried_data_authority_state), key=_AUTHORITY_SEVERITY.index
+        )
+        if prior.carried_resource_restriction is FeatureAxisRestriction.RESTRICTIVE:
+            resource = FeatureAxisRestriction.RESTRICTIVE
+        if prior.carried_lifecycle_restriction is FeatureAxisRestriction.RESTRICTIVE:
+            lifecycle = FeatureAxisRestriction.RESTRICTIVE
+        evidence["prior"] = prior.carried_evidence_fingerprint
+    return trust, authority, resource, lifecycle, _hash(evidence)
+
+
 def _context_status(
     samples: Sequence[FeatureSample], evaluation_time: datetime | None
-) -> tuple[FeatureValidity | None, str, str]:
+) -> tuple[FeatureValidity | None, str, MarketStateTrust]:
+    """Map market-truth evidence to analytical validity only.
+
+    Resource admission and universe lifecycle never falsify otherwise valid
+    analytical truth; they travel as separate restrictive axes.
+    """
+
     if not samples:
-        return FeatureValidity.WARMUP, "NO_INPUT_SAMPLES", "TRUSTED"
+        return FeatureValidity.WARMUP, "NO_INPUT_SAMPLES", MarketStateTrust.TRUSTED
     first = samples[0]
+    trust = min(
+        (sample.authority.market_state_trust for sample in samples),
+        key=_TRUST_SEVERITY.index,
+    )
+    first_source = (first.source_id.kind, first.source_id.value)
+    first_contract = (first.contract_id.kind, first.contract_id.value)
+    first_timeframe = first.timeframe
     for sample in samples:
         if (
-            sample.source_id != first.source_id
-            or sample.contract_id != first.contract_id
+            (sample.source_id.kind, sample.source_id.value) != first_source
+            or (sample.contract_id.kind, sample.contract_id.value) != first_contract
             or sample.environment is not first.environment
             or sample.generation_fingerprint != first.generation_fingerprint
-            or sample.timeframe.fingerprint != first.timeframe.fingerprint
+            or sample.timeframe != first_timeframe
         ):
             return (
                 FeatureValidity.INVALID,
                 "MIXED_SOURCE_CONTRACT_ENVIRONMENT_GENERATION_OR_TIMEFRAME",
-                first.upstream_fidelity,
+                trust,
             )
     for previous, current in zip(samples[:-1], samples[1:], strict=False):
         previous_start = previous.interval_start or previous.event_time
@@ -866,7 +1521,7 @@ def _context_status(
             return (
                 FeatureValidity.INVALID,
                 "NON_MONOTONIC_OR_DUPLICATE_SAMPLE_ORDER",
-                first.upstream_fidelity,
+                trust,
             )
     if evaluation_time is not None:
         boundary = _utc(evaluation_time, "evaluation time")
@@ -876,21 +1531,27 @@ def _context_status(
             return (
                 FeatureValidity.INVALID,
                 "FUTURE_EVENT_OR_KNOWLEDGE_EVIDENCE",
-                first.upstream_fidelity,
+                trust,
             )
     if any(
-        sample.market_state_trust in {"UNKNOWN", "UNTRUSTED", "RESYNC_REQUIRED"}
+        _INVALID_QUALITY_REASONS.intersection(sample.authority.data_authority_reasons)
         for sample in samples
     ):
-        return FeatureValidity.UNKNOWN, "UPSTREAM_MARKET_STATE_UNTRUSTED", first.upstream_fidelity
+        return FeatureValidity.INVALID, "CONTRADICTORY_OR_RETIRED_MARKET_TRUTH", trust
+    if trust in {
+        MarketStateTrust.UNKNOWN,
+        MarketStateTrust.UNTRUSTED,
+        MarketStateTrust.RESYNC_REQUIRED,
+    } or any(
+        _UNKNOWN_QUALITY_REASONS.intersection(sample.authority.data_authority_reasons)
+        for sample in samples
+    ):
+        return FeatureValidity.UNKNOWN, "UPSTREAM_MARKET_STATE_UNTRUSTED", trust
     if any(not sample.closed for sample in samples):
-        return FeatureValidity.WARMUP, "CLOSED_INPUT_REQUIRED", first.upstream_fidelity
-    if any(
-        sample.market_state_trust == "DEGRADED" or sample.upstream_fidelity == "RESOURCE_DEGRADED"
-        for sample in samples
-    ):
-        return FeatureValidity.DEGRADED, "UPSTREAM_FIDELITY_DEGRADED", "RESOURCE_DEGRADED"
-    return None, "", first.upstream_fidelity
+        return FeatureValidity.WARMUP, "CLOSED_INPUT_REQUIRED", trust
+    if trust is MarketStateTrust.DEGRADED:
+        return FeatureValidity.DEGRADED, "UPSTREAM_MARKET_STATE_DEGRADED", trust
+    return None, "", trust
 
 
 def _feature_values(samples: Sequence[FeatureSample], feature: FeatureVersion) -> list[Decimal]:
@@ -955,6 +1616,7 @@ def _state_for(
         previous_close = _canonical(previous_close.value)
     canonical_components = tuple(_canonical(item.value) for item in components)
     prior_market_states = previous_state.market_state_lineage if previous_state else ()
+    prior_authority = previous_state.authority_lineage if previous_state else ()
     prior_event = previous_state.event_time if previous_state else sample.event_time
     prior_knowledge = previous_state.knowledge_time if previous_state else sample.knowledge_time
     prior_wall = previous_state.wall_receive_time if previous_state else sample.wall_receive_time
@@ -966,10 +1628,10 @@ def _state_for(
     prior_end = (
         previous_state.window_end if previous_state else (sample.interval_end or sample.event_time)
     )
-    return RecursiveAccumulatorState(
-        feature_fingerprint=feature.fingerprint,
-        algorithm_version=RECURSIVE_STATE_VERSION,
-        parameter_n=feature.parameter_n or 2,
+    carried = _authority_summary(new_samples, previous_state)
+    return RecursiveAccumulatorState._from_evaluator(
+        feature=feature,
+        sample=sample,
         components=canonical_components,
         previous_input=previous,
         previous_close=previous_close,
@@ -978,8 +1640,17 @@ def _state_for(
         lineage=lineage,
         market_state_lineage=prior_market_states
         + tuple(item.market_state_fingerprint for item in new_samples),
-        source_generation_fingerprint=sample.generation_fingerprint,
-        environment=sample.environment,
+        authority_lineage=prior_authority
+        + tuple(item.authority.fingerprint for item in new_samples),
+        carried_market_state_trust=carried[0],
+        carried_data_authority_state=carried[1],
+        carried_resource_restriction=carried[2],
+        carried_lifecycle_restriction=carried[3],
+        carried_evidence_fingerprint=carried[4],
+        previous_state_fingerprint=(
+            previous_state.fingerprint if previous_state is not None else None
+        ),
+        validated_lineage_prefix=(len(previous_state.lineage) if previous_state is not None else 0),
         event_time=max(prior_event, *(item.event_time for item in new_samples)),
         knowledge_time=max(prior_knowledge, *(item.knowledge_time for item in new_samples)),
         wall_receive_time=max(prior_wall, *(item.wall_receive_time for item in new_samples)),
@@ -998,10 +1669,20 @@ def _build_output(
     reason: str,
     lineage: tuple[str, ...],
     recursive_state: RecursiveAccumulatorState | None = None,
-    upstream_fidelity: str | None = None,
     previous_state: RecursiveAccumulatorState | None = None,
 ) -> FeatureValue:
     first = samples[0]
+    carried = recursive_state if recursive_state is not None else previous_state
+    if carried is not None:
+        # The carried summary already folds every consumed sample, so a resume
+        # cannot widen any axis and the output fingerprint is path independent.
+        trust = carried.carried_market_state_trust
+        authority = carried.carried_data_authority_state
+        resource = carried.carried_resource_restriction
+        lifecycle = carried.carried_lifecycle_restriction
+        evidence = carried.carried_evidence_fingerprint
+    else:
+        trust, authority, resource, lifecycle, evidence = _authority_summary(samples)
     if recursive_state is not None:
         source_market_state = _hash({"ordered": recursive_state.market_state_lineage})
         event_time = recursive_state.event_time
@@ -1061,7 +1742,11 @@ def _build_output(
         sample_count=sample_count,
         required_sample_count=_required_count(feature),
         lineage=lineage,
-        upstream_fidelity=upstream_fidelity or first.upstream_fidelity,
+        market_state_trust=trust,
+        data_authority_state=authority,
+        authority_evidence_fingerprint=evidence,
+        resource_restriction=resource,
+        lifecycle_restriction=lifecycle,
         recursive_state=recursive_state,
     )
 
@@ -1107,23 +1792,11 @@ def _compute_numeric(
             deltas = [right - left for left, right in zip(values[:-1], values[1:], strict=False)]
             avg_gain = _mean([max(delta, Decimal(0)) for delta in deltas[-n:]])
             avg_loss = _mean([max(-delta, Decimal(0)) for delta in deltas[-n:]])
-        if avg_gain == 0 and avg_loss == 0:
-            return Decimal(50), "COMPUTED", (_canonical(avg_gain), _canonical(avg_loss))
-        if avg_loss == 0:
-            return Decimal(100), "COMPUTED", (_canonical(avg_gain), _canonical(avg_loss))
-        if avg_gain == 0:
-            return Decimal(0), "COMPUTED", (_canonical(avg_gain), _canonical(avg_loss))
-        with localcontext() as context:
-            context.prec = 76
-            rs = avg_gain / avg_loss
-            return (
-                Decimal(100) - (Decimal(100) / (Decimal(1) + rs)),
-                "COMPUTED",
-                (
-                    _canonical(avg_gain),
-                    _canonical(avg_loss),
-                ),
-            )
+        return (
+            _rsi_output(avg_gain, avg_loss).value,
+            "COMPUTED",
+            (_canonical(avg_gain), _canonical(avg_loss)),
+        )
     if identifier == "F-VSMA-001":
         assert n is not None
         return _mean(values[-n:]), "COMPUTED", ()
@@ -1168,6 +1841,128 @@ def _compute_numeric(
     raise FeatureEvaluationError("unsupported feature ID")
 
 
+def _validate_resume_state(
+    feature: FeatureVersion,
+    state: RecursiveAccumulatorState | None,
+    values: Sequence[FeatureSample],
+) -> None:
+    """Require an evaluator-issued state bound to the resumed context."""
+
+    if state is None:
+        return
+    if not state._is_attested():
+        raise FeatureEvaluationError("resume state is not evaluator-issued")
+    if state.feature_fingerprint != feature.fingerprint:
+        raise FeatureEvaluationError("resume state belongs to another feature version")
+    if state.feature_id != feature.canonical_id or state.feature_version != feature.version:
+        raise FeatureEvaluationError("resume state feature identity disagrees")
+    if state.parameter_n != (feature.parameter_n or 2):
+        raise FeatureEvaluationError("resume state N disagrees with the feature definition")
+    if state.algorithm_version != RECURSIVE_STATE_VERSION:
+        raise FeatureEvaluationError("resume state algorithm version is unsupported")
+    if state.decimal_policy_version != FEATURE_DECIMAL_POLICY_VERSION:
+        raise FeatureEvaluationError("resume state Decimal policy is unsupported")
+    if values and not state.matches(feature, values[0]):
+        raise FeatureEvaluationError(
+            "resume state source, contract, environment, generation or timeframe disagrees"
+        )
+
+
+def _evaluate_steps(
+    feature: FeatureVersion,
+    values: tuple[FeatureSample, ...],
+    evaluation_time: datetime | None,
+    initial_state: RecursiveAccumulatorState | None,
+    *,
+    emit_series: bool,
+) -> list[FeatureValue]:
+    """Run the single incremental evaluation loop for one feature.
+
+    ``emit_series`` materializes one output per observed sample; the batch entry
+    point reuses the identical loop and materializes only the final step.  Both
+    paths therefore share values, canonical components and state fingerprints by
+    construction instead of by coincidence.
+    """
+
+    outputs: list[FeatureValue] = []
+    state = initial_state
+    prior_lineage = initial_state.lineage if initial_state is not None else ()
+    prior_count = initial_state.processed_samples if initial_state is not None else 0
+    required = _required_count(feature)
+    last_index = len(values) - 1
+    content_fingerprints = tuple(item.content_fingerprint for item in values)
+    for index in range(len(values)):
+        prefix = values[: index + 1]
+        context_status, context_reason, trust = _context_status(prefix, evaluation_time)
+        lineage = prior_lineage + content_fingerprints[: index + 1]
+        total_count = prior_count + index + 1
+        emit = emit_series or index == last_index
+        if context_status is not None and context_status is not FeatureValidity.DEGRADED:
+            if emit:
+                outputs.append(
+                    _build_output(feature, prefix, None, context_status, context_reason, lineage)
+                )
+            continue
+        if total_count < required:
+            if emit:
+                outputs.append(
+                    _build_output(
+                        feature,
+                        prefix,
+                        None,
+                        FeatureValidity.WARMUP,
+                        "INSUFFICIENT_REQUIRED_SAMPLES",
+                        lineage,
+                    )
+                )
+            continue
+        try:
+            numeric, reason, components = _compute_numeric(feature, prefix, state)
+        except (FeatureEvaluationError, NumericPolicyError, InvalidOperation, ValueError) as exc:
+            if emit:
+                outputs.append(
+                    _build_output(feature, prefix, None, FeatureValidity.INVALID, str(exc), lineage)
+                )
+            continue
+        if numeric is None:
+            if emit:
+                outputs.append(
+                    _build_output(feature, prefix, None, FeatureValidity.INVALID, reason, lineage)
+                )
+            continue
+        output = _safe_canonical(numeric)
+        if output is None:
+            if emit:
+                outputs.append(
+                    _build_output(
+                        feature,
+                        prefix,
+                        None,
+                        FeatureValidity.INVALID,
+                        "CANONICAL_DECIMAL_OVERFLOW",
+                        lineage,
+                    )
+                )
+            continue
+        previous_state = state
+        state = None
+        if feature.canonical_id in _RECURSIVE_FEATURES:
+            state_components = components
+            if not state_components:
+                state_components = (_canonical(numeric),)
+            state = _state_for(
+                feature, state_components, prefix[-1], prefix, lineage, previous_state
+            )
+        validity = (
+            FeatureValidity.DEGRADED
+            if trust is MarketStateTrust.DEGRADED
+            else FeatureValidity.VALID
+        )
+        if emit:
+            outputs.append(_build_output(feature, prefix, output, validity, reason, lineage, state))
+    return outputs
+
+
 def evaluate_feature_series(
     feature: FeatureVersion,
     samples: Iterable[FeatureSample | CandleBar | DecimalValue | str | int | Decimal],
@@ -1182,268 +1977,8 @@ def evaluate_feature_series(
     values = _coerce_samples(samples)
     if not values:
         return ()
-    if initial_state is not None and initial_state.feature_fingerprint != feature.fingerprint:
-        raise FeatureEvaluationError("resume state belongs to another feature version")
-    outputs: list[FeatureValue] = []
-    state = initial_state
-    prior_lineage = initial_state.lineage if initial_state is not None else ()
-    prior_count = initial_state.processed_samples if initial_state is not None else 0
-    for index in range(len(values)):
-        prefix = values[: index + 1]
-        context_status, context_reason, fidelity = _context_status(prefix, evaluation_time)
-        lineage = prior_lineage + tuple(item.content_fingerprint for item in prefix)
-        total_count = prior_count + index + 1
-        required = _required_count(feature)
-        if context_status is not None and context_status is not FeatureValidity.DEGRADED:
-            outputs.append(
-                _build_output(
-                    feature,
-                    prefix,
-                    None,
-                    context_status,
-                    context_reason,
-                    lineage,
-                    upstream_fidelity=fidelity,
-                )
-            )
-            continue
-        if total_count < required:
-            outputs.append(
-                _build_output(
-                    feature,
-                    prefix,
-                    None,
-                    FeatureValidity.WARMUP,
-                    "INSUFFICIENT_REQUIRED_SAMPLES",
-                    lineage,
-                    upstream_fidelity=fidelity,
-                )
-            )
-            continue
-        try:
-            numeric, reason, components = _compute_numeric(feature, prefix, state)
-        except (FeatureEvaluationError, NumericPolicyError, InvalidOperation, ValueError) as exc:
-            outputs.append(
-                _build_output(
-                    feature,
-                    prefix,
-                    None,
-                    FeatureValidity.INVALID,
-                    str(exc),
-                    lineage,
-                    upstream_fidelity=fidelity,
-                )
-            )
-            continue
-        if numeric is None:
-            outputs.append(
-                _build_output(
-                    feature,
-                    prefix,
-                    None,
-                    FeatureValidity.INVALID,
-                    reason,
-                    lineage,
-                    upstream_fidelity=fidelity,
-                )
-            )
-            continue
-        output = _safe_canonical(numeric)
-        if output is None:
-            outputs.append(
-                _build_output(
-                    feature,
-                    prefix,
-                    None,
-                    FeatureValidity.INVALID,
-                    "CANONICAL_DECIMAL_OVERFLOW",
-                    lineage,
-                    upstream_fidelity=fidelity,
-                )
-            )
-            continue
-        previous_state = state
-        state = None
-        if feature.canonical_id in _RECURSIVE_FEATURES:
-            state_components = components
-            if not state_components:
-                state_components = (_canonical(numeric),)
-            state = _state_for(
-                feature, state_components, prefix[-1], prefix, lineage, previous_state
-            )
-        validity = (
-            FeatureValidity.DEGRADED if fidelity == "RESOURCE_DEGRADED" else FeatureValidity.VALID
-        )
-        outputs.append(
-            _build_output(feature, prefix, output, validity, reason, lineage, state, fidelity)
-        )
-    return tuple(outputs)
-
-
-def _recursive_latest(
-    feature: FeatureVersion,
-    inputs: Sequence[FeatureSample],
-    initial_state: RecursiveAccumulatorState | None,
-    lineage: tuple[str, ...],
-) -> tuple[DecimalValue, RecursiveAccumulatorState]:
-    """Replay recursive values without materializing one output per prefix."""
-
-    n = feature.parameter_n
-    assert n is not None
-    has_state = initial_state is not None and bool(initial_state.components)
-    prior_count = initial_state.processed_samples if initial_state is not None else 0
-    prior_market = initial_state.market_state_lineage if initial_state is not None else ()
-    source_generation = inputs[0].generation_fingerprint
-    environment = inputs[0].environment
-    input_market_states = tuple(item.market_state_fingerprint for item in inputs)
-    previous_close_value = (
-        initial_state.previous_close.value
-        if initial_state is not None
-        and initial_state.components
-        and initial_state.previous_close is not None
-        else None
-    )
-    previous_input_value = (
-        initial_state.previous_input.value
-        if initial_state is not None
-        and initial_state.components
-        and initial_state.previous_input is not None
-        else None
-    )
-    previous_input: DecimalValue | None = None
-    previous_close: DecimalValue | None = None
-    components: tuple[DecimalValue, ...]
-
-    def true_range(sample: FeatureSample, prior: Decimal | None) -> Decimal:
-        if not all(
-            isinstance(value, DecimalValue) for value in (sample.high, sample.low, sample.close)
-        ):
-            raise FeatureEvaluationError("true range requires OHLC inputs")
-        assert sample.high is not None and sample.low is not None and sample.close is not None
-        if prior is None:
-            return sample.high.value - sample.low.value
-        return max(
-            sample.high.value - sample.low.value,
-            abs(sample.high.value - prior),
-            abs(sample.low.value - prior),
-        )
-
-    if feature.canonical_id == "F-EMA-001":
-        values = _feature_values(inputs, feature)
-        if has_state and initial_state is not None:
-            current = initial_state.components[0].value
-            start = 0
-        else:
-            current = _mean(values[:n])
-            start = n
-        with localcontext() as context:
-            context.prec = 76
-            context.rounding = ROUND_HALF_EVEN
-            alpha = Decimal(2) / Decimal(n + 1)
-            for value in values[start:]:
-                current = alpha * value + (Decimal(1) - alpha) * current
-        components = (_canonical(current),)
-        previous_input = _canonical(values[-1])
-        output = components[0]
-    elif feature.canonical_id == "F-RSI-001":
-        values = _feature_values(inputs, feature)
-        if has_state and initial_state is not None:
-            avg_gain = initial_state.components[0].value
-            avg_loss = initial_state.components[1].value
-            previous = previous_input_value
-            start = 0
-        else:
-            deltas = [right - left for left, right in zip(values[:-1], values[1:], strict=False)]
-            avg_gain = _mean([max(delta, Decimal(0)) for delta in deltas[:n]])
-            avg_loss = _mean([max(-delta, Decimal(0)) for delta in deltas[:n]])
-            previous = values[n]
-            start = n + 1
-        with localcontext() as context:
-            context.prec = 76
-            context.rounding = ROUND_HALF_EVEN
-            for value in values[start:]:
-                assert previous is not None
-                delta = value - previous
-                gain = max(delta, Decimal(0))
-                loss = max(-delta, Decimal(0))
-                avg_gain = _canonical(((avg_gain * (n - 1)) + gain) / n).value
-                avg_loss = _canonical(((avg_loss * (n - 1)) + loss) / n).value
-                previous = value
-        if avg_gain == 0 and avg_loss == 0:
-            output = _canonical(Decimal(50))
-        elif avg_loss == 0:
-            output = _canonical(Decimal(100))
-        elif avg_gain == 0:
-            output = _canonical(Decimal(0))
-        else:
-            with localcontext() as context:
-                context.prec = 76
-                output = _canonical(
-                    Decimal(100) - (Decimal(100) / (Decimal(1) + avg_gain / avg_loss))
-                )
-        components = (_canonical(avg_gain), _canonical(avg_loss))
-        previous_input = _canonical(values[-1])
-    else:
-        tr_values: list[Decimal] = []
-        prior = previous_close_value
-        for sample in inputs:
-            current_tr = true_range(sample, prior)
-            tr_values.append(current_tr)
-            prior = sample.close.value if sample.close is not None else None
-        if has_state and initial_state is not None:
-            current = initial_state.components[0].value
-            start = 0
-        else:
-            current = _mean(tr_values[:n])
-            start = n
-        with localcontext() as context:
-            context.prec = 76
-            context.rounding = ROUND_HALF_EVEN
-            for current_tr in tr_values[start:]:
-                current = ((current * (n - 1)) + current_tr) / n
-        components = (_canonical(current),)
-        previous_close = _canonical(inputs[-1].close.value) if inputs[-1].close else None
-        if previous_close is None:
-            raise FeatureEvaluationError("ATR resume input lacks previous close")
-        output = components[0]
-
-    first = inputs[0]
-    prior_event = initial_state.event_time if initial_state is not None else first.event_time
-    prior_knowledge = (
-        initial_state.knowledge_time if initial_state is not None else first.knowledge_time
-    )
-    prior_wall = (
-        initial_state.wall_receive_time if initial_state is not None else first.wall_receive_time
-    )
-    prior_start = (
-        initial_state.window_start
-        if initial_state is not None
-        else (first.interval_start or first.event_time)
-    )
-    prior_end = (
-        initial_state.window_end
-        if initial_state is not None
-        else (first.interval_end or first.event_time)
-    )
-    state = RecursiveAccumulatorState(
-        feature_fingerprint=feature.fingerprint,
-        algorithm_version=RECURSIVE_STATE_VERSION,
-        parameter_n=n,
-        components=components,
-        previous_input=previous_input,
-        previous_close=previous_close,
-        processed_samples=prior_count + len(inputs),
-        lineage=lineage,
-        market_state_lineage=prior_market + input_market_states,
-        source_generation_fingerprint=source_generation,
-        environment=environment,
-        event_time=max(prior_event, *(item.event_time for item in inputs)),
-        knowledge_time=max(prior_knowledge, *(item.knowledge_time for item in inputs)),
-        wall_receive_time=max(prior_wall, *(item.wall_receive_time for item in inputs)),
-        window_start=min(prior_start, *(item.interval_start or item.event_time for item in inputs)),
-        window_end=max(prior_end, *(item.interval_end or item.event_time for item in inputs)),
-    )
-    return output, state
+    _validate_resume_state(feature, initial_state, values)
+    return tuple(_evaluate_steps(feature, values, evaluation_time, initial_state, emit_series=True))
 
 
 def evaluate_feature(
@@ -1453,96 +1988,20 @@ def evaluate_feature(
     evaluation_time: datetime | None = None,
     initial_state: RecursiveAccumulatorState | None = None,
 ) -> FeatureValue:
-    """Evaluate one feature and return the latest point-in-time result."""
+    """Evaluate one feature and return the latest point-in-time result.
+
+    This is the final step of the same incremental evaluation used by
+    :func:`evaluate_feature_series`, so batch, series and resumed replay can
+    never disagree on values, canonical components or state fingerprints.
+    """
 
     if not isinstance(feature, FeatureVersion):
         raise FeatureEvaluationError("FeatureVersion is required")
     inputs = _coerce_samples(samples)
     if not inputs:
         raise FeatureEvaluationError("at least one sample is required")
-    if initial_state is not None and initial_state.feature_fingerprint != feature.fingerprint:
-        raise FeatureEvaluationError("resume state belongs to another feature version")
-    context_status, context_reason, fidelity = _context_status(inputs, evaluation_time)
-    prior_lineage = initial_state.lineage if initial_state is not None else ()
-    lineage = prior_lineage + tuple(item.content_fingerprint for item in inputs)
-    prior_count = initial_state.processed_samples if initial_state is not None else 0
-    required = _required_count(feature)
-    if context_status is not None and context_status is not FeatureValidity.DEGRADED:
-        return _build_output(
-            feature,
-            inputs,
-            None,
-            context_status,
-            context_reason,
-            lineage,
-            upstream_fidelity=fidelity,
-            previous_state=initial_state,
-        )
-    if prior_count + len(inputs) < required:
-        return _build_output(
-            feature,
-            inputs,
-            None,
-            FeatureValidity.WARMUP,
-            "INSUFFICIENT_REQUIRED_SAMPLES",
-            lineage,
-            upstream_fidelity=fidelity,
-            previous_state=initial_state,
-        )
-    state = initial_state
-    numeric: Decimal | None = None
-    reason = "COMPUTED"
-    components: tuple[DecimalValue, ...] = ()
-    if feature.canonical_id in _RECURSIVE_FEATURES:
-        try:
-            output, state = _recursive_latest(feature, inputs, initial_state, lineage)
-            numeric = output.value
-        except (FeatureEvaluationError, NumericPolicyError, InvalidOperation, ValueError) as exc:
-            numeric = None
-            reason = str(exc)
-    else:
-        try:
-            numeric, reason, components = _compute_numeric(feature, inputs, initial_state)
-        except (FeatureEvaluationError, NumericPolicyError, InvalidOperation, ValueError) as exc:
-            numeric = None
-            reason = str(exc)
-    if numeric is None:
-        return _build_output(
-            feature,
-            inputs,
-            None,
-            FeatureValidity.INVALID,
-            reason,
-            lineage,
-            upstream_fidelity=fidelity,
-            previous_state=initial_state,
-        )
-    canonical_output = _safe_canonical(numeric)
-    if canonical_output is None:
-        return _build_output(
-            feature,
-            inputs,
-            None,
-            FeatureValidity.INVALID,
-            "CANONICAL_DECIMAL_OVERFLOW",
-            lineage,
-            upstream_fidelity=fidelity,
-            previous_state=initial_state,
-        )
-    validity = (
-        FeatureValidity.DEGRADED if fidelity == "RESOURCE_DEGRADED" else FeatureValidity.VALID
-    )
-    return _build_output(
-        feature,
-        inputs,
-        canonical_output,
-        validity,
-        reason,
-        lineage,
-        state,
-        fidelity,
-        initial_state if state is None else None,
-    )
+    _validate_resume_state(feature, initial_state, inputs)
+    return _evaluate_steps(feature, inputs, evaluation_time, initial_state, emit_series=False)[-1]
 
 
 def evaluate_snapshot(
@@ -1569,14 +2028,23 @@ def evaluate_snapshot(
     )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class AlignedWindowEvidence:
-    """Derived analytical OHLCV evidence; never a Market-State truth owner."""
+    """Evaluator-issued derived 5m/15m analytical evidence.
+
+    Every material field is recomputed by the evaluator from the exact ordered
+    constituents, so a caller cannot mint VALID/DEGRADED evidence or disagree
+    with constituent identity, values, times, provenance or authority axes.
+    """
 
     target_minutes: int
+    target_timeframe_fingerprint: str
     start: datetime
     end: datetime
     constituents: tuple[CandleBar, ...]
+    constituent_fingerprints: tuple[str, ...]
+    constituent_provenance_fingerprints: tuple[str, ...]
+    authority_evidence_fingerprints: tuple[str, ...]
     validity: FeatureValidity
     reason: str
     source_id: StableId | None
@@ -1592,11 +2060,30 @@ class AlignedWindowEvidence:
     knowledge_time: datetime | None
     wall_receive_time: datetime | None
     lineage: tuple[str, ...]
-    provenance: str = DERIVED_MTF_PROVENANCE
+    resource_restriction: FeatureAxisRestriction
+    lifecycle_restriction: FeatureAxisRestriction
+    provenance: str
+    _attestation: object = field(default=None, repr=False, compare=False)
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        raise FeatureError("AlignedWindowEvidence must be issued by align_closed_1m_candles")
+
+    def _is_attested(self) -> bool:
+        return self._attestation is _ALIGNED_ATTESTATION
+
+    @classmethod
+    def _from_evaluator(cls, **material: Any) -> AlignedWindowEvidence:
+        instance = object.__new__(cls)
+        for name, value in material.items():
+            object.__setattr__(instance, name, value)
+        object.__setattr__(instance, "_attestation", _ALIGNED_ATTESTATION)
+        instance.__post_init__()
+        return instance
 
     def __post_init__(self) -> None:
         if self.target_minutes not in {5, 15}:
             raise FeatureError("only deterministic 5m and 15m alignment is authorized")
+        _require_hash(self.target_timeframe_fingerprint, "aligned target timeframe fingerprint")
         object.__setattr__(self, "start", _utc(self.start, "aligned start"))
         object.__setattr__(self, "end", _utc(self.end, "aligned end"))
         if (
@@ -1615,16 +2102,44 @@ class AlignedWindowEvidence:
             raise FeatureError("aligned lineage is missing or duplicated")
         for item in self.lineage:
             _require_hash(item, "aligned lineage entry")
+        if self.lineage != self.constituent_fingerprints:
+            raise FeatureError("aligned lineage is not bound to the exact ordered constituents")
+        if not (
+            len(self.constituent_provenance_fingerprints)
+            == len(self.authority_evidence_fingerprints)
+            == len(self.constituent_fingerprints)
+        ):
+            raise FeatureError("aligned constituent evidence lengths disagree")
+        for item in self.constituent_provenance_fingerprints:
+            _require_hash(item, "aligned constituent provenance")
+        for item in self.authority_evidence_fingerprints:
+            _require_hash(item, "aligned authority evidence")
+        if not isinstance(self.resource_restriction, FeatureAxisRestriction) or not isinstance(
+            self.lifecycle_restriction, FeatureAxisRestriction
+        ):
+            raise FeatureError("aligned restriction axes are invalid")
         if self.provenance != DERIVED_MTF_PROVENANCE:
             raise FeatureError("unsupported derived provenance")
+        for attr, label in (
+            ("event_time", "aligned event time"),
+            ("knowledge_time", "aligned knowledge time"),
+            ("wall_receive_time", "aligned wall receive time"),
+        ):
+            value = getattr(self, attr)
+            if value is not None:
+                object.__setattr__(self, attr, _utc(value, label))
 
     @property
     def fingerprint(self) -> str:
         return _hash(
             {
                 "target_minutes": self.target_minutes,
+                "target_timeframe": self.target_timeframe_fingerprint,
                 "start": self.start.isoformat(),
                 "end": self.end.isoformat(),
+                "constituents": self.constituent_fingerprints,
+                "constituent_provenance": self.constituent_provenance_fingerprints,
+                "authority_evidence": self.authority_evidence_fingerprints,
                 "validity": self.validity.value,
                 "reason": self.reason,
                 "source": self.source_id.as_text() if self.source_id else None,
@@ -1642,6 +2157,8 @@ class AlignedWindowEvidence:
                 if self.wall_receive_time
                 else None,
                 "lineage": self.lineage,
+                "resource_restriction": self.resource_restriction.value,
+                "lifecycle_restriction": self.lifecycle_restriction.value,
                 "provenance": self.provenance,
             }
         )
@@ -1655,52 +2172,89 @@ def _aligned_bounds(start: datetime, target_minutes: int) -> tuple[datetime, dat
     return begin, begin + timedelta(seconds=seconds)
 
 
+def _aligned_resource_axis(
+    authorities: Sequence[FeatureAuthorityEvidence],
+) -> tuple[FeatureAxisRestriction, FeatureAxisRestriction, MarketStateTrust]:
+    resource = (
+        FeatureAxisRestriction.RESTRICTIVE
+        if any(
+            item.resource_restriction is FeatureAxisRestriction.RESTRICTIVE for item in authorities
+        )
+        else FeatureAxisRestriction.NONE
+    )
+    lifecycle = (
+        FeatureAxisRestriction.RESTRICTIVE
+        if any(item.lifecycle_axis is FeatureAxisRestriction.RESTRICTIVE for item in authorities)
+        else FeatureAxisRestriction.NONE
+    )
+    trust = min((item.market_state_trust for item in authorities), key=_TRUST_SEVERITY.index)
+    return resource, lifecycle, trust
+
+
 def align_closed_1m_candles(
     candles: Iterable[CandleBar],
     target_minutes: int,
     *,
     evaluation_time: datetime | None = None,
-    upstream_fidelity: str = "TRUSTED",
+    authority: FeatureAuthorityEvidence | None = None,
 ) -> AlignedWindowEvidence:
     """Derive one exact 5m/15m window from complete CLOSED 1m constituents."""
 
     if target_minutes not in {5, 15}:
         raise FeatureEvaluationError("target timeframe must be 5 or 15 minutes")
-    if upstream_fidelity not in {"TRUSTED", "RESOURCE_DEGRADED"}:
-        raise FeatureEvaluationError("unsupported upstream fidelity")
+    if authority is not None and not isinstance(authority, FeatureAuthorityEvidence):
+        raise FeatureEvaluationError("aligned evidence requires typed authority evidence")
+    target_frame = Timeframe(f"Min{target_minutes}", target_minutes * 60)
     items = tuple(candles)
     if not items:
         now = _utc(evaluation_time or datetime(1970, 1, 1, tzinfo=UTC), "evaluation time")
         start, end = _aligned_bounds(now, target_minutes)
-        return AlignedWindowEvidence(
-            target_minutes,
-            start,
-            end,
-            (),
-            FeatureValidity.WARMUP,
-            "NO_CONSTITUENTS",
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            (),
+        return AlignedWindowEvidence._from_evaluator(
+            target_minutes=target_minutes,
+            target_timeframe_fingerprint=target_frame.fingerprint,
+            start=start,
+            end=end,
+            constituents=(),
+            constituent_fingerprints=(),
+            constituent_provenance_fingerprints=(),
+            authority_evidence_fingerprints=(),
+            validity=FeatureValidity.WARMUP,
+            reason="NO_CONSTITUENTS",
+            source_id=None,
+            contract_id=None,
+            environment=None,
+            generation_fingerprint=None,
+            open=None,
+            high=None,
+            low=None,
+            close=None,
+            volume=None,
+            event_time=None,
+            knowledge_time=None,
+            wall_receive_time=None,
+            lineage=(),
+            resource_restriction=FeatureAxisRestriction.NONE,
+            lifecycle_restriction=FeatureAxisRestriction.NONE,
+            provenance=DERIVED_MTF_PROVENANCE,
         )
     first = items[0]
     start, end = _aligned_bounds(first.start, target_minutes)
-    lineage = tuple(item.fingerprint for item in items)
+    constituent_fingerprints = tuple(item.fingerprint for item in items)
+    provenance_fingerprints = tuple(item.context.provenance_fingerprint for item in items)
+    authorities = tuple(
+        authority if authority is not None else FeatureSample.from_candle(item).authority
+        for item in items
+    )
+    resource, lifecycle, trust = _aligned_resource_axis(authorities)
     base_kwargs: dict[str, Any] = dict(
         target_minutes=target_minutes,
+        target_timeframe_fingerprint=target_frame.fingerprint,
         start=start,
         end=end,
         constituents=items,
+        constituent_fingerprints=constituent_fingerprints,
+        constituent_provenance_fingerprints=provenance_fingerprints,
+        authority_evidence_fingerprints=tuple(item.fingerprint for item in authorities),
         source_id=first.context.source_id,
         contract_id=first.context.contract_id,
         environment=first.context.environment,
@@ -1713,7 +2267,10 @@ def align_closed_1m_candles(
         event_time=max(item.context.event_time for item in items),
         knowledge_time=max(item.context.knowledge_time for item in items),
         wall_receive_time=max(item.context.wall_receive_time for item in items),
-        lineage=lineage,
+        lineage=constituent_fingerprints,
+        resource_restriction=resource,
+        lifecycle_restriction=lifecycle,
+        provenance=DERIVED_MTF_PROVENANCE,
     )
     expected = target_minutes
     boundary = _utc(evaluation_time, "evaluation time") if evaluation_time is not None else None
@@ -1721,7 +2278,7 @@ def align_closed_1m_candles(
         item.timeframe.duration_seconds != 60 or item.finality is not Finality.CLOSED
         for item in items
     ):
-        return AlignedWindowEvidence(
+        return AlignedWindowEvidence._from_evaluator(
             **base_kwargs,
             validity=FeatureValidity.INVALID,
             reason="CLOSED_1M_CONSTITUENTS_REQUIRED",
@@ -1734,17 +2291,17 @@ def align_closed_1m_candles(
         if boundary
         else False
     ):
-        return AlignedWindowEvidence(
+        return AlignedWindowEvidence._from_evaluator(
             **base_kwargs, validity=FeatureValidity.INVALID, reason="FUTURE_CONSTITUENT_EVIDENCE"
         )
     if any(item.start < start or item.end > end for item in items):
-        return AlignedWindowEvidence(
+        return AlignedWindowEvidence._from_evaluator(
             **base_kwargs,
             validity=FeatureValidity.INVALID,
             reason="CONSTITUENT_OUTSIDE_ALIGNED_WINDOW",
         )
     if items != tuple(sorted(items, key=lambda item: item.start)):
-        return AlignedWindowEvidence(
+        return AlignedWindowEvidence._from_evaluator(
             **base_kwargs, validity=FeatureValidity.INVALID, reason="OUT_OF_ORDER_CONSTITUENTS"
         )
     if len(items) != expected:
@@ -1753,12 +2310,12 @@ def align_closed_1m_candles(
             if boundary is None or boundary < end
             else FeatureValidity.UNKNOWN
         )
-        return AlignedWindowEvidence(
+        return AlignedWindowEvidence._from_evaluator(
             **base_kwargs, validity=validity, reason="INCOMPLETE_ALIGNED_WINDOW"
         )
     for left, right in zip(items[:-1], items[1:], strict=False):
         if left.end != right.start:
-            return AlignedWindowEvidence(
+            return AlignedWindowEvidence._from_evaluator(
                 **base_kwargs,
                 validity=FeatureValidity.INVALID,
                 reason="NON_CONTIGUOUS_ALIGNED_WINDOW",
@@ -1775,13 +2332,13 @@ def align_closed_1m_candles(
             or item.volume.source_contract_identity_version
             != first.volume.source_contract_identity_version
         ):
-            return AlignedWindowEvidence(
+            return AlignedWindowEvidence._from_evaluator(
                 **base_kwargs,
                 validity=FeatureValidity.INVALID,
                 reason="MIXED_IDENTITY_OR_QUANTITY_CONTRACT",
             )
     if items[0].start != start or items[-1].end != end:
-        return AlignedWindowEvidence(
+        return AlignedWindowEvidence._from_evaluator(
             **base_kwargs, validity=FeatureValidity.INVALID, reason="WINDOW_GEOMETRY_MISMATCH"
         )
     try:
@@ -1797,26 +2354,26 @@ def align_closed_1m_candles(
             first.volume.unit,
             first.volume.source_contract_identity_version,
         )
-        fidelity = "RESOURCE_DEGRADED" if upstream_fidelity == "RESOURCE_DEGRADED" else "TRUSTED"
-        valid_kwargs = {
+    except (NumericPolicyError, InvalidOperation, ValueError) as exc:
+        return AlignedWindowEvidence._from_evaluator(
+            **base_kwargs, validity=FeatureValidity.INVALID, reason=str(exc)
+        )
+    return AlignedWindowEvidence._from_evaluator(
+        **{
             **base_kwargs,
             "open": open_value,
             "high": _canonical(high_value),
             "low": _canonical(low_value),
             "close": close_value,
             "volume": volume,
+            "validity": (
+                FeatureValidity.DEGRADED
+                if trust is MarketStateTrust.DEGRADED
+                else FeatureValidity.VALID
+            ),
+            "reason": "COMPLETE_COHERENT_ALIGNED_WINDOW",
         }
-        return AlignedWindowEvidence(
-            **valid_kwargs,
-            validity=FeatureValidity.DEGRADED
-            if fidelity == "RESOURCE_DEGRADED"
-            else FeatureValidity.VALID,
-            reason="COMPLETE_COHERENT_ALIGNED_WINDOW",
-        )
-    except (NumericPolicyError, InvalidOperation, ValueError) as exc:
-        return AlignedWindowEvidence(
-            **base_kwargs, validity=FeatureValidity.INVALID, reason=str(exc)
-        )
+    )
 
 
 def align_candles(
@@ -1824,7 +2381,7 @@ def align_candles(
     target_minutes: int,
     *,
     evaluation_time: datetime | None = None,
-    upstream_fidelity: str = "TRUSTED",
+    authority: FeatureAuthorityEvidence | None = None,
 ) -> AlignedWindowEvidence:
     """Short alias for the public deterministic MTF alignment operation."""
 
@@ -1832,15 +2389,58 @@ def align_candles(
         candles,
         target_minutes,
         evaluation_time=evaluation_time,
-        upstream_fidelity=upstream_fidelity,
+        authority=authority,
     )
+
+
+def restore_recursive_state(
+    feature: FeatureVersion,
+    payload: str | Mapping[str, Any],
+    *,
+    consumed_inputs: Iterable[FeatureSample | CandleBar | DecimalValue | str | int | Decimal],
+) -> RecursiveAccumulatorState:
+    """Re-issue an evaluator-attested state from serialized material.
+
+    The canonical state is recomputed from the exact ordered inputs the
+    serialized state claims to have consumed; the payload is accepted only when
+    every material field, the ordered input and authority lineage and the
+    predecessor-chain link agree with that recomputation.  Anything else fails
+    closed instead of resuming from caller-controlled material.
+    """
+
+    if not isinstance(feature, FeatureVersion):
+        raise FeatureEvaluationError("FeatureVersion is required")
+    if feature.canonical_id not in _RECURSIVE_FEATURES:
+        raise FeatureEvaluationError("serialized resume requires a recursive feature")
+    inputs = _coerce_samples(consumed_inputs)
+    if not inputs:
+        raise FeatureEvaluationError("serialized resume requires the consumed inputs")
+    context_status, context_reason, _ = _context_status(inputs, None)
+    if context_status is not None and context_status is not FeatureValidity.DEGRADED:
+        raise FeatureEvaluationError(
+            f"serialized resume inputs are not admissible: {context_reason}"
+        )
+    if len(inputs) < _required_count(feature):
+        raise FeatureEvaluationError("serialized resume inputs are below the required cardinality")
+    submitted = RecursiveAccumulatorState.deserialize(payload)
+    if submitted.feature_fingerprint != feature.fingerprint:
+        raise FeatureEvaluationError("serialized state belongs to another feature version")
+    canonical = evaluate_feature_series(feature, inputs)[-1].recursive_state
+    if canonical is None:
+        raise FeatureError("serialized recursive state could not be recomputed")
+    if submitted.to_dict(include_fingerprint=False) != canonical.to_dict(include_fingerprint=False):
+        raise FeatureError("serialized recursive state disagrees with recomputation")
+    return canonical
 
 
 __all__ = [
     "AlignedWindowEvidence",
     "DERIVED_MTF_PROVENANCE",
     "FEATURE_ALGORITHM_VERSION",
+    "FEATURE_AUTHORITY_VERSION",
     "FEATURE_DECIMAL_POLICY_VERSION",
+    "FeatureAuthorityEvidence",
+    "FeatureAxisRestriction",
     "FeatureDefinition",
     "FeatureError",
     "FeatureEvaluationError",
@@ -1858,4 +2458,5 @@ __all__ = [
     "evaluate_feature",
     "evaluate_feature_series",
     "evaluate_snapshot",
+    "restore_recursive_state",
 ]

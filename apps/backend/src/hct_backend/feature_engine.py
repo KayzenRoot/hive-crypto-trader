@@ -3,9 +3,12 @@
 from hct_backend.features import (
     DERIVED_MTF_PROVENANCE,
     FEATURE_ALGORITHM_VERSION,
+    FEATURE_AUTHORITY_VERSION,
     FEATURE_DECIMAL_POLICY_VERSION,
     RECURSIVE_STATE_VERSION,
     AlignedWindowEvidence,
+    FeatureAuthorityEvidence,
+    FeatureAxisRestriction,
     FeatureDefinition,
     FeatureError,
     FeatureEvaluationError,
@@ -22,13 +25,17 @@ from hct_backend.features import (
     evaluate_feature,
     evaluate_feature_series,
     evaluate_snapshot,
+    restore_recursive_state,
 )
 
 __all__ = [
     "AlignedWindowEvidence",
     "DERIVED_MTF_PROVENANCE",
     "FEATURE_ALGORITHM_VERSION",
+    "FEATURE_AUTHORITY_VERSION",
     "FEATURE_DECIMAL_POLICY_VERSION",
+    "FeatureAuthorityEvidence",
+    "FeatureAxisRestriction",
     "FeatureDefinition",
     "FeatureError",
     "FeatureEvaluationError",
@@ -46,4 +53,5 @@ __all__ = [
     "evaluate_feature",
     "evaluate_feature_series",
     "evaluate_snapshot",
+    "restore_recursive_state",
 ]

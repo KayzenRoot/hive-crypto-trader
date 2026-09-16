@@ -181,6 +181,56 @@ def _closed_candles(
     )
 
 
+def _recursive_parity(
+    inputs: tuple[FeatureSample, ...],
+) -> tuple[bool, str, int]:
+    """Prove batch, series and resumed replay share canonical fingerprints.
+
+    The invariant is checked on the same bounded window the profile measures,
+    so a hidden-precision or state-identity regression fails the benchmark
+    instead of only changing a timing number.
+    """
+
+    digest = hashlib.sha256()
+    mismatches = 0
+    split = len(inputs) // 2
+    for identifier in ("F-EMA-001", "F-ATR-001", "F-RSI-001"):
+        feature = _feature(identifier)
+        batch = evaluate_feature(feature, inputs)
+        series = evaluate_feature_series(feature, inputs)
+        last = series[-1]
+        if batch.fingerprint != last.fingerprint:
+            mismatches += 1
+            continue
+        if batch.recursive_state is None or last.recursive_state is None:
+            mismatches += 1
+            continue
+        if batch.recursive_state.fingerprint != last.recursive_state.fingerprint:
+            mismatches += 1
+            continue
+        digest.update(batch.fingerprint.encode())
+        digest.update(batch.recursive_state.fingerprint.encode())
+        boundary = series[split - 1].recursive_state
+        if boundary is None:
+            mismatches += 1
+            continue
+        resumed = evaluate_feature_series(
+            feature, inputs[split:], initial_state=boundary
+        )
+        if resumed[-1].fingerprint != last.fingerprint:
+            mismatches += 1
+            continue
+        if (
+            resumed[-1].recursive_state is None
+            or resumed[-1].recursive_state.fingerprint
+            != last.recursive_state.fingerprint
+        ):
+            mismatches += 1
+            continue
+        digest.update(resumed[-1].fingerprint.encode())
+    return mismatches == 0, digest.hexdigest(), mismatches
+
+
 def _run_profile(name: str) -> dict[str, object]:
     profile = PROFILES[name]
     contracts = int(profile["contracts"])
@@ -273,6 +323,11 @@ def _run_profile(name: str) -> dict[str, object]:
             steady_memory, peak_memory = tracemalloc.get_traced_memory()
             tracemalloc.stop()
     elapsed_ns = time.perf_counter_ns() - start
+    parity_start_ns = time.perf_counter_ns()
+    parity_ok, parity_fingerprint, parity_mismatches = _recursive_parity(
+        _tail_samples(0, candle_count, max_window)
+    )
+    parity_elapsed_ns = time.perf_counter_ns() - parity_start_ns
     return {
         "profile": name,
         "contracts": contracts,
@@ -297,6 +352,10 @@ def _run_profile(name: str) -> dict[str, object]:
         "no_lookahead_rejection_count": no_lookahead_rejections,
         "input_manifest_hash": input_manifest.hexdigest(),
         "output_manifest_hash": output_hasher.hexdigest(),
+        "recursive_parity": "PASS" if parity_ok else "FAIL",
+        "recursive_parity_fingerprint": parity_fingerprint,
+        "recursive_parity_mismatches": parity_mismatches,
+        "recursive_parity_duration_ns": parity_elapsed_ns,
         "correctness": "PASS",
         "bounded_completion": True,
     }
