@@ -166,6 +166,28 @@ authorized.
 
 `S2B_TIMEFRAME_ALLOWLIST=Min1,Min5,Min15`
 
+`S2B_TIMEFRAME_IDENTITY=Min1:60:1:UNIX_EPOCH_MULTIPLES;Min5:300:1:UNIX_EPOCH_MULTIPLES;Min15:900:1:UNIX_EPOCH_MULTIPLES`
+
+`S2B_TIMEFRAME_IDENTITY_MATERIAL=TRUE`
+
+The name list above is a human-readable marker only. The normative authorization is the
+complete upstream `Timeframe` identity — name, `duration_seconds`, `version` and
+`alignment`:
+
+| Token | duration_seconds | version | alignment |
+|---|---:|---:|---|
+| `Min1` | `60` | `1` | `UNIX_EPOCH_MULTIPLES` |
+| `Min5` | `300` | `1` | `UNIX_EPOCH_MULTIPLES` |
+| `Min15` | `900` | `1` | `UNIX_EPOCH_MULTIPLES` |
+
+The future implementation must compare the complete `Timeframe` identity or its canonical
+fingerprint, never the name alone. A correct name with a wrong duration, a wrong name with a
+correct duration, a wrong version, a non-canonical alignment, or a cross-timeframe
+constituent mixture is rejected `INVALID`. The complete timeframe identity and version are
+material in `PatternDefinition` and `PatternEvidence` fingerprints. Any future timeframe
+version, duration or alignment expansion requires separate governed authorization and a
+`PatternVersion` change.
+
 `S2B_PATTERN_DECIMAL_POLICY=FEATURE_DECIMAL_V1`
 
 `S2B_PATTERN_BINARY_FLOAT=FORBIDDEN`
@@ -209,6 +231,108 @@ authorized.
 `S2B_BENCHMARK_MODE=S2B_BASELINE_ESTABLISHMENT_V1`
 
 `S2B_BENCHMARK_PROFILES=MICRO,NOMINAL,STRESS`
+
+## FROZEN PACKAGE LOCK
+
+`S2B_FROZEN_PACKAGE_COUNT=17`
+
+The governance check locks the complete applicable freeze package at the canonical base, in
+addition to the nine frozen requirement source blobs:
+
+- `docs/00-source-hierarchy.md`, `docs/03-scope.md`, `docs/04-architecture.md`,
+  `docs/05-security.md`, `docs/06-test-benchmark-plan.md`, `docs/09-definition-of-done.md`,
+  `docs/10-decisions-ledger.md`;
+- `docs/14-product-module-map.md` — the accepted planning module registry, which must keep
+  Module `9` as `Candlestick & Chart Pattern Engine` and must not let an accepted module
+  silently disappear;
+- `docs/91-r11-integrated-authority-state-dependency-architecture.md` — Stage 2 keeps
+  `features/indicators/patterns` before `regime` and preserves the restrictive-authority
+  intersection semantics;
+- `docs/99-r12-frozen-requirements-baseline.md`,
+  `docs/100-r12-requirements-traceability-and-no-loss-proof.md`,
+  `docs/101-r12-freeze-governance-change-control-and-deferred-decisions.md`,
+  `docs/102-r12-freeze-acceptance-matrix.md`,
+  `docs/103-r12-final-planning-freeze-audit.md`,
+  `docs/105-r12-freeze-approval-and-checkpoint-promotion.md`;
+- `docs/92-r11-v1-module-classification-and-integration-hardening.md`;
+- `checkpoints/history/HCT-CP-0014.json` — `PLANNING_FREEZE_APPROVED` for `HCT-PLAN-0001-R12`.
+
+Every blob identity is resolved from the canonical base with `git rev-parse :`; no identity
+is guessed or carried stale. If the canonical freeze promotion package designates another
+R12 artifact as frozen-critical, it is added rather than keeping an artificial fixed count,
+and no existing lock is weakened.
+
+## CANONICAL NON-REPLAY INPUT AND AUTHORITY SEAM
+
+`S2B_AUTHORITY_SEAM=EVALUATOR_ISSUED_FEATURE_SAMPLE_FROM_CANDLE_AND_FEATURE_AUTHORITY_EVIDENCE`
+
+`S2B_PER_CONSTITUENT_AUTHORITY=EXACTLY_ONE_INDEPENDENTLY_ATTESTED_BINDING_PER_CONSTITUENT`
+
+`S2B_CONSTITUENT_CONTIGUITY=left.end==right.start`
+
+`S2B_AXIS_FOLD=EXISTING_S2A_MOST_RESTRICTIVE`
+
+`S2B_FIXTURE_SCOPE=REPLAY_ONLY`
+
+S2A already solved point-in-time authority. Module 9 must not create a second, weaker
+adapter for authoritative input. For `LIVE`, `PAPER` and `SHADOW` environments, every
+candlestick constituent is consumed through the evaluator-issued S2A
+`FeatureSample.from_candle(candle, market_state=..., resource=...)` and its
+`FeatureAuthorityEvidence`, reusing that validation path exactly rather than re-implementing
+it. Reusing `FeatureAuthorityEvidence` also means Module 9 references S2A ownership instead
+of re-defining `DataAuthority` inside Module 9.
+
+Raw `CandleBar` values combined with caller-supplied trust strings or caller-supplied hashes
+are not authoritative Module 9 input and must be rejected. Public construction of
+authoritative pattern input evidence from arbitrary values or fingerprints is forbidden.
+`REPLAY` synthetic fixtures remain `REPLAY`-only and unmistakably synthetic, and synthetic
+authority can never cross into `PAPER`, `LIVE` or `SHADOW`.
+
+Per-constituent invariants:
+
+- exactly one independently attested authority binding per constituent; one later
+  `MarketStateSnapshot` cannot blanket earlier bars;
+- identical `source_id`, `contract_id`, `environment`, `generation`, exact `Timeframe`
+  identity/version and quantity contract where applicable;
+- each non-fixture authority proves its exact originating event and its exact bound candle
+  and value evidence;
+- constituent windows strictly ordered, unique and contiguous with `left.end == right.start`;
+- ordered constituent and authority fingerprints are material, so reorder, duplicate,
+  correction or revision changes `PatternEvidence`;
+- mismatched or retired generation fails closed.
+
+Axis propagation keeps `MarketStateTrust`, `DataAuthority`, `ResourceRestriction` and
+`UniverseLifecycleRestriction` separate. Each axis is folded across all constituents with the
+existing S2A most-restrictive semantics, and no later constituent may upgrade an earlier
+restrictive one. Pattern analytical validity remains separate from the resource and
+lifecycle restrictions.
+
+## POINT-IN-TIME DERIVED TIMESTAMPS
+
+`S2B_WINDOW_START=FIRST_ORDERED_CONSTITUENT_INTERVAL_START`
+
+`S2B_WINDOW_END=FINAL_ORDERED_CONSTITUENT_INTERVAL_END`
+
+`S2B_EVENT_TIME=MAX_CONSTITUENT_EVENT_TIME`
+
+`S2B_KNOWLEDGE_TIME=MAX_CONSTITUENT_KNOWLEDGE_TIME`
+
+`S2B_WALL_RECEIVE_TIME=MAX_CONSTITUENT_WALL_RECEIVE_TIME`
+
+`S2B_PRE_BOUNDARY_RULE=MATCHED_FORBIDDEN_BEFORE_FINAL_CLOSED_BAR_AND_ALL_KNOWLEDGE_TIMES`
+
+The `PatternEvidence` timestamps are deterministic functions of the exact ordered
+constituents: `window_start` is the first ordered constituent `interval_start`/`start`,
+`window_end` is the final ordered constituent `interval_end`/`end`, `event_time` is the
+maximum constituent `event_time`, `knowledge_time` is the maximum constituent
+`knowledge_time`, and `wall_receive_time` is the maximum constituent `wall_receive_time`.
+
+The first observable evaluation boundary requires the final CLOSED bar **and** the
+availability of every required constituent at its `knowledge_time`. Before both conditions
+hold, `MATCHED` is forbidden. If any constituent `knowledge_time` is after the evaluation
+boundary, the frozen `WARMUP` / `UNKNOWN` / `INVALID` semantics apply and `MATCHED` is never
+emitted. Correction or revision creates new `PatternEvidence` and a new fingerprint;
+historical evidence is not mutated.
 
 ## MATCH SEPARATION AND ROLLBACK
 
@@ -254,6 +378,22 @@ persistence, strategy/signal, order, position, risk, deployment or live authorit
 `S2B-PO-09` bounded MICRO/NOMINAL/STRESS baseline tied to `docs/06-test-benchmark-plan.md`
 where correctness fails closed before performance metrics matter.
 
+`S2B-PO-10` timing adversarial tests: identical OHLC with one later `knowledge_time` changes
+derived evidence and fingerprint and blocks premature recognition; changed
+`wall_receive_time` changes derived evidence and fingerprint where material; one instant
+before the final close/knowledge boundary is not `MATCHED` while the exact boundary can
+evaluate; non-contiguous and reordered bars are `INVALID`; cross-generation,
+cross-environment, cross-timeframe and cross-version mixtures are `INVALID`; a revised
+candle requires a new exact authority binding and a new predecessor/evidence lineage.
+
+`S2B-PO-11` timeframe identity negative tests: correct full identity admitted; correct name
+with wrong duration rejected; wrong name with correct duration rejected; wrong version
+rejected; non-canonical alignment rejected; cross-timeframe constituent mixture rejected.
+
+`S2B-PO-12` authority-seam tests: authoritative non-REPLAY constituents are admitted only
+through the evaluator-issued S2A `FeatureSample.from_candle` and `FeatureAuthorityEvidence`;
+one later snapshot cannot blanket earlier bars; raw candle plus caller-supplied trust strings
+or hashes is rejected; `REPLAY` fixtures cannot cross into `PAPER`/`LIVE`/`SHADOW`.
 ## AUTHORITY FIREWALL
 
 This candidate authorizes nothing until its own authorization checkpoint is promoted:

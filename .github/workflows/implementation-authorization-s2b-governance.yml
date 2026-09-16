@@ -122,6 +122,13 @@ jobs:
                   "docs/99-r12-frozen-requirements-baseline.md": "cdaf66eab10f650292908679efbb7d0ec400ebf9",
                   "docs/100-r12-requirements-traceability-and-no-loss-proof.md": "2ef416b4ea06e2aaee8b3545e1022f3459f3d647",
                   "docs/101-r12-freeze-governance-change-control-and-deferred-decisions.md": "5ec4003c577fc4875c5cad494e8877f731d3f943",
+                  "docs/05-security.md": "4f63f584ee7f169402c5609ead7aa64304248bc0",
+                  "docs/14-product-module-map.md": "f2e254e493ed27a31c4986f006e6455bc1b58c3e",
+                  "docs/91-r11-integrated-authority-state-dependency-architecture.md": "faa7d0fc35481a73e0c5ae204a80e57d4856ef61",
+                  "docs/102-r12-freeze-acceptance-matrix.md": "886703addb72f277033005ea33e80bfa5f007766",
+                  "docs/103-r12-final-planning-freeze-audit.md": "9748ac220bdf83faa4579bfe8c6856eb28895712",
+                  "docs/105-r12-freeze-approval-and-checkpoint-promotion.md": "b95db9084312efac70af7f2c4ef71f34c7ae6cd4",
+                  "checkpoints/history/HCT-CP-0014.json": "99c94f226b7beb454c946fb6eb0fc9628a54531f",
               },
               "frozen requirement source blobs": {
                   "docs/02-requirements.md": "292da9552ae816e4d51b8a299456305da1658e55",
@@ -145,7 +152,7 @@ jobs:
               },
           }
           expected_sizes = {
-              "frozen planning package": 10,
+              "frozen planning package": 17,
               "frozen requirement source blobs": 9,
               "CP0034/S2A handoff lock": 7,
           }
@@ -155,6 +162,53 @@ jobs:
                   actual = subprocess.check_output(["git", "rev-parse", f"{base}:{path}"], text=True).strip()
                   assert actual == digest, (label, path, actual, digest)
           print("Full frozen planning package, requirement source blobs and CP0034/S2A handoff: PASS")
+          PY
+
+      - name: Validate frozen package semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+
+          base = os.environ["CANONICAL_BASE_SHA"]
+
+          def read(path):
+              return subprocess.check_output(["git", "show", f"{base}:{path}"], text=True)
+
+          cp0014 = json.loads(read("checkpoints/history/HCT-CP-0014.json"))
+          assert cp0014["checkpoint_id"] == "HCT-CP-0014"
+          assert cp0014["status"] == "PLANNING_FREEZE_APPROVED"
+          assert cp0014["completed_increment"] == "HCT-PLAN-0001-R12"
+          assert cp0014["functional_planning_frozen"] is True
+          assert cp0014["implementation_authorized"] is False
+          for key in ("production_credentials_authorized", "production_deployment_authorized", "limited_live_authorized", "live_trading_authorized"):
+              assert cp0014[key] is False, key
+
+          module_map = read("docs/14-product-module-map.md")
+          assert "Candlestick & Chart Pattern Engine" in module_map
+          assert "No accepted module may silently disappear" in module_map
+
+          integrated = read("docs/91-r11-integrated-authority-state-dependency-architecture.md")
+          assert "features/indicators/patterns" in integrated
+          assert "Restrictive authority lattice" in integrated
+          assert "intersection of independent restrictive domains" in integrated
+          stage2 = integrated.split("### Stage 2")[1].split("### Stage 3")[0]
+          order = [stage2.index(token) for token in ("features/indicators/patterns", "regime", "scanner", "strategy engine/catalog/signal", "minimum microstructure")]
+          assert order == sorted(order), "Stage 2 dependency order drifted"
+
+          security = read("docs/05-security.md")
+          for marker in ("No secret, exchange credential", "private key", "tenant", "account", "authority boundaries"):
+              assert marker in security, marker
+
+          promotion = read("docs/105-r12-freeze-approval-and-checkpoint-promotion.md")
+          assert "FREEZE_APPROVED" in promotion
+          assert "HCT-CP-0014" in promotion
+          assert "HCT-PLAN-0001-R12" in promotion
+
+          print("CP0014 freeze approval, module map, R11 Stage 2 order, security invariants and R12 promotion semantics: PASS")
           PY
 
       - name: Validate traceability, Module 9 scope integrity and candlestick semantics
@@ -230,6 +284,29 @@ jobs:
               "current.close <= previous.open",
               "midpoint(bar1.open, bar1.close)",
               "S2B_TIMEFRAME_ALLOWLIST=Min1,Min5,Min15",
+              "S2B_TIMEFRAME_IDENTITY=Min1:60:1:UNIX_EPOCH_MULTIPLES;Min5:300:1:UNIX_EPOCH_MULTIPLES;Min15:900:1:UNIX_EPOCH_MULTIPLES",
+              "S2B_TIMEFRAME_IDENTITY_MATERIAL=TRUE",
+              "`Min1` | `60` | `1` | `UNIX_EPOCH_MULTIPLES`",
+              "`Min5` | `300` | `1` | `UNIX_EPOCH_MULTIPLES`",
+              "`Min15` | `900` | `1` | `UNIX_EPOCH_MULTIPLES`",
+              "S2B_AUTHORITY_SEAM=EVALUATOR_ISSUED_FEATURE_SAMPLE_FROM_CANDLE_AND_FEATURE_AUTHORITY_EVIDENCE",
+              "S2B_PER_CONSTITUENT_AUTHORITY=EXACTLY_ONE_INDEPENDENTLY_ATTESTED_BINDING_PER_CONSTITUENT",
+              "S2B_CONSTITUENT_CONTIGUITY=left.end==right.start",
+              "S2B_AXIS_FOLD=EXISTING_S2A_MOST_RESTRICTIVE",
+              "S2B_FIXTURE_SCOPE=REPLAY_ONLY",
+              "S2B_WINDOW_START=FIRST_ORDERED_CONSTITUENT_INTERVAL_START",
+              "S2B_WINDOW_END=FINAL_ORDERED_CONSTITUENT_INTERVAL_END",
+              "S2B_EVENT_TIME=MAX_CONSTITUENT_EVENT_TIME",
+              "S2B_KNOWLEDGE_TIME=MAX_CONSTITUENT_KNOWLEDGE_TIME",
+              "S2B_WALL_RECEIVE_TIME=MAX_CONSTITUENT_WALL_RECEIVE_TIME",
+              "S2B_PRE_BOUNDARY_RULE=MATCHED_FORBIDDEN_BEFORE_FINAL_CLOSED_BAR_AND_ALL_KNOWLEDGE_TIMES",
+              "S2B_FROZEN_PACKAGE_COUNT=17",
+              "docs/14-product-module-map.md",
+              "docs/91-r11-integrated-authority-state-dependency-architecture.md",
+              "docs/105-r12-freeze-approval-and-checkpoint-promotion.md",
+              "FeatureSample.from_candle",
+              "FeatureAuthorityEvidence",
+              "most-restrictive",
           )
           for marker in semantics:
               assert marker in combined, marker
@@ -247,7 +324,11 @@ jobs:
               assert marker in combined, marker
 
           # 6. proof obligations and rollback semantics
-          for marker in ("S2B-PO-01", "S2B-PO-09", "negative-valid", "boundary-equality", "zero-range", "timeframe-rejection", "rollback"):
+          for marker in (
+              "S2B-PO-01", "S2B-PO-09", "S2B-PO-10", "S2B-PO-11", "S2B-PO-12",
+              "negative-valid", "boundary-equality", "zero-range", "timeframe-rejection", "rollback",
+              "wrong duration", "non-canonical alignment",
+          ):
               assert marker in combined, marker
 
           # 7. canonical markers must be consistent across all three documents
@@ -262,6 +343,19 @@ jobs:
               "S2B_PATTERN_MATCH_STATE=MATCHED,NOT_MATCHED,INDETERMINATE",
               "S2B_FROZEN_BASELINE=" + baseline,
               "S2B_DOD_SECTIONS=2,4,5,11",
+              "S2B_TIMEFRAME_IDENTITY=Min1:60:1:UNIX_EPOCH_MULTIPLES;Min5:300:1:UNIX_EPOCH_MULTIPLES;Min15:900:1:UNIX_EPOCH_MULTIPLES",
+              "S2B_AUTHORITY_SEAM=EVALUATOR_ISSUED_FEATURE_SAMPLE_FROM_CANDLE_AND_FEATURE_AUTHORITY_EVIDENCE",
+              "S2B_PER_CONSTITUENT_AUTHORITY=EXACTLY_ONE_INDEPENDENTLY_ATTESTED_BINDING_PER_CONSTITUENT",
+              "S2B_CONSTITUENT_CONTIGUITY=left.end==right.start",
+              "S2B_AXIS_FOLD=EXISTING_S2A_MOST_RESTRICTIVE",
+              "S2B_FIXTURE_SCOPE=REPLAY_ONLY",
+              "S2B_WINDOW_START=FIRST_ORDERED_CONSTITUENT_INTERVAL_START",
+              "S2B_WINDOW_END=FINAL_ORDERED_CONSTITUENT_INTERVAL_END",
+              "S2B_EVENT_TIME=MAX_CONSTITUENT_EVENT_TIME",
+              "S2B_KNOWLEDGE_TIME=MAX_CONSTITUENT_KNOWLEDGE_TIME",
+              "S2B_WALL_RECEIVE_TIME=MAX_CONSTITUENT_WALL_RECEIVE_TIME",
+              "S2B_PRE_BOUNDARY_RULE=MATCHED_FORBIDDEN_BEFORE_FINAL_CLOSED_BAR_AND_ALL_KNOWLEDGE_TIMES",
+              "S2B_FROZEN_PACKAGE_COUNT=17",
           )
           for document in (candidate, authorization, implementation):
               for marker in shared:
