@@ -1,3 +1,7 @@
+import copy
+import inspect
+import pickle
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -33,6 +37,7 @@ from hct_backend.patterns import (
     PatternDirection,
     PatternError,
     PatternEvaluationError,
+    PatternEvaluationState,
     PatternEvidence,
     PatternMatchState,
     PatternRegistry,
@@ -72,16 +77,16 @@ def s1e_event_fingerprint(number: int) -> str:
     return (str(number) * 64)[:64]
 
 
-def s1e_generation(number: int = 1) -> GenerationRef:
-    return GenerationRef(SOURCE, Environment.PAPER, number)
+def s1e_generation(number: int = 1, environment: Environment = Environment.PAPER) -> GenerationRef:
+    return GenerationRef(SOURCE, environment, number)
 
 
-def s1e_capability() -> ChannelCapability:
+def s1e_capability(contract: StableId = CONTRACT) -> ChannelCapability:
     return ChannelCapability(
         source_id=SOURCE,
         visibility=ChannelVisibility.PUBLIC,
         channel="public-events",
-        contract_scope=CONTRACT,
+        contract_scope=contract,
         schema_version=1,
         snapshot_available=True,
         update_semantics=UpdateSemantics.SNAPSHOT_AND_DELTA,
@@ -94,17 +99,23 @@ def s1e_capability() -> ChannelCapability:
     )
 
 
-def s1e_observation(number: int, *, snapshot: bool = True) -> SequenceObservation:
-    capability = s1e_capability()
+def s1e_observation(
+    number: int,
+    *,
+    snapshot: bool = True,
+    contract: StableId = CONTRACT,
+    environment: Environment = Environment.PAPER,
+) -> SequenceObservation:
+    capability = s1e_capability(contract)
     return SequenceObservation(
-        generation=s1e_generation(),
+        generation=s1e_generation(1, environment),
         observed_at=NOW,
         event_fingerprint=s1e_event_fingerprint(number),
         update_id=number,
         is_snapshot=snapshot,
         source_id=SOURCE,
         channel="public-events",
-        contract_id=CONTRACT,
+        contract_id=contract,
         schema_version=1,
         capability_fingerprint=capability.fingerprint,
         capability_policy_version=capability.policy_version,
@@ -138,18 +149,25 @@ def s1e_state(
     event_number: int = 99,
     resource: ResourceDisposition = ResourceDisposition.AVAILABLE,
     generation_number: int = 1,
+    contract: StableId = CONTRACT,
+    environment: Environment = Environment.PAPER,
 ) -> MarketStateSnapshot:
-    capability = s1e_capability()
-    evaluation = evaluate_sequence(capability, None, s1e_observation(event_number, snapshot=True))
+    capability = s1e_capability(contract)
+    evaluation = evaluate_sequence(
+        capability,
+        None,
+        s1e_observation(event_number, snapshot=True, contract=contract, environment=environment),
+    )
+    generation = s1e_generation(generation_number, environment)
     proof = SynchronizationProof.from_sequence_evaluation(
         capability=capability,
-        generation=s1e_generation(generation_number),
+        generation=generation,
         evaluation=evaluation,
     )
     return MarketStateSnapshot(
-        contract_id=CONTRACT,
-        environment=Environment.PAPER,
-        generation=s1e_generation(generation_number),
+        contract_id=contract,
+        environment=environment,
+        generation=generation,
         source_id=SOURCE,
         source_version=1,
         provenance_fingerprint=PROVENANCE,
@@ -196,15 +214,17 @@ def paper_candle(
     finality: Finality = Finality.OPEN,
     volume: str = "2",
     generation_number: int = 1,
+    contract: StableId = CONTRACT,
+    environment: Environment = Environment.PAPER,
 ) -> CandleBar:
     timeframe = frame or Timeframe("Min1", 60)
     start = NOW + timedelta(seconds=index * timeframe.duration_seconds)
     context = ValueContext(
         SOURCE,
         "sub.kline",
-        CONTRACT,
-        Environment.PAPER,
-        s1e_generation(generation_number),
+        contract,
+        environment,
+        s1e_generation(generation_number, environment),
         1,
         PROVENANCE,
         s1e_event_fingerprint(event_number),
@@ -244,6 +264,8 @@ def pair(
     finality: Finality = Finality.CLOSED,
     volume: str = "2",
     generation_number: int = 1,
+    contract: StableId = CONTRACT,
+    environment: Environment = Environment.PAPER,
 ) -> PatternConstituent:
     """Build a closed paired constituent with a typed next-window close proof."""
 
@@ -258,6 +280,8 @@ def pair(
         finality=Finality.OPEN,
         volume=volume,
         generation_number=generation_number,
+        contract=contract,
+        environment=environment,
     )
     candle = opened
     if finality is Finality.CLOSED:
@@ -272,6 +296,8 @@ def pair(
             finality=Finality.OPEN,
             volume=volume,
             generation_number=generation_number,
+            contract=contract,
+            environment=environment,
         )
         candle = replace_candle(
             opened,
@@ -292,7 +318,11 @@ def replace_candle(candle: CandleBar, **change: object) -> CandleBar:
 
 
 def bars(
-    *rows: tuple[str, str, str, str], state: MarketStateSnapshot, frame: Timeframe | None = None
+    *rows: tuple[str, str, str, str],
+    state: MarketStateSnapshot,
+    frame: Timeframe | None = None,
+    contract: StableId = CONTRACT,
+    environment: Environment = Environment.PAPER,
 ):
     return tuple(
         pair(
@@ -303,9 +333,72 @@ def bars(
             close=row[3],
             state=state,
             frame=frame,
+            contract=contract,
+            environment=environment,
         )
         for index, row in enumerate(rows)
     )
+
+
+def revised_pair(
+    index: int,
+    *,
+    open_value: str,
+    high: str,
+    low: str,
+    close: str,
+    state: MarketStateSnapshot,
+    prior_candle: CandleBar,
+    revision_delta: int = 1,
+    predecessor: str | None = None,
+) -> PatternConstituent:
+    """Build a corrected constituent carrying the canonical predecessor relation."""
+
+    base = pair(index, open_value=open_value, high=high, low=low, close=close, state=state)
+    revised = replace_candle(
+        base.candle,
+        revision=prior_candle.revision + revision_delta,
+        predecessor_fingerprint=(prior_candle.fingerprint if predecessor is None else predecessor),
+    )
+    return PatternConstituent(revised, FeatureSample.from_candle(revised, market_state=state))
+
+
+EVIDENCE_FIELDS = (
+    "pattern",
+    "match_state",
+    "direction",
+    "validity",
+    "reason",
+    "source_id",
+    "contract_id",
+    "environment",
+    "generation_fingerprint",
+    "timeframe_fingerprint",
+    "timeframe_version",
+    "timeframe_duration_seconds",
+    "window_start",
+    "window_end",
+    "event_time",
+    "knowledge_time",
+    "wall_receive_time",
+    "evaluation_boundary",
+    "lineage",
+    "constituent_revisions",
+    "sample_lineage",
+    "authority_lineage",
+    "market_state_trust",
+    "data_authority_state",
+    "resource_restriction",
+    "lifecycle_restriction",
+    "revision",
+    "predecessor_evidence_fingerprint",
+)
+
+
+def evidenced_material(evidence: PatternEvidence) -> dict[str, object]:
+    """Complete issued field material, used only to attempt forgery."""
+
+    return {name: getattr(evidence, name) for name in EVIDENCE_FIELDS}
 
 
 # ---------------------------------------------------------------------------
@@ -359,6 +452,18 @@ def test_s2b_po01_definition_material_is_frozen() -> None:
         {"star_gap_policy": "REQUIRED"},
         {"timeframe_allowlist": ("Min1",)},
         {"rounding_mode": "ROUND_DOWN"},
+        {"equation": "SINGLE_BAR_UNBOUND"},
+        {"input_contract": "OHLC_ONLY"},
+        {"source_fields": ("open", "close")},
+        {"timeframe_identity": ("Min1:60:1:UNIX_EPOCH_MULTIPLES",)},
+        {"zero_range_policy": "ZERO_RANGE_MATCHES"},
+        {"finality_requirement": "OPEN_BAR_ALLOWED"},
+        {"formation_rule": "UNORDERED_SUBSET"},
+        {"cardinality_policy": "PREFIX_SLICE_TO_CARDINALITY"},
+        {"evaluation_boundary_rule": "S2B_CANONICAL_EVALUATION_BOUNDARY=window_end"},
+        {"decimal_precision": 28},
+        {"direction_policy": "MATCHED_ALLOWS_NONE"},
+        {"match_state_policy": "RESTRICTIVE_VALIDITY_ALLOWS_MATCHED"},
     ):
         with pytest.raises(PatternError):
             replace_definition(definition, **change)
@@ -698,10 +803,20 @@ def test_s2b_po05_open_constituent_is_warmup() -> None:
 
 def test_s2b_po16_invalid_dominates_unknown_and_warmup() -> None:
     state = s1e_state()
-    mixed = bars(("10", "11", "9", "10"), state=state, frame=Timeframe("Min1", 60))
-    wrong_frame = bars(("10", "11", "9", "10"), state=state, frame=Timeframe("Min9", 60))
+    mixed = bars(
+        ("13", "13", "10", "10.05"),
+        ("10.05", "10.2", "9.9", "10.06"),
+        state=state,
+        frame=Timeframe("Min1", 60),
+    )
+    wrong_frame = bars(
+        ("10.1", "14", "10.1", "13.9"),
+        state=state,
+        frame=Timeframe("Min9", 60),
+    )
     evidence = evaluate_pattern(PatternVersion.standard("P-MS-001"), mixed + wrong_frame)
     assert evidence.validity is PatternValidity.INVALID
+    assert evidence.reason == "MIXED_SOURCE_CONTRACT_ENVIRONMENT_GENERATION_OR_TIMEFRAME"
 
 
 def test_s2b_po16_unknown_dominates_warmup() -> None:
@@ -867,49 +982,18 @@ def test_s2b_po17_callers_cannot_choose_match_state() -> None:
     evidence = evaluate_pattern(
         PatternVersion.standard("P-DC-001"), bars(("10", "11", "9", "10"), state=state)
     )
-    payload = dict(
-        pattern=evidence.pattern,
-        match_state=PatternMatchState.NOT_MATCHED,
-        direction=PatternDirection.NONE,
-        validity=PatternValidity.VALID,
-        reason="FORGED",
-        source_id=evidence.source_id,
-        contract_id=evidence.contract_id,
-        environment=evidence.environment,
-        generation_fingerprint=evidence.generation_fingerprint,
-        timeframe_fingerprint=evidence.timeframe_fingerprint,
-        timeframe_version=evidence.timeframe_version,
-        timeframe_duration_seconds=evidence.timeframe_duration_seconds,
-        window_start=evidence.window_start,
-        window_end=evidence.window_end,
-        event_time=evidence.event_time,
-        knowledge_time=evidence.knowledge_time,
-        wall_receive_time=evidence.wall_receive_time,
-        evaluation_boundary=evidence.evaluation_boundary,
-        lineage=evidence.lineage,
-        sample_lineage=evidence.sample_lineage,
-        authority_lineage=evidence.authority_lineage,
-        market_state_trust=evidence.market_state_trust,
-        data_authority_state=evidence.data_authority_state,
-        resource_restriction=evidence.resource_restriction,
-        lifecycle_restriction=evidence.lifecycle_restriction,
-        revision=0,
-        predecessor_evidence_fingerprint=None,
-    )
     with pytest.raises(PatternError):
-        PatternEvidence._from_evaluator(**{**payload, "reason": ""})
+        PatternEvidence(**dict(evidenced_material(evidence), reason="FORGED"))
     with pytest.raises(PatternError):
-        PatternEvidence._from_evaluator(
-            **{
-                **payload,
-                "validity": PatternValidity.UNKNOWN,
-                "match_state": PatternMatchState.MATCHED,
-            }
+        PatternEvidence(
+            **dict(
+                evidenced_material(evidence),
+                validity=PatternValidity.UNKNOWN,
+                match_state=PatternMatchState.MATCHED,
+            )
         )
-    with pytest.raises(PatternError):
-        PatternEvidence._from_evaluator(
-            **{**payload, "match_state": PatternMatchState.INDETERMINATE}
-        )
+    with pytest.raises((AttributeError, PatternError)):
+        PatternEvidence._from_evaluator(**dict(evidenced_material(evidence)))  # type: ignore[attr-defined]
 
 
 # ---------------------------------------------------------------------------
@@ -934,28 +1018,24 @@ def test_s2b_po19_boundary_is_canonical_and_later_calls_are_idempotent() -> None
 
 def test_s2b_po19_revision_changes_the_boundary_and_the_predecessor_link() -> None:
     state = s1e_state()
-    base = evaluate_pattern(
-        PatternVersion.standard("P-DC-001"), bars(("10", "11", "9", "10"), state=state)
+    original = bars(("10", "11", "9", "10"), state=state)
+    base = evaluate_pattern(PatternVersion.standard("P-DC-001"), original)
+    revision = PatternEvaluationState((base,))
+    corrected = (
+        revised_pair(
+            0,
+            open_value="10",
+            high="11.5",
+            low="9",
+            close="10",
+            state=state,
+            prior_candle=original[0].candle,
+        ),
     )
-    revised_candle = paper_candle(
-        0, open_value="10", high="11.5", low="9", close="10", event_number=99
-    )
-    from dataclasses import replace
-
-    revised_candle = replace(
-        revised_candle, revision=1, predecessor_fingerprint=revised_candle.fingerprint
-    )
-    revised_pair = PatternConstituent(
-        revised_candle, FeatureSample.from_candle(revised_candle, market_state=state)
-    )
-    revised = evaluate_pattern(
-        PatternVersion.standard("P-DC-001"),
-        (revised_pair,),
-        revision=1,
-        predecessor_evidence_fingerprint=base.fingerprint,
-    )
+    revised = evaluate_pattern(PatternVersion.standard("P-DC-001"), corrected, state=revision)
     assert revised.fingerprint != base.fingerprint
     assert revised.predecessor_evidence_fingerprint == base.fingerprint
+    assert revised.revision == base.revision + 1
 
 
 # ---------------------------------------------------------------------------
@@ -1032,23 +1112,39 @@ def test_s2b_po21_predecessor_is_none_only_without_earlier_evidence() -> None:
 
 def test_s2b_po21_chain_links_are_exact_and_replayable() -> None:
     state = s1e_state()
-    constituents = bars(("10", "11", "9", "10"), state=state)
-    first = evaluate_pattern(PatternVersion.standard("P-DC-001"), constituents)
-    second = evaluate_pattern(
-        PatternVersion.standard("P-DC-001"),
-        constituents,
-        revision=1,
-        predecessor_evidence_fingerprint=first.fingerprint,
+    original = bars(("10", "11", "9", "10"), state=state)
+    first = evaluate_pattern(PatternVersion.standard("P-DC-001"), original)
+    chain = PatternEvaluationState((first,))
+    corrected = (
+        revised_pair(
+            0,
+            open_value="10",
+            high="11.5",
+            low="9",
+            close="10.4",
+            state=state,
+            prior_candle=original[0].candle,
+        ),
     )
-    third = evaluate_pattern(
-        PatternVersion.standard("P-DC-001"),
-        constituents,
-        revision=2,
-        predecessor_evidence_fingerprint=second.fingerprint,
+    second = evaluate_pattern(PatternVersion.standard("P-DC-001"), corrected, state=chain)
+    chain = chain.record(second)
+    again = (
+        revised_pair(
+            0,
+            open_value="10",
+            high="12",
+            low="9",
+            close="10.9",
+            state=state,
+            prior_candle=corrected[0].candle,
+        ),
     )
+    third = evaluate_pattern(PatternVersion.standard("P-DC-001"), again, state=chain)
+    chain = chain.record(third)
     assert second.predecessor_evidence_fingerprint == first.fingerprint
     assert third.predecessor_evidence_fingerprint == second.fingerprint
     assert first.fingerprint not in {second.fingerprint, third.fingerprint}
+    assert [item.revision for item in chain.evidences] == [0, 1, 2]
 
 
 # ---------------------------------------------------------------------------
@@ -1073,3 +1169,609 @@ def test_s2b_po14_replay_is_deterministic_for_identical_inputs() -> None:
         list(PatternVersion.standard(i) for i in PATTERN_ALLOWLIST), constituents
     )
     assert [item.fingerprint for item in first] == [item.fingerprint for item in second]
+
+
+# ---------------------------------------------------------------------------
+# S2B-IMP-H001 exact evaluable bar cardinality
+# ---------------------------------------------------------------------------
+
+OTHER_CONTRACT = StableId(kind=IdentityKind.INSTRUMENT, value="eth-usdt-perpetual")
+
+GOLDEN_DEFINITION_FINGERPRINTS = {
+    "P-DC-001": "2c193e7efd867cef16d66e7b07eb659069b4a68441f96a2c215fb1e27141f332",
+    "P-MB-001": "de6ad3d388065acfedd15773ab33fd766f6898c5b140451698d3fd06b85b7e19",
+    "P-EC-001": "95feb422973712af479a380648ac7ba1f5cc234a9df9caa099ebc0cfe98b9847",
+    "P-EC-002": "c758677df7f59646489a253f5a0d1dc84df6ea60c6c5cbe9476d17e39d9a881a",
+    "P-MS-001": "0169f1b99b03309d58514cb3a1b20a5ad73a5ba5f55cbeb5c6987cf3b6d6baec",
+    "P-ES-001": "aa8e7e998255a85d07bb56715cb57d570c95ffd09d05c5a496c8569180b6cf41",
+}
+GOLDEN_VERSION_FINGERPRINTS = {
+    "P-DC-001": "824234cb29c0e9f5dbbacab973a36f0995ff678ab8b72ad0b2e7c38897249645",
+    "P-MB-001": "d66315e6141b2c9e3072df441964dd68c396ea2d400305f1f15d93c894c639c0",
+    "P-EC-001": "2df75db3905b68f599bcec781a5b7019dc95d581a68e4d4faf700e9409a0870f",
+    "P-EC-002": "af7d1575527ec2fd365f0e3d98b427963c09dbd8565b863d43081eeb0f87a360",
+    "P-MS-001": "59156d914f6f5c7d8a8bb91280458f40d5d550d2c9983bcbacd4dd508b97f47f",
+    "P-ES-001": "7ba5b5398fefae7e661305917f14e07834e54db544ea60e62390b4eddc4ebb7b",
+}
+# The first ``bar_cardinality`` rows of each vector are the canonical MATCHED window;
+# every remaining row makes the presented window strictly over-cardinality.
+GOLDEN_MATCHED_WINDOWS = {
+    "P-DC-001": [("10", "11", "9", "10"), ("10", "11", "9", "10.4")],
+    "P-MB-001": [("10", "13.5", "10", "13.5"), ("13.5", "14", "13", "13.6")],
+    "P-EC-001": [
+        ("12", "12", "10", "10"),
+        ("9.5", "13", "9.5", "12.5"),
+        ("12.5", "13", "12", "12.4"),
+    ],
+    "P-EC-002": [
+        ("10", "12", "10", "12"),
+        ("12.5", "13", "9.5", "9.6"),
+        ("9.6", "10", "9", "9.4"),
+    ],
+    "P-MS-001": [
+        ("13", "13", "10", "10.05"),
+        ("10.05", "10.2", "9.9", "10.06"),
+        ("10.1", "14", "10.1", "13.9"),
+        ("13.9", "14", "13.5", "13.6"),
+    ],
+    "P-ES-001": [
+        ("10", "13", "10", "12.95"),
+        ("12.95", "13.1", "12.8", "12.96"),
+        ("12.9", "12.9", "9", "9.1"),
+        ("9.1", "9.4", "8.9", "9.2"),
+    ],
+}
+GOLDEN_MATCHED_DIRECTIONS = {
+    "P-DC-001": PatternDirection.NEUTRAL,
+    "P-MB-001": PatternDirection.BULLISH,
+    "P-EC-001": PatternDirection.BULLISH,
+    "P-EC-002": PatternDirection.BEARISH,
+    "P-MS-001": PatternDirection.BULLISH,
+    "P-ES-001": PatternDirection.BEARISH,
+}
+
+
+def test_s2b_imp_h001_over_cardinality_window_fails_closed() -> None:
+    import hct_backend.patterns as module
+
+    state = s1e_state()
+    assert module.PATTERN_CARDINALITY_POLICY == (
+        "EXACT_CARDINALITY_OVER_CARDINALITY_WINDOW_INVALID"
+    )
+    for identifier, rows in GOLDEN_MATCHED_WINDOWS.items():
+        version = PatternVersion.standard(identifier)
+        cardinality = version.bar_cardinality
+        assert len(rows) == cardinality + 1, identifier
+        overlong = evaluate_pattern(version, bars(*rows, state=state))
+        assert overlong.validity is PatternValidity.INVALID, identifier
+        assert overlong.reason == "OVER_CARDINALITY_WINDOW", identifier
+        assert overlong.match_state is PatternMatchState.INDETERMINATE, identifier
+        assert overlong.direction is PatternDirection.UNKNOWN, identifier
+        later = evaluate_pattern(
+            version,
+            bars(*rows, state=state),
+            evaluation_time=overlong.window_end + timedelta(days=1),
+        )
+        assert later.match_state is PatternMatchState.INDETERMINATE, identifier
+        assert later.validity is PatternValidity.INVALID, identifier
+
+
+def test_s2b_imp_h001_no_silent_slicing_of_presented_constituents() -> None:
+    state = s1e_state()
+    for identifier, rows in GOLDEN_MATCHED_WINDOWS.items():
+        version = PatternVersion.standard(identifier)
+        presented = bars(*rows, state=state)
+        evidence = evaluate_pattern(version, presented)
+        assert evidence.lineage == tuple(item.sample.fingerprint for item in presented)
+        assert len(evidence.constituent_revisions) == len(presented)
+        assert evidence.window_start == presented[0].sample.interval_start
+        assert evidence.window_end == presented[-1].sample.interval_end
+        assert evidence.window_end > (
+            presented[0].start
+            + timedelta(seconds=version.bar_cardinality * presented[0].timeframe.duration_seconds)
+        )
+
+
+def test_s2b_imp_h001_exact_cardinality_semantics_unchanged() -> None:
+    state = s1e_state()
+    for identifier, rows in GOLDEN_MATCHED_WINDOWS.items():
+        version = PatternVersion.standard(identifier)
+        exact = bars(*rows[: version.bar_cardinality], state=state)
+        evidence = evaluate_pattern(version, exact)
+        assert evidence.match_state is PatternMatchState.MATCHED, identifier
+        assert evidence.direction is GOLDEN_MATCHED_DIRECTIONS[identifier], identifier
+        assert evidence.validity is PatternValidity.VALID, identifier
+        assert evidence.reason == "MATCHED", identifier
+        assert len(evidence.lineage) == version.bar_cardinality, identifier
+
+
+# ---------------------------------------------------------------------------
+# S2B-IMP-H002 non-forgeable authoritative evidence
+# ---------------------------------------------------------------------------
+
+
+def test_s2b_imp_h002_no_arbitrary_material_issuance_api() -> None:
+    for name in (
+        "_from_evaluator",
+        "_from_material",
+        "_mint",
+        "_attach_attestation",
+        "_issue",
+    ):
+        assert not hasattr(PatternEvidence, name), name
+    signature = inspect.signature(pattern_module._issue_pattern_evidence)
+    assert tuple(signature.parameters) == ("pattern", "items", "supplied_time", "prior")
+    forbidden = {
+        "match_state",
+        "direction",
+        "validity",
+        "reason",
+        "lineage",
+        "sample_lineage",
+        "authority_lineage",
+        "constituent_revisions",
+        "revision",
+        "predecessor_evidence_fingerprint",
+        "window_start",
+        "window_end",
+        "event_time",
+        "knowledge_time",
+        "evaluation_boundary",
+        "fingerprint",
+        "material",
+    }
+    assert forbidden.isdisjoint(signature.parameters)
+    for parameter in signature.parameters.values():
+        assert parameter.kind is not inspect.Parameter.VAR_KEYWORD
+    with pytest.raises(TypeError):
+        pattern_module._issue_pattern_evidence(match_state=PatternMatchState.MATCHED)
+
+
+def test_s2b_imp_h002_coherent_forgery_is_impossible() -> None:
+    state = s1e_state()
+    version = PatternVersion.standard("P-DC-001")
+    constituents = bars(("10", "14", "9", "13"), state=state)
+    legitimate = evaluate_pattern(version, constituents)
+    assert legitimate.match_state is PatternMatchState.NOT_MATCHED
+    coherent = dict(
+        evidenced_material(legitimate),
+        match_state=PatternMatchState.MATCHED,
+        direction=PatternDirection.NEUTRAL,
+        validity=PatternValidity.VALID,
+        reason="MATCHED",
+    )
+    with pytest.raises(PatternError):
+        PatternEvidence(**coherent)
+    with pytest.raises((AttributeError, PatternError)):
+        PatternEvidence._from_evaluator(**coherent)  # type: ignore[attr-defined]
+    with pytest.raises(PatternError):
+        replace(
+            legitimate,
+            match_state=PatternMatchState.MATCHED,
+            direction=PatternDirection.NEUTRAL,
+        )
+    manual = object.__new__(PatternEvidence)
+    for name, value in coherent.items():
+        object.__setattr__(manual, name, value)
+    object.__setattr__(manual, "_attestation", None)
+    with pytest.raises(PatternError):
+        manual.__post_init__()
+    refused = evaluate_pattern(version, constituents)
+    assert refused.match_state is PatternMatchState.NOT_MATCHED
+    assert refused.fingerprint == legitimate.fingerprint
+
+
+def test_s2b_imp_h002_caller_selected_fields_are_rejected() -> None:
+    state = s1e_state()
+    evidence = evaluate_pattern(
+        PatternVersion.standard("P-MS-001"),
+        bars(*GOLDEN_MATCHED_WINDOWS["P-MS-001"][:3], state=state),
+    )
+    for field, value in (
+        ("validity", PatternValidity.DEGRADED),
+        ("window_start", evidence.window_start + timedelta(seconds=60)),
+        ("knowledge_time", evidence.knowledge_time + timedelta(seconds=1)),
+        ("evaluation_boundary", evidence.evaluation_boundary + timedelta(seconds=1)),
+        ("lineage", tuple(reversed(evidence.lineage))),
+        ("sample_lineage", tuple(reversed(evidence.sample_lineage))),
+        ("authority_lineage", tuple(reversed(evidence.authority_lineage))),
+        ("pattern", PatternVersion.standard("P-DC-001")),
+        ("constituent_revisions", (9, 9, 9)),
+    ):
+        with pytest.raises((PatternError, TypeError)):
+            replace(evidence, **{field: value})
+        manual = object.__new__(PatternEvidence)
+        for name in EVIDENCE_FIELDS:
+            object.__setattr__(manual, name, getattr(evidence, name))
+        object.__setattr__(manual, field, value)
+        object.__setattr__(manual, "_attestation", None)
+        with pytest.raises(PatternError):
+            manual.__post_init__()
+
+
+def test_s2b_imp_h002_tampered_or_copied_evidence_is_rejected() -> None:
+    state = s1e_state()
+    evidence = evaluate_pattern(
+        PatternVersion.standard("P-DC-001"), bars(("10", "11", "9", "10"), state=state)
+    )
+    assert evidence._is_attested()
+    with pytest.raises(PatternError):
+        copy.copy(evidence)
+    with pytest.raises(PatternError):
+        copy.deepcopy(evidence)
+    with pytest.raises(PatternError):
+        pickle.dumps(evidence)
+    object.__setattr__(evidence, "match_state", PatternMatchState.NOT_MATCHED)
+    assert not evidence._is_attested()
+    with pytest.raises(PatternEvaluationError):
+        canonical_evidence_order((evidence,))
+
+
+# ---------------------------------------------------------------------------
+# S2B-IMP-H003 evaluator-derived revision and predecessor chain
+# ---------------------------------------------------------------------------
+
+
+def chain_evidence_fingerprints(
+    evidences: tuple[PatternEvidence, ...],
+) -> tuple[str, ...]:
+    return tuple(item.fingerprint for item in evidences)
+
+
+def test_s2b_imp_h003_raw_revision_and_predecessor_inputs_are_removed() -> None:
+    state = s1e_state()
+    version = PatternVersion.standard("P-DC-001")
+    constituents = bars(("10", "11", "9", "10"), state=state)
+    for function in (evaluate_pattern, evaluate_patterns):
+        parameters = inspect.signature(function).parameters
+        assert "revision" not in parameters
+        assert "revisions" not in parameters
+        assert "predecessor_evidence_fingerprint" not in parameters
+        assert "predecessor_evidence_fingerprints" not in parameters
+    with pytest.raises(TypeError):
+        evaluate_pattern(version, constituents, revision=1)  # type: ignore[call-arg]
+    with pytest.raises(TypeError):
+        evaluate_pattern(  # type: ignore[call-arg]
+            version, constituents, predecessor_evidence_fingerprint="a" * 64
+        )
+    with pytest.raises(TypeError):
+        evaluate_patterns(  # type: ignore[call-arg]
+            [version], constituents, revisions={"P-DC-001": 1}
+        )
+    with pytest.raises(TypeError):
+        evaluate_patterns(  # type: ignore[call-arg]
+            [version], constituents, predecessor_evidence_fingerprints={"P-DC-001": "a" * 64}
+        )
+    with pytest.raises(PatternEvaluationError):
+        evaluate_pattern(version, constituents, state="a" * 64)  # type: ignore[arg-type]
+    with pytest.raises(PatternEvaluationError):
+        evaluate_patterns([version], constituents, states={"P-MB-001": PatternEvaluationState()})
+
+
+def test_s2b_imp_h003_scope_covers_pattern_identity_source_contract_environment() -> None:
+    state = s1e_state()
+    head = evaluate_pattern(
+        PatternVersion.standard("P-DC-001"), bars(("10", "11", "9", "10"), state=state)
+    )
+    scope = PatternEvaluationState((head,)).scope_key
+    assert scope is not None
+    assert scope[:5] == (
+        "P-DC-001",
+        1,
+        head.source_id.as_text(),
+        head.contract_id.as_text(),
+        head.environment.value,
+    )
+    assert scope[5:8] == (
+        head.timeframe_fingerprint,
+        head.timeframe_version,
+        head.timeframe_duration_seconds,
+    )
+    assert scope[8:] == (head.window_start.isoformat(), head.window_end.isoformat())
+
+
+def test_s2b_imp_h003_wrong_scope_is_rejected() -> None:
+    state = s1e_state()
+    version = PatternVersion.standard("P-DC-001")
+    original = bars(("10", "11", "9", "10"), state=state)
+    head = evaluate_pattern(version, original)
+    chain = PatternEvaluationState((head,))
+    correction = (
+        revised_pair(
+            0,
+            open_value="10",
+            high="12",
+            low="9",
+            close="10.5",
+            state=state,
+            prior_candle=original[0].candle,
+        ),
+    )
+    with pytest.raises(PatternEvaluationError):
+        evaluate_pattern(PatternVersion.standard("P-MB-001"), correction, state=chain)
+    other_state = s1e_state(contract=OTHER_CONTRACT)
+    other_contract = bars(("10", "11", "9", "10"), state=other_state, contract=OTHER_CONTRACT)
+    other_head = evaluate_pattern(version, other_contract)
+    with pytest.raises(PatternEvaluationError):
+        evaluate_pattern(version, correction, state=PatternEvaluationState((other_head,)))
+    other_window = bars(
+        ("10", "11", "9", "10"),
+        ("10", "11", "9", "10"),
+        state=state,
+        frame=Timeframe("Min5", 300),
+    )
+    window_head = evaluate_pattern(version, other_window[:1])
+    shifted = (
+        revised_pair(
+            5,
+            open_value="10",
+            high="12",
+            low="9",
+            close="10.5",
+            state=state,
+            prior_candle=other_window[0].candle,
+        ),
+    )
+    with pytest.raises(PatternEvaluationError):
+        evaluate_pattern(version, shifted, state=PatternEvaluationState((window_head,)))
+
+
+def test_s2b_imp_h003_skip_fork_and_overwrite_are_rejected() -> None:
+    state = s1e_state()
+    version = PatternVersion.standard("P-DC-001")
+    original = bars(("10", "11", "9", "10"), state=state)
+    head = evaluate_pattern(version, original)
+    first_chain = PatternEvaluationState((head,))
+    correction = (
+        revised_pair(
+            0,
+            open_value="10",
+            high="12",
+            low="9",
+            close="10.5",
+            state=state,
+            prior_candle=original[0].candle,
+        ),
+    )
+    second = evaluate_pattern(version, correction, state=first_chain)
+    chain = first_chain.record(second)
+    with pytest.raises(PatternEvaluationError):
+        PatternEvaluationState((second,))
+    again = (
+        revised_pair(
+            0,
+            open_value="10",
+            high="13",
+            low="9",
+            close="10.9",
+            state=state,
+            prior_candle=correction[0].candle,
+        ),
+    )
+    third = evaluate_pattern(version, again, state=chain)
+    with pytest.raises(PatternEvaluationError):
+        PatternEvaluationState((head,)).record(third)
+    fork = (
+        revised_pair(
+            0,
+            open_value="10",
+            high="11.9",
+            low="9",
+            close="10.1",
+            state=state,
+            prior_candle=original[0].candle,
+        ),
+    )
+    sibling = evaluate_pattern(version, fork, state=first_chain)
+    with pytest.raises(PatternEvaluationError):
+        chain.record(sibling)
+    with pytest.raises(PatternEvaluationError):
+        chain.record(second)
+    assert [item.revision for item in chain.record(third).evidences] == [0, 1, 2]
+
+
+def test_s2b_imp_h003_constituent_continuity_is_required() -> None:
+    state = s1e_state()
+    version = PatternVersion.standard("P-DC-001")
+    original = bars(("10", "11", "9", "10"), state=state)
+    head = evaluate_pattern(version, original)
+    chain = PatternEvaluationState((head,))
+    skipped_revision = (
+        revised_pair(
+            0,
+            open_value="10",
+            high="12",
+            low="9",
+            close="10.5",
+            state=state,
+            prior_candle=original[0].candle,
+            revision_delta=2,
+        ),
+    )
+    with pytest.raises(PatternEvaluationError):
+        evaluate_pattern(version, skipped_revision, state=chain)
+    wrong_predecessor = (
+        revised_pair(
+            0,
+            open_value="10",
+            high="12",
+            low="9",
+            close="10.5",
+            state=state,
+            prior_candle=original[0].candle,
+            predecessor="f" * 64,
+        ),
+    )
+    with pytest.raises(PatternEvaluationError):
+        evaluate_pattern(version, wrong_predecessor, state=chain)
+
+
+def test_s2b_imp_h003_valid_correction_derives_the_immediate_link() -> None:
+    state = s1e_state()
+    version = PatternVersion.standard("P-EC-001")
+    rows = GOLDEN_MATCHED_WINDOWS["P-EC-001"][:2]
+    original = bars(*rows, state=state)
+    head = evaluate_pattern(version, original)
+    assert head.revision == 0
+    assert head.predecessor_evidence_fingerprint is None
+    unchanged_first, revised_second = (
+        original[0],
+        revised_pair(
+            1,
+            open_value="9.5",
+            high="13",
+            low="9.5",
+            close="12.6",
+            state=state,
+            prior_candle=original[1].candle,
+        ),
+    )
+    successor = evaluate_pattern(
+        version,
+        (unchanged_first, revised_second),
+        state=PatternEvaluationState((head,)),
+    )
+    assert successor.revision == head.revision + 1
+    assert successor.predecessor_evidence_fingerprint == head.fingerprint
+    assert successor.lineage[0] == head.lineage[0]
+    assert successor.lineage[1] != head.lineage[1]
+    assert chain_evidence_fingerprints((head, successor)) == (
+        head.fingerprint,
+        successor.fingerprint,
+    )
+
+
+def test_s2b_imp_h003_no_change_revision_is_rejected() -> None:
+    state = s1e_state()
+    version = PatternVersion.standard("P-DC-001")
+    original = bars(("10", "11", "9", "10"), state=state)
+    head = evaluate_pattern(version, original)
+    chain = PatternEvaluationState((head,))
+    with pytest.raises(PatternEvaluationError):
+        evaluate_pattern(version, original, state=chain)
+    with pytest.raises(PatternEvaluationError):
+        evaluate_patterns([version], original, states={"P-DC-001": chain})
+
+
+def test_s2b_imp_h003_replay_reproduces_the_chain() -> None:
+    state = s1e_state()
+    version = PatternVersion.standard("P-DC-001")
+    original = bars(("10", "11", "9", "10"), state=state)
+    head = evaluate_pattern(version, original)
+
+    def replay() -> tuple[str, ...]:
+        chain = PatternEvaluationState((head,))
+        first_candle = revised_pair(
+            0,
+            open_value="10",
+            high="12",
+            low="9",
+            close="10.5",
+            state=state,
+            prior_candle=original[0].candle,
+        )
+        first = evaluate_pattern(version, (first_candle,), state=chain)
+        chain = chain.record(first)
+        second_candle = revised_pair(
+            0,
+            open_value="10",
+            high="12.5",
+            low="9",
+            close="10.8",
+            state=state,
+            prior_candle=first_candle.candle,
+        )
+        second = evaluate_pattern(version, (second_candle,), state=chain)
+        chain = chain.record(second)
+        return chain_evidence_fingerprints(chain.evidences)
+
+    assert replay() == replay()
+    assert len(replay()) == 3
+
+
+# ---------------------------------------------------------------------------
+# S2B-IMP-H004 fully content-bound definition identity
+# ---------------------------------------------------------------------------
+
+
+def test_s2b_imp_h004_definition_golden_fingerprints() -> None:
+    for identifier in PATTERN_ALLOWLIST:
+        definition = PatternDefinition.standard(identifier)
+        assert definition.version == 1, identifier
+        assert definition.fingerprint == GOLDEN_DEFINITION_FINGERPRINTS[identifier], identifier
+        assert (
+            PatternVersion.standard(identifier).fingerprint
+            == GOLDEN_VERSION_FINGERPRINTS[identifier]
+        ), identifier
+
+
+def test_s2b_imp_h004_definition_material_binds_every_frozen_semantic() -> None:
+    import hct_backend.patterns as module
+
+    definition = PatternDefinition.standard("P-MS-001")
+    assert definition.input_contract == "CANDLEBAR_OHLC_PLUS_EVALUATOR_ISSUED_FEATURE_SAMPLE"
+    assert definition.source_fields == ("open", "high", "low", "close")
+    assert definition.timeframe_identity == (
+        "Min1:60:1:UNIX_EPOCH_MULTIPLES",
+        "Min5:300:1:UNIX_EPOCH_MULTIPLES",
+        "Min15:900:1:UNIX_EPOCH_MULTIPLES",
+    )
+    assert definition.decimal_policy_version == "FEATURE_DECIMAL_V1"
+    assert definition.decimal_precision == 76
+    assert definition.rounding_mode == "ROUND_HALF_EVEN"
+    assert definition.small_body_max == SMALL_BODY_MAX
+    assert definition.long_body_min == LONG_BODY_MIN
+    assert definition.engulfing_bounds == "BOUNDS_INCLUSIVE"
+    assert definition.midpoint_equality == "BOUNDS_INCLUSIVE"
+    assert definition.star_gap_policy == "NONE_IN_V1"
+    assert definition.zero_range_policy == "ZERO_RANGE_PRIMITIVE_UNKNOWN"
+    assert definition.finality_requirement == "CLOSED_BAR_REQUIRED"
+    assert definition.formation_rule == "EXACT_ORDERED_CONTIGUOUS_CLOSED_PAIRS_K"
+    assert definition.cardinality_policy == ("EXACT_CARDINALITY_OVER_CARDINALITY_WINDOW_INVALID")
+    assert definition.evaluation_boundary_rule == (
+        "S2B_CANONICAL_EVALUATION_BOUNDARY=max(window_end,knowledge_time)"
+    )
+    assert definition.direction_policy == (
+        "MATCHED_REQUIRES_CONCRETE_DIRECTION_NOT_MATCHED_REQUIRES_NONE"
+    )
+    assert definition.match_state_policy == "RESTRICTIVE_VALIDITY_REQUIRES_INDETERMINATE"
+    assert definition.equation == module.PATTERN_EQUATIONS["P-MS-001"]
+    assert "close[2]>=midpoint(open[0],close[0])" in definition.equation
+    assert "r[1]<=SMALL_BODY_MAX" in definition.equation
+    assert "gap=NONE_IN_V1" in definition.equation
+    assert len(module.PATTERN_EQUATIONS) == 6
+
+
+def test_s2b_imp_h004_definition_mutation_is_rejected() -> None:
+    for identifier in PATTERN_ALLOWLIST:
+        definition = PatternDefinition.standard(identifier)
+        with pytest.raises(PatternError):
+            replace_definition(definition, equation=f"MUTATED_EQUATION:{identifier}")
+        with pytest.raises(PatternError):
+            replace_definition(definition, bar_cardinality=definition.bar_cardinality + 1)
+        with pytest.raises(PatternError):
+            replace_definition(
+                definition,
+                timeframe_identity=("Min1:60:2:UNIX_EPOCH_MULTIPLES",),
+            )
+
+
+def test_s2b_imp_h004_every_material_key_is_fingerprint_visible() -> None:
+    import hct_backend.patterns as module
+
+    for identifier in PATTERN_ALLOWLIST:
+        definition = PatternDefinition.standard(identifier)
+        material = dict(definition.material)
+        baseline = module._hash(material)
+        assert baseline == definition.fingerprint, identifier
+        for key, value in material.items():
+            mutated = dict(material)
+            if isinstance(value, list):
+                mutated[key] = ["S2B_MUTATED"]
+            elif isinstance(value, bool):
+                mutated[key] = not value
+            elif isinstance(value, int):
+                mutated[key] = value + 1
+            else:
+                mutated[key] = "S2B_MUTATED"
+            assert module._hash(mutated) != baseline, (identifier, key)

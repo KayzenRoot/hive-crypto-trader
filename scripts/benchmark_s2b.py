@@ -42,6 +42,7 @@ from hct_backend.market_truth import (
 from hct_backend.patterns import (
     PATTERN_ALLOWLIST,
     PatternConstituent,
+    PatternEvaluationState,
     PatternMatchState,
     PatternRegistry,
     PatternValidity,
@@ -352,6 +353,15 @@ def _run_profile(name: str) -> dict[str, object]:
     versions = tuple(
         registry.resolve(identifier, 1) for identifier in PATTERN_ALLOWLIST
     )
+    # Each pattern is evaluated only over its own exact evaluable bar cardinality: an
+    # overlong window is structurally contradictory and must never be sliced.
+    groups = tuple(
+        (
+            cardinality,
+            tuple(item for item in versions if item.bar_cardinality == cardinality),
+        )
+        for cardinality in sorted({item.bar_cardinality for item in versions})
+    )
     latency: dict[str, list[int]] = {
         f"{identifier}|{frame.name}": []
         for identifier in PATTERN_ALLOWLIST
@@ -365,6 +375,10 @@ def _run_profile(name: str) -> dict[str, object]:
     no_lookahead_rejections = 0
     restrictive_count = 0
     boundary_rejections = 0
+    over_cardinality_rejections = 0
+    chain_evaluations = 0
+    chain_links_valid = 0
+    correctness_failures = 0
     peak_memory = 0
     steady_memory = 0
     window_depth = 0
@@ -392,76 +406,132 @@ def _run_profile(name: str) -> dict[str, object]:
             offsets = list(range(0, horizon, stride))[:WINDOW_EVALUATION_BUDGET]
             evaluated_windows += len(offsets)
             for offset in offsets:
-                window = corpus[offset : offset + required]
-                measured = time.perf_counter_ns()
-                evidences = evaluate_all_patterns(versions, window)
-                elapsed = time.perf_counter_ns() - measured
-                share = max(1, len(evidences))
-                for evidence in evidences:
-                    key = f"{evidence.pattern.canonical_id}|{frame.name}"
-                    latency[key].append(elapsed // share)
-                    output_hasher.update(evidence.fingerprint.encode())
-                    counts_validity[evidence.validity.value] += 1
-                    counts_match[evidence.match_state.value] += 1
-                    evaluations += 1
-                    if evidence.match_state is PatternMatchState.INDETERMINATE:
-                        restrictive_count += 1
-                        if evidence.reason in {
-                            "PRE_CANONICAL_BOUNDARY",
-                            "INSUFFICIENT_REQUIRED_CONSTITUENTS",
-                        }:
-                            no_lookahead_rejections += 1
+                for cardinality, group in groups:
+                    window = corpus[offset : offset + cardinality]
+                    measured = time.perf_counter_ns()
+                    evidences = evaluate_all_patterns(group, window)
+                    elapsed = time.perf_counter_ns() - measured
+                    share = max(1, len(evidences))
+                    for evidence in evidences:
+                        latency[f"{evidence.pattern.canonical_id}|{frame.name}"].append(
+                            elapsed // share
+                        )
+                        output_hasher.update(evidence.fingerprint.encode())
+                        counts_validity[evidence.validity.value] += 1
+                        counts_match[evidence.match_state.value] += 1
+                        evaluations += 1
+                        if evidence.match_state is PatternMatchState.INDETERMINATE:
+                            restrictive_count += 1
+                            if evidence.reason in {
+                                "PRE_CANONICAL_BOUNDARY",
+                                "INSUFFICIENT_REQUIRED_CONSTITUENTS",
+                            }:
+                                no_lookahead_rejections += 1
             # Deterministic pre-boundary proof: one instant before the canonical
             # boundary the pattern must not be reported as matched.
-            final_window = corpus[-required:]
-            boundary = final_window[-1].end
-            before = boundary - timedelta(microseconds=1)
-            blocked = evaluate_all_patterns(
-                versions, final_window, evaluation_time=before
-            )
-            boundary_rejections += sum(
-                item.match_state is PatternMatchState.INDETERMINATE for item in blocked
-            )
-            restrictive_count += sum(
-                item.match_state is PatternMatchState.INDETERMINATE for item in blocked
-            )
-            evaluations += len(blocked)
-            for item in blocked:
-                counts_validity[item.validity.value] += 1
-                counts_match[item.match_state.value] += 1
+            for cardinality, group in groups:
+                final_window = corpus[-cardinality:]
+                boundary = final_window[-1].end
+                before = boundary - timedelta(microseconds=1)
+                blocked = evaluate_all_patterns(
+                    group, final_window, evaluation_time=before
+                )
+                for item in blocked:
+                    evaluations += 1
+                    output_hasher.update(item.fingerprint.encode())
+                    counts_validity[item.validity.value] += 1
+                    counts_match[item.match_state.value] += 1
+                    if item.match_state is PatternMatchState.INDETERMINATE:
+                        boundary_rejections += 1
+                        restrictive_count += 1
+                    else:
+                        correctness_failures += 1
+            # Over-cardinality proof: a presented overlong window must fail closed and
+            # must never be sliced to the canonical first k constituents.
+            for cardinality, group in groups:
+                overlong = corpus[-(cardinality + 1) :]
+                if len(overlong) != cardinality + 1:
+                    continue
+                for item in evaluate_all_patterns(group, overlong):
+                    evaluations += 1
+                    output_hasher.update(item.fingerprint.encode())
+                    counts_validity[item.validity.value] += 1
+                    counts_match[item.match_state.value] += 1
+                    restrictive_count += 1
+                    if (
+                        item.validity is PatternValidity.INVALID
+                        and item.reason == "OVER_CARDINALITY_WINDOW"
+                        and item.match_state is PatternMatchState.INDETERMINATE
+                    ):
+                        over_cardinality_rejections += 1
+                    else:
+                        correctness_failures += 1
+            # Revision-chain proof: one corrected constituent must derive revision n+1
+            # and the exact immediate predecessor fingerprint from the typed chain.
+            for cardinality, group in groups:
+                chain_window = corpus[-cardinality:]
+                heads = {
+                    item.pattern.canonical_id: item
+                    for item in evaluate_all_patterns(group, chain_window)
+                }
+                last = chain_window[-1]
+                revised_candle = replace(
+                    last.candle,
+                    revision=last.candle.revision + 1,
+                    predecessor_fingerprint=last.candle.fingerprint,
+                )
+                revised = chain_window[:-1] + (
+                    PatternConstituent(
+                        revised_candle,
+                        FeatureSample.from_candle(revised_candle, market_state=state),
+                    ),
+                )
+                states = {
+                    identifier: PatternEvaluationState((item,))
+                    for identifier, item in heads.items()
+                }
+                for successor in evaluate_all_patterns(group, revised, states=states):
+                    evaluations += 1
+                    chain_evaluations += 1
+                    output_hasher.update(successor.fingerprint.encode())
+                    counts_validity[successor.validity.value] += 1
+                    counts_match[successor.match_state.value] += 1
+                    head = heads[successor.pattern.canonical_id]
+                    if (
+                        successor.revision == head.revision + 1
+                        and successor.predecessor_evidence_fingerprint
+                        == head.fingerprint
+                    ):
+                        chain_links_valid += 1
+                    else:
+                        correctness_failures += 1
             if name == "STRESS":
-                # Deterministic adversarial corpus: mixed identity, resource and
-                # lifecycle restrictions, and a corrected constituent.
+                # Deterministic adversarial corpus: resource and lifecycle restrictions
+                # plus degraded market truth, evaluated over exact cardinality windows.
                 restrictive_state = _state(
                     contract,
                     resource=ResourceDisposition.DEGRADED,
                     lifecycle=LifecycleRestriction.NEW_EXPOSURE_DISABLED,
                 )
                 restricted = _corpus(contract, frame, required, restrictive_state)
-                adversarial = evaluate_all_patterns(versions, restricted[-required:])
-                restrictive_count += sum(
-                    item.match_state is PatternMatchState.INDETERMINATE
-                    for item in adversarial
-                )
-                evaluations += len(adversarial)
-                for item in adversarial:
-                    counts_validity[item.validity.value] += 1
-                    counts_match[item.match_state.value] += 1
-                    output_hasher.update(item.fingerprint.encode())
                 degraded_state = _state(
                     contract, trust=MarketStateTrust.DEGRADED, event_number=97
                 )
                 degraded = _corpus(
                     contract, frame, required, degraded_state, event_number=97
                 )
-                degraded_evidence = evaluate_all_patterns(
-                    versions, degraded[-required:]
-                )
-                evaluations += len(degraded_evidence)
-                for item in degraded_evidence:
-                    counts_validity[item.validity.value] += 1
-                    counts_match[item.match_state.value] += 1
-                    output_hasher.update(item.fingerprint.encode())
+                for source in (restricted, degraded):
+                    for cardinality, group in groups:
+                        adversarial = evaluate_all_patterns(
+                            group, source[-cardinality:]
+                        )
+                        for item in adversarial:
+                            evaluations += 1
+                            output_hasher.update(item.fingerprint.encode())
+                            counts_validity[item.validity.value] += 1
+                            counts_match[item.match_state.value] += 1
+                            if item.match_state is PatternMatchState.INDETERMINATE:
+                                restrictive_count += 1
             if memory_probe:
                 steady_memory, peak_memory = tracemalloc.get_traced_memory()
                 tracemalloc.stop()
@@ -473,6 +543,7 @@ def _run_profile(name: str) -> dict[str, object]:
         "closed_pairs_per_contract_per_timeframe": pairs_per_contract,
         "timeframes": [frame.name for frame in TIMEFRAMES],
         "pattern_ids": list(PATTERN_ALLOWLIST),
+        "exact_cardinality_groups": [cardinality for cardinality, _ in groups],
         "pattern_evaluations": evaluations,
         "pattern_evaluations_per_second": evaluations / (elapsed_ns / 1_000_000_000),
         "per_pattern_timeframe_latency_ns": {
@@ -491,10 +562,16 @@ def _run_profile(name: str) -> dict[str, object]:
         "counts_by_pattern_validity": counts_validity,
         "counts_by_pattern_match_state": counts_match,
         "no_lookahead_rejections": no_lookahead_rejections + boundary_rejections,
+        "boundary_rejections": boundary_rejections,
+        "over_cardinality_rejections": over_cardinality_rejections,
+        "revision_chain_probe": {
+            "evaluations": chain_evaluations,
+            "valid_links": chain_links_valid,
+        },
         "restrictive_state_count": restrictive_count,
         "input_manifest_hash": input_manifest.hexdigest(),
         "output_manifest_hash": output_hasher.hexdigest(),
-        "correctness": "PASS",
+        "correctness": "PASS" if correctness_failures == 0 else "FAIL",
     }
 
 
@@ -507,6 +584,7 @@ DETERMINISTIC_FIELDS: tuple[str, ...] = (
     "timeframes",
     "pattern_ids",
     "pattern_evaluations",
+    "exact_cardinality_groups",
     "window_buffer_depth",
     "window_evaluation_budget",
     "evaluated_windows",
@@ -514,6 +592,9 @@ DETERMINISTIC_FIELDS: tuple[str, ...] = (
     "counts_by_pattern_validity",
     "counts_by_pattern_match_state",
     "no_lookahead_rejections",
+    "boundary_rejections",
+    "over_cardinality_rejections",
+    "revision_chain_probe",
     "restrictive_state_count",
     "input_manifest_hash",
     "output_manifest_hash",
@@ -579,6 +660,39 @@ def _validate_profile_document(document: dict[str, object], label: str) -> None:
         if item["counts_by_pattern_match_state"]["INDETERMINATE"] <= 0:
             raise BenchmarkValidationError(
                 f"{label}/{profile}: no indeterminate outcomes"
+            )
+        if item["exact_cardinality_groups"] != sorted(
+            {
+                PatternVersion.standard(identifier).bar_cardinality
+                for identifier in PATTERN_ALLOWLIST
+            }
+        ):
+            raise BenchmarkValidationError(
+                f"{label}/{profile}: exact cardinality groups changed"
+            )
+        if (
+            item["counts_by_pattern_validity"]["INVALID"]
+            != item["over_cardinality_rejections"]
+        ):
+            raise BenchmarkValidationError(
+                f"{label}/{profile}: INVALID evidence is not exactly the over-cardinality probe"
+            )
+        if item["counts_by_pattern_validity"]["WARMUP"] != item["boundary_rejections"]:
+            raise BenchmarkValidationError(
+                f"{label}/{profile}: WARMUP evidence is not exactly the pre-boundary probe"
+            )
+        if item["boundary_rejections"] <= 0:
+            raise BenchmarkValidationError(
+                f"{label}/{profile}: pre-boundary rejections were not exercised"
+            )
+        if item["over_cardinality_rejections"] <= 0:
+            raise BenchmarkValidationError(
+                f"{label}/{profile}: over-cardinality windows were not rejected"
+            )
+        chain = item["revision_chain_probe"]
+        if chain["evaluations"] <= 0 or chain["valid_links"] != chain["evaluations"]:
+            raise BenchmarkValidationError(
+                f"{label}/{profile}: revision chain links are not the immediate predecessors"
             )
         if not item["per_pattern_timeframe_latency_ns"]:
             raise BenchmarkValidationError(

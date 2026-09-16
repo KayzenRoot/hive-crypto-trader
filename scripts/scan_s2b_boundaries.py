@@ -42,6 +42,41 @@ PATTERN_IDS = {
     "P-MS-001",
     "P-ES-001",
 }
+FORBIDDEN_FUNCTION_NAMES = (
+    "_from_evaluator",
+    "_from_material",
+    "_mint",
+    "_attach_attestation",
+)
+FORBIDDEN_EVALUATION_PARAMETERS = (
+    "revision",
+    "revisions",
+    "predecessor_evidence_fingerprint",
+    "predecessor_evidence_fingerprints",
+    "material",
+)
+EVALUATION_FUNCTIONS = ("evaluate_pattern", "evaluate_patterns")
+REQUIRED_MARKERS = (
+    "OVER_CARDINALITY_WINDOW",
+    "EXACT_CARDINALITY_OVER_CARDINALITY_WINDOW_INVALID",
+    "PatternEvaluationState",
+    "CANDLEBAR_OHLC_PLUS_EVALUATOR_ISSUED_FEATURE_SAMPLE",
+    "UNIX_EPOCH_MULTIPLES",
+    "(60, 1, _ALIGNMENT)",
+    "(300, 1, _ALIGNMENT)",
+    "(900, 1, _ALIGNMENT)",
+    "S2B_CANONICAL_EVALUATION_BOUNDARY=max(window_end,knowledge_time)",
+    "CLOSED_BAR_REQUIRED",
+    "ZERO_RANGE_PRIMITIVE_UNKNOWN",
+    "constituent_revisions",
+    "_evidence_seal",
+    "DOJI:r[0]<=SMALL_BODY_MAX",
+    "LONG_BODY:r[0]>=LONG_BODY_MIN",
+    "BULLISH_ENGULFING:close[0]<open[0]",
+    "BEARISH_ENGULFING:close[0]>open[0]",
+    "MORNING_STAR:close[0]<open[0]",
+    "EVENING_STAR:close[0]>open[0]",
+)
 AUTHORIZED_FILES = {
     ".github/workflows/s2b-quality.yml",
     "apps/backend/src/hct_backend/patterns.py",
@@ -52,6 +87,65 @@ AUTHORIZED_FILES = {
     "evidence/HCT-IMP-0011-S2B-CONTEXT-LOCK.md",
     "evidence/HCT-IMP-0011-S2B.md",
 }
+
+
+def _argument_names(node: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
+    arguments = node.args
+    names = {
+        item.arg
+        for item in (*arguments.posonlyargs, *arguments.args, *arguments.kwonlyargs)
+    }
+    if arguments.vararg is not None:
+        names.add(arguments.vararg.arg)
+    if arguments.kwarg is not None:
+        names.add(arguments.kwarg.arg)
+    return names
+
+
+def _contract_violations(path: Path, tree: ast.AST) -> list[str]:
+    """Reject a reintroduced arbitrary-material issuance or raw evaluator inputs."""
+
+    failures: list[str] = []
+    for node in tree.body:
+        if (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name.startswith(("_issue", "_from", "_mint"))
+            and node.name != "_issue_pattern_evidence"
+        ):
+            failures.append(f"{path}: unexpected issuance helper {node.name}")
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if "material" in _argument_names(node):
+                failures.append(f"{path}: {node.name} accepts caller material")
+            if node.name in FORBIDDEN_FUNCTION_NAMES:
+                failures.append(
+                    f"{path}: arbitrary evidence issuance function {node.name}"
+                )
+            if node.name in EVALUATION_FUNCTIONS:
+                forbidden = sorted(
+                    _argument_names(node) & set(FORBIDDEN_EVALUATION_PARAMETERS)
+                )
+                if forbidden:
+                    failures.append(
+                        f"{path}: raw evaluator input(s) {forbidden} in {node.name}"
+                    )
+        if isinstance(node, ast.ClassDef) and node.name == "PatternEvidence":
+            for item in node.body:
+                if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                # ``__init__`` is the deliberately blocked constructor: it accepts
+                # arbitrary arguments only in order to refuse them.
+                if item.name == "__init__":
+                    continue
+                if item.args.kwarg is not None:
+                    failures.append(
+                        f"{path}: PatternEvidence.{item.name} accepts arbitrary material"
+                    )
+                if "material" in _argument_names(item):
+                    failures.append(
+                        f"{path}: PatternEvidence.{item.name} accepts material"
+                    )
+    return failures
 
 
 def scan(path: Path) -> list[str]:
@@ -78,6 +172,11 @@ def scan(path: Path) -> list[str]:
             failures.append(f"{path}: forbidden capability pattern {pattern}")
     urls = re.findall(r"(?:wss?|https?)://[^\"'\s)]+", text)
     failures.extend(f"{path}: unexpected URL {url}" for url in urls)
+    if path.name == "patterns.py":
+        failures.extend(_contract_violations(path, tree))
+        for marker in REQUIRED_MARKERS:
+            if marker not in text:
+                failures.append(f"{path}: missing corrected marker {marker}")
     return failures
 
 

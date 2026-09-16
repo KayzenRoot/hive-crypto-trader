@@ -9,13 +9,14 @@ produce downstream decisions or grant authority.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import ROUND_HALF_EVEN, Decimal, localcontext
 from enum import StrEnum
-from typing import Any, Final, Self
+from typing import Final, Self, SupportsIndex
 
 from hct_backend.contracts import Environment, IdentityKind, StableId
 from hct_backend.features import (
@@ -73,6 +74,50 @@ _TIMEFRAME_IDENTITY: Final = {
     "Min5": (300, 1, _ALIGNMENT),
     "Min15": (900, 1, _ALIGNMENT),
 }
+# Full structural timeframe identity tokens: duration, version and alignment are each
+# behaviorally material, so each is fingerprint-visible in the definition.
+PATTERN_TIMEFRAME_IDENTITY: Final = tuple(
+    f"{name}:{duration}:{version}:{alignment}"
+    for name, (duration, version, alignment) in _TIMEFRAME_IDENTITY.items()
+)
+PATTERN_INPUT_CONTRACT: Final = "CANDLEBAR_OHLC_PLUS_EVALUATOR_ISSUED_FEATURE_SAMPLE"
+PATTERN_SOURCE_FIELDS: Final = ("open", "high", "low", "close")
+PATTERN_DECIMAL_PRECISION: Final = 76
+PATTERN_ZERO_RANGE_POLICY: Final = "ZERO_RANGE_PRIMITIVE_UNKNOWN"
+PATTERN_FINALITY_REQUIREMENT: Final = "CLOSED_BAR_REQUIRED"
+PATTERN_FORMATION_RULE: Final = "EXACT_ORDERED_CONTIGUOUS_CLOSED_PAIRS_K"
+PATTERN_CARDINALITY_POLICY: Final = "EXACT_CARDINALITY_OVER_CARDINALITY_WINDOW_INVALID"
+PATTERN_EVALUATION_BOUNDARY_RULE: Final = (
+    "S2B_CANONICAL_EVALUATION_BOUNDARY=max(window_end,knowledge_time)"
+)
+PATTERN_DIRECTION_POLICY: Final = "MATCHED_REQUIRES_CONCRETE_DIRECTION_NOT_MATCHED_REQUIRES_NONE"
+PATTERN_MATCH_STATE_POLICY: Final = "RESTRICTIVE_VALIDITY_REQUIRES_INDETERMINATE"
+# Canonical per-pattern equation specification.  ``r`` is the canonical body ratio
+# ``abs(close-open)/(high-low)`` computed under the frozen Decimal policy.
+PATTERN_EQUATIONS: Final = {
+    "P-DC-001": "DOJI:r[0]<=SMALL_BODY_MAX;r=abs(close-open)/(high-low);direction=NEUTRAL",
+    "P-MB-001": (
+        "LONG_BODY:r[0]>=LONG_BODY_MIN;r=abs(close-open)/(high-low);direction=SIGN(close-open)"
+    ),
+    "P-EC-001": (
+        "BULLISH_ENGULFING:close[0]<open[0]&close[1]>open[1]&open[1]<=close[0]"
+        "&close[1]>=open[0];engulfing_bounds=INCLUSIVE;direction=BULLISH"
+    ),
+    "P-EC-002": (
+        "BEARISH_ENGULFING:close[0]>open[0]&close[1]<open[1]&open[1]>=close[0]"
+        "&close[1]<=open[0];engulfing_bounds=INCLUSIVE;direction=BEARISH"
+    ),
+    "P-MS-001": (
+        "MORNING_STAR:close[0]<open[0]&r[0]>=LONG_BODY_MIN&r[1]<=SMALL_BODY_MAX"
+        "&close[2]>open[2]&r[2]>=LONG_BODY_MIN&close[2]>=midpoint(open[0],close[0])"
+        ";midpoint_equality=INCLUSIVE;gap=NONE_IN_V1;direction=BULLISH"
+    ),
+    "P-ES-001": (
+        "EVENING_STAR:close[0]>open[0]&r[0]>=LONG_BODY_MIN&r[1]<=SMALL_BODY_MAX"
+        "&close[2]<open[2]&r[2]>=LONG_BODY_MIN&close[2]<=midpoint(open[0],close[0])"
+        ";midpoint_equality=INCLUSIVE;gap=NONE_IN_V1;direction=BEARISH"
+    ),
+}
 _TRUST_SEVERITY: Final = (
     MarketStateTrust.UNTRUSTED,
     MarketStateTrust.RESYNC_REQUIRED,
@@ -99,7 +144,6 @@ _LIFECYCLE_SEVERITY: Final = (
     LifecycleRestriction.ELIGIBILITY_UNKNOWN,
     LifecycleRestriction.NONE,
 )
-_EVIDENCE_ATTESTATION: Final = object()
 
 
 class PatternError(ValueError):
@@ -140,9 +184,21 @@ class PatternDirection(StrEnum):
     UNKNOWN = "UNKNOWN"
 
 
-def _hash(material: object) -> str:
-    encoded = json.dumps(material, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+def _hash(payload: object) -> str:
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+# Attestation is content-bound: the seal is a keyed digest over the complete evidence
+# fingerprint, so any later field mutation invalidates the seal and is detected.
+_SEAL_KEY: Final = _hash(
+    {
+        "attestation": "S2B_PATTERN_EVIDENCE_ATTESTATION_V1",
+        "evidence_version": PATTERN_EVIDENCE_VERSION,
+        "fingerprint_version": PATTERN_FINGERPRINT_VERSION,
+        "algorithm_version": PATTERN_ALGORITHM_VERSION,
+    }
+)
 
 
 def _require_hash(value: str, label: str) -> None:
@@ -200,14 +256,25 @@ def _midpoint(left: Decimal, right: Decimal) -> Decimal:
 
 @dataclass(frozen=True, slots=True)
 class PatternDefinition:
-    """Immutable behaviorally material pattern definition."""
+    """Immutable behaviorally material pattern definition.
+
+    Every frozen behaviorally material semantic is a field and is part of ``material``,
+    so the definition/version fingerprint is a deterministic function of the complete
+    contract: exact equation and source fields, full structural timeframe identity,
+    formation/completion boundary rule, finality, thresholds, equality, zero-range
+    policy, Decimal policy and the direction/match-state policy.
+    """
 
     canonical_id: str
     version: int
     family: str
     bar_cardinality: int
+    equation: str = ""
+    input_contract: str = PATTERN_INPUT_CONTRACT
+    source_fields: tuple[str, ...] = PATTERN_SOURCE_FIELDS
     algorithm_version: str = PATTERN_ALGORITHM_VERSION
     decimal_policy_version: str = PATTERN_DECIMAL_POLICY_VERSION
+    decimal_precision: int = PATTERN_DECIMAL_PRECISION
     fingerprint_version: str = PATTERN_FINGERPRINT_VERSION
     small_body_max: Decimal = SMALL_BODY_MAX
     long_body_min: Decimal = LONG_BODY_MIN
@@ -215,7 +282,15 @@ class PatternDefinition:
     midpoint_equality: str = "BOUNDS_INCLUSIVE"
     star_gap_policy: str = "NONE_IN_V1"
     timeframe_allowlist: tuple[str, ...] = _TIMEFRAME_ALLOWLIST
+    timeframe_identity: tuple[str, ...] = PATTERN_TIMEFRAME_IDENTITY
     rounding_mode: str = "ROUND_HALF_EVEN"
+    zero_range_policy: str = PATTERN_ZERO_RANGE_POLICY
+    finality_requirement: str = PATTERN_FINALITY_REQUIREMENT
+    formation_rule: str = PATTERN_FORMATION_RULE
+    cardinality_policy: str = PATTERN_CARDINALITY_POLICY
+    evaluation_boundary_rule: str = PATTERN_EVALUATION_BOUNDARY_RULE
+    direction_policy: str = PATTERN_DIRECTION_POLICY
+    match_state_policy: str = PATTERN_MATCH_STATE_POLICY
 
     def __post_init__(self) -> None:
         if self.canonical_id not in _PATTERN_IDS:
@@ -228,10 +303,21 @@ class PatternDefinition:
             raise PatternError("pattern family disagrees with its canonical ID")
         if self.bar_cardinality != _PATTERN_BAR_CARDINALITY[self.canonical_id]:
             raise PatternError("pattern bar cardinality disagrees with its canonical ID")
+        if self.equation != PATTERN_EQUATIONS[self.canonical_id]:
+            raise PatternError("pattern equation token is frozen for V1")
+        if self.input_contract != PATTERN_INPUT_CONTRACT:
+            raise PatternError("unsupported pattern input contract")
+        if self.source_fields != PATTERN_SOURCE_FIELDS:
+            raise PatternError("unsupported pattern source fields")
         if self.algorithm_version != PATTERN_ALGORITHM_VERSION:
             raise PatternError("unsupported pattern algorithm version")
         if self.decimal_policy_version != PATTERN_DECIMAL_POLICY_VERSION:
             raise PatternError("unsupported Decimal policy")
+        if (
+            isinstance(self.decimal_precision, bool)
+            or self.decimal_precision != PATTERN_DECIMAL_PRECISION
+        ):
+            raise PatternError("unsupported Decimal precision")
         if self.fingerprint_version != PATTERN_FINGERPRINT_VERSION:
             raise PatternError("unsupported fingerprint version")
         if not isinstance(self.small_body_max, Decimal) or not isinstance(
@@ -248,8 +334,24 @@ class PatternDefinition:
             raise PatternError("V1 imposes no star gap requirement")
         if self.timeframe_allowlist != _TIMEFRAME_ALLOWLIST:
             raise PatternError("unsupported structural timeframe allowlist")
+        if self.timeframe_identity != PATTERN_TIMEFRAME_IDENTITY:
+            raise PatternError("unsupported structural timeframe identity")
         if self.rounding_mode != "ROUND_HALF_EVEN":
             raise PatternError("unsupported rounding mode")
+        if self.zero_range_policy != PATTERN_ZERO_RANGE_POLICY:
+            raise PatternError("unsupported zero-range policy")
+        if self.finality_requirement != PATTERN_FINALITY_REQUIREMENT:
+            raise PatternError("unsupported finality requirement")
+        if self.formation_rule != PATTERN_FORMATION_RULE:
+            raise PatternError("unsupported canonical formation rule")
+        if self.cardinality_policy != PATTERN_CARDINALITY_POLICY:
+            raise PatternError("unsupported bar cardinality policy")
+        if self.evaluation_boundary_rule != PATTERN_EVALUATION_BOUNDARY_RULE:
+            raise PatternError("unsupported canonical evaluation boundary rule")
+        if self.direction_policy != PATTERN_DIRECTION_POLICY:
+            raise PatternError("unsupported direction policy")
+        if self.match_state_policy != PATTERN_MATCH_STATE_POLICY:
+            raise PatternError("unsupported match-state policy")
 
     @classmethod
     def standard(cls, canonical_id: str) -> Self:
@@ -260,6 +362,7 @@ class PatternDefinition:
             version=PATTERN_DEFINITION_VERSION,
             family=_PATTERN_FAMILIES[canonical_id],
             bar_cardinality=_PATTERN_BAR_CARDINALITY[canonical_id],
+            equation=PATTERN_EQUATIONS[canonical_id],
         )
 
     @property
@@ -269,8 +372,12 @@ class PatternDefinition:
             "version": self.version,
             "family": self.family,
             "bar_cardinality": self.bar_cardinality,
+            "equation": self.equation,
+            "input_contract": self.input_contract,
+            "source_fields": list(self.source_fields),
             "algorithm_version": self.algorithm_version,
             "decimal_policy_version": self.decimal_policy_version,
+            "decimal_precision": self.decimal_precision,
             "fingerprint_version": self.fingerprint_version,
             "small_body_max": str(self.small_body_max),
             "long_body_min": str(self.long_body_min),
@@ -278,7 +385,15 @@ class PatternDefinition:
             "midpoint_equality": self.midpoint_equality,
             "star_gap_policy": self.star_gap_policy,
             "timeframe_allowlist": list(self.timeframe_allowlist),
+            "timeframe_identity": list(self.timeframe_identity),
             "rounding_mode": self.rounding_mode,
+            "zero_range_policy": self.zero_range_policy,
+            "finality_requirement": self.finality_requirement,
+            "formation_rule": self.formation_rule,
+            "cardinality_policy": self.cardinality_policy,
+            "evaluation_boundary_rule": self.evaluation_boundary_rule,
+            "direction_policy": self.direction_policy,
+            "match_state_policy": self.match_state_policy,
         }
 
     @property
@@ -525,6 +640,10 @@ def _span(constituents: Sequence[PatternConstituent], cardinality: int) -> _Span
                 return span(PatternValidity.INVALID, "NON_CONTIGUOUS_OR_REORDERED_CONSTITUENTS")
     if len({item.sample.fingerprint for item in constituents}) != len(constituents):
         return span(PatternValidity.INVALID, "DUPLICATE_CONSTITUENTS")
+    if len(constituents) > cardinality:
+        # Every presented constituent is part of the claimed evidence window, so an
+        # overlong window is structurally contradictory and never silently sliced.
+        return span(PatternValidity.INVALID, "OVER_CARDINALITY_WINDOW")
     for item in constituents:
         if item.candle.finality is not Finality.CLOSED:
             return span(PatternValidity.WARMUP, "CLOSED_CONSTITUENT_REQUIRED")
@@ -539,7 +658,17 @@ def _span(constituents: Sequence[PatternConstituent], cardinality: int) -> _Span
 
 @dataclass(frozen=True, slots=True, init=False)
 class PatternEvidence:
-    """Evaluator-issued, content-bound analytical pattern evidence."""
+    """Evaluator-issued, content-bound analytical pattern evidence.
+
+    There is no caller-servable issuance API.  The only path that creates an
+    attested instance is the module-private evaluator issuance function, which
+    receives the frozen ``PatternVersion``, the exact validated paired constituents,
+    the evaluation boundary time and the typed prior evidence state, and recomputes
+    span, axis fold, equation, direction, validity, timestamps, lineage and
+    fingerprint material itself.  The attestation seal is a keyed digest over the
+    complete evidence fingerprint, so object-level tampering or copy-style mutation
+    invalidates the seal instead of yielding attested material.
+    """
 
     pattern: PatternVersion
     match_state: PatternMatchState
@@ -560,6 +689,7 @@ class PatternEvidence:
     wall_receive_time: datetime
     evaluation_boundary: datetime
     lineage: tuple[str, ...]
+    constituent_revisions: tuple[int, ...]
     sample_lineage: tuple[str, ...]
     authority_lineage: tuple[str, ...]
     market_state_trust: MarketStateTrust
@@ -573,21 +703,27 @@ class PatternEvidence:
     def __init__(self, *args: object, **kwargs: object) -> None:
         raise PatternError("PatternEvidence must be issued by the pattern evaluator")
 
-    def _is_attested(self) -> bool:
-        return self._attestation is _EVIDENCE_ATTESTATION
+    def __copy__(self) -> PatternEvidence:
+        raise PatternError("pattern evidence cannot be copied into unattested material")
 
-    @classmethod
-    def _from_evaluator(cls, **material: Any) -> PatternEvidence:
-        instance = object.__new__(cls)
-        for name, value in material.items():
-            object.__setattr__(instance, name, value)
-        object.__setattr__(instance, "_attestation", _EVIDENCE_ATTESTATION)
-        instance.__post_init__()
-        return instance
+    def __deepcopy__(self, memo: object) -> PatternEvidence:
+        raise PatternError("pattern evidence cannot be deep-copied")
+
+    def __reduce_ex__(self, protocol: SupportsIndex) -> str:
+        raise PatternError("pattern evidence cannot be serialized or reconstructed")
+
+    def _is_attested(self) -> bool:
+        seal = self._attestation
+        if not isinstance(seal, str):
+            return False
+        return hmac.compare_digest(seal, _evidence_seal(self))
 
     def __post_init__(self) -> None:
+        self._validate_material()
         if not self._is_attested():
             raise PatternError("pattern evidence is not evaluator-issued")
+
+    def _validate_material(self) -> None:
         if not isinstance(self.pattern, PatternVersion):
             raise PatternError("pattern evidence requires a PatternVersion")
         if not isinstance(self.match_state, PatternMatchState):
@@ -628,6 +764,11 @@ class PatternEvidence:
             raise PatternError("pattern lineage is required")
         for item in self.lineage:
             _require_hash(item, "pattern lineage entry")
+        if len(self.constituent_revisions) != len(self.lineage):
+            raise PatternError("pattern constituent revision lineage length disagrees")
+        for revision in self.constituent_revisions:
+            if isinstance(revision, bool) or not isinstance(revision, int) or revision < 0:
+                raise PatternError("pattern constituent revision is invalid")
         if len(self.sample_lineage) != len(self.lineage):
             raise PatternError("pattern sample lineage length disagrees")
         if len(self.authority_lineage) != len(self.lineage):
@@ -686,43 +827,67 @@ class PatternEvidence:
     def fingerprint(self) -> str:
         """Canonical fingerprint v1 over the complete evidence material."""
 
-        return _hash(
-            {
-                "evidence_version": PATTERN_EVIDENCE_VERSION,
-                "fingerprint_version": PATTERN_FINGERPRINT_VERSION,
-                "pattern": self.pattern.fingerprint,
-                "match_state": self.match_state.value,
-                "direction": self.direction.value,
-                "validity": self.validity.value,
-                "reason": self.reason,
-                "source": self.source_id.as_text(),
-                "contract": self.contract_id.as_text(),
-                "environment": self.environment.value,
-                "generation": self.generation_fingerprint,
-                "timeframe_fingerprint": self.timeframe_fingerprint,
-                "timeframe_version": self.timeframe_version,
-                "timeframe_duration_seconds": self.timeframe_duration_seconds,
-                "window_start": self.window_start.isoformat(),
-                "window_end": self.window_end.isoformat(),
-                "event_time": self.event_time.isoformat(),
-                "knowledge_time": self.knowledge_time.isoformat(),
-                "wall_receive_time": self.wall_receive_time.isoformat(),
-                "evaluation_boundary": self.evaluation_boundary.isoformat(),
-                "lineage": self.lineage,
-                "sample_lineage": self.sample_lineage,
-                "authority_lineage": self.authority_lineage,
-                "market_state_trust": self.market_state_trust.value,
-                "data_authority_state": self.data_authority_state.value,
-                "resource_restriction": self.resource_restriction.value,
-                "lifecycle_restriction": self.lifecycle_restriction.value,
-                "revision": self.revision,
-                "predecessor_evidence_fingerprint": self.predecessor_evidence_fingerprint,
-            }
-        )
+        return _hash(_evidence_material(self))
 
     @property
     def evidence_fingerprint(self) -> str:
         return self.fingerprint
+
+    @property
+    def material(self) -> dict[str, object]:
+        return _evidence_material(self)
+
+
+def _evidence_material(evidence: PatternEvidence) -> dict[str, object]:
+    """Complete canonical evidence material; every field is fingerprint-visible."""
+
+    return {
+        "evidence_version": PATTERN_EVIDENCE_VERSION,
+        "fingerprint_version": PATTERN_FINGERPRINT_VERSION,
+        "pattern": evidence.pattern.fingerprint,
+        "match_state": evidence.match_state.value,
+        "direction": evidence.direction.value,
+        "validity": evidence.validity.value,
+        "reason": evidence.reason,
+        "source": evidence.source_id.as_text(),
+        "contract": evidence.contract_id.as_text(),
+        "environment": evidence.environment.value,
+        "generation": evidence.generation_fingerprint,
+        "timeframe_fingerprint": evidence.timeframe_fingerprint,
+        "timeframe_version": evidence.timeframe_version,
+        "timeframe_duration_seconds": evidence.timeframe_duration_seconds,
+        "window_start": evidence.window_start.isoformat(),
+        "window_end": evidence.window_end.isoformat(),
+        "event_time": evidence.event_time.isoformat(),
+        "knowledge_time": evidence.knowledge_time.isoformat(),
+        "wall_receive_time": evidence.wall_receive_time.isoformat(),
+        "evaluation_boundary": evidence.evaluation_boundary.isoformat(),
+        "lineage": evidence.lineage,
+        "constituent_revisions": evidence.constituent_revisions,
+        "sample_lineage": evidence.sample_lineage,
+        "authority_lineage": evidence.authority_lineage,
+        "market_state_trust": evidence.market_state_trust.value,
+        "data_authority_state": evidence.data_authority_state.value,
+        "resource_restriction": evidence.resource_restriction.value,
+        "lifecycle_restriction": evidence.lifecycle_restriction.value,
+        "revision": evidence.revision,
+        "predecessor_evidence_fingerprint": evidence.predecessor_evidence_fingerprint,
+    }
+
+
+def _evidence_seal(evidence: PatternEvidence) -> str:
+    """Keyed digest over the complete evidence fingerprint."""
+
+    return _hash({"seal": _SEAL_KEY, "evidence": evidence.fingerprint})
+
+
+def _transition_material(evidence: PatternEvidence) -> dict[str, object]:
+    """Evidence material without the revision link; used to reject no-change revisions."""
+
+    material = _evidence_material(evidence)
+    material.pop("revision")
+    material.pop("predecessor_evidence_fingerprint")
+    return material
 
 
 def _match_pattern(
@@ -813,24 +978,142 @@ def _match_pattern(
     )
 
 
-def evaluate_pattern(
-    pattern: PatternVersion,
-    constituents: Iterable[PatternConstituent],
-    *,
-    evaluation_time: datetime | None = None,
-    revision: int = 0,
-    predecessor_evidence_fingerprint: str | None = None,
-) -> PatternEvidence:
-    """Evaluate one frozen pattern over its exact ordered paired constituents."""
+@dataclass(frozen=True, slots=True)
+class PatternEvaluationState:
+    """Evaluator-owned immutable revision chain for one logical pattern/window key.
 
-    if not isinstance(pattern, PatternVersion):
-        raise PatternEvaluationError("PatternVersion is required")
-    items = tuple(constituents)
-    if not items:
-        raise PatternEvaluationError("at least one constituent is required")
-    for item in items:
-        if not isinstance(item, PatternConstituent):
-            raise PatternEvaluationError("evaluator input must be paired constituents")
+    This is the only accepted predecessor input to the public evaluation API: the
+    revision and the predecessor fingerprint are derived from its head instead of being
+    supplied by the caller.  Recording rejects a revision skip, a fork, a non-immediate
+    predecessor, a scope change and an overwrite of an already recorded chain node, so
+    the chain stays exact and replayable.
+    """
+
+    evidences: tuple[PatternEvidence, ...] = ()
+
+    def __post_init__(self) -> None:
+        previous: PatternEvidence | None = None
+        for index, evidence in enumerate(self.evidences):
+            if not isinstance(evidence, PatternEvidence) or not evidence._is_attested():
+                raise PatternEvaluationError("chain entries must be evaluator-issued evidence")
+            if evidence.revision != index:
+                raise PatternEvaluationError("chain revision sequence has a skip")
+            if previous is None:
+                if evidence.predecessor_evidence_fingerprint is not None:
+                    raise PatternEvaluationError("chain head cannot carry a predecessor")
+            elif evidence.predecessor_evidence_fingerprint != previous.fingerprint or _scope_key(
+                evidence
+            ) != _scope_key(previous):
+                raise PatternEvaluationError("chain link is not the immediate predecessor")
+            previous = evidence
+
+    @property
+    def head(self) -> PatternEvidence | None:
+        """The exact immediate predecessor for the next revision, when one exists."""
+
+        return self.evidences[-1] if self.evidences else None
+
+    @property
+    def scope_key(self) -> tuple[object, ...] | None:
+        return _scope_key(self.evidences[0]) if self.evidences else None
+
+    def record(self, evidence: PatternEvidence) -> Self:
+        """Append the exact immediate successor; reject skip, fork and overwrite."""
+
+        if not isinstance(evidence, PatternEvidence) or not evidence._is_attested():
+            raise PatternEvaluationError("chain entries must be evaluator-issued evidence")
+        if any(item.fingerprint == evidence.fingerprint for item in self.evidences):
+            raise PatternEvaluationError("chain node was already recorded")
+        head = self.head
+        if head is None:
+            if evidence.revision != 0 or evidence.predecessor_evidence_fingerprint is not None:
+                raise PatternEvaluationError("chain cannot start from a revision link")
+        else:
+            if _scope_key(evidence) != _scope_key(head):
+                raise PatternEvaluationError("chain evidence scope disagrees with the chain")
+            if evidence.revision != head.revision + 1:
+                raise PatternEvaluationError("chain revision is not the immediate successor")
+            if evidence.predecessor_evidence_fingerprint != head.fingerprint:
+                raise PatternEvaluationError("chain link is not the immediate predecessor")
+        return type(self)((*self.evidences, evidence))
+
+
+def _scope_key(evidence: PatternEvidence) -> tuple[object, ...]:
+    """The exact logical pattern/window scope of one evidence item."""
+
+    return (
+        evidence.pattern.canonical_id,
+        evidence.pattern.version,
+        evidence.source_id.as_text(),
+        evidence.contract_id.as_text(),
+        evidence.environment.value,
+        evidence.timeframe_fingerprint,
+        evidence.timeframe_version,
+        evidence.timeframe_duration_seconds,
+        evidence.window_start.isoformat(),
+        evidence.window_end.isoformat(),
+    )
+
+
+def _require_immediate_predecessor(
+    pattern: PatternVersion,
+    items: Sequence[PatternConstituent],
+    span: _Span,
+    prior: PatternEvidence,
+) -> None:
+    """Reject any predecessor that is not the exact immediate typed predecessor."""
+
+    if not isinstance(prior, PatternEvidence) or not prior._is_attested():
+        raise PatternEvaluationError("typed prior pattern evidence is required")
+    if (
+        prior.pattern.canonical_id != pattern.canonical_id
+        or prior.pattern.version != pattern.version
+    ):
+        raise PatternEvaluationError("predecessor pattern identity disagrees")
+    first = items[0]
+    if (
+        prior.source_id != first.sample.source_id
+        or prior.contract_id != first.sample.contract_id
+        or prior.environment is not first.sample.environment
+    ):
+        raise PatternEvaluationError("predecessor source, contract or environment disagrees")
+    if (
+        prior.timeframe_fingerprint != first.timeframe.fingerprint
+        or prior.timeframe_version != first.timeframe.version
+        or prior.timeframe_duration_seconds != first.timeframe.duration_seconds
+    ):
+        raise PatternEvaluationError("predecessor timeframe identity disagrees")
+    if prior.window_start != span.window_start or prior.window_end != span.window_end:
+        raise PatternEvaluationError("predecessor window identity disagrees")
+    if len(prior.lineage) != len(items):
+        raise PatternEvaluationError("predecessor constituent cardinality disagrees")
+    for index, item in enumerate(items):
+        if item.candle.fingerprint == prior.lineage[index]:
+            continue
+        if (
+            item.candle.revision != prior.constituent_revisions[index] + 1
+            or item.candle.predecessor_fingerprint != prior.lineage[index]
+        ):
+            raise PatternEvaluationError(
+                "changed constituent lacks the canonical immediate predecessor relation"
+            )
+
+
+def _issue_pattern_evidence(
+    pattern: PatternVersion,
+    items: Sequence[PatternConstituent],
+    *,
+    supplied_time: datetime | None,
+    prior: PatternEvidence | None,
+) -> PatternEvidence:
+    """Evaluator-owned issuance: the only path that creates attested evidence.
+
+    The inputs are the frozen definition, the exact validated paired constituents, the
+    evaluation boundary time and the typed prior evidence state.  The span, axis fold,
+    equation, direction, validity, timestamps, lineage, revision link and fingerprint
+    material are all recomputed here; no caller-selected output material is accepted.
+    """
+
     span = _span(items, pattern.bar_cardinality)
     first = items[0]
     trust, authority, resource, lifecycle = _pair_fold(items)
@@ -839,6 +1122,14 @@ def evaluate_pattern(
     lineage = tuple(item.sample.fingerprint for item in items)
     sample_lineage = lineage
     authority_lineage = tuple(item.authority.fingerprint for item in items)
+    constituent_revisions = tuple(item.candle.revision for item in items)
+    if prior is not None:
+        _require_immediate_predecessor(pattern, items, span, prior)
+        revision = prior.revision + 1
+        predecessor = prior.fingerprint
+    else:
+        revision = 0
+        predecessor = None
 
     def build(
         match_state: PatternMatchState,
@@ -846,45 +1137,53 @@ def evaluate_pattern(
         validity: PatternValidity,
         reason: str,
     ) -> PatternEvidence:
-        return PatternEvidence._from_evaluator(
-            pattern=pattern,
-            match_state=match_state,
-            direction=direction,
-            validity=validity,
-            reason=reason,
-            source_id=first.sample.source_id,
-            contract_id=first.sample.contract_id,
-            environment=first.sample.environment,
-            generation_fingerprint=first.sample.generation_fingerprint,
-            timeframe_fingerprint=first.timeframe.fingerprint,
-            timeframe_version=first.timeframe.version,
-            timeframe_duration_seconds=first.timeframe.duration_seconds,
-            window_start=span.window_start,
-            window_end=span.window_end,
-            event_time=span.event_time,
-            knowledge_time=span.knowledge_time,
-            wall_receive_time=span.wall_receive_time,
-            evaluation_boundary=span.boundary,
-            lineage=lineage,
-            sample_lineage=sample_lineage,
-            authority_lineage=authority_lineage,
-            market_state_trust=trust,
-            data_authority_state=authority,
-            resource_restriction=resource,
-            lifecycle_restriction=lifecycle,
-            revision=revision,
-            predecessor_evidence_fingerprint=predecessor_evidence_fingerprint,
-        )
+        instance = object.__new__(PatternEvidence)
+        for name, value in (
+            ("pattern", pattern),
+            ("match_state", match_state),
+            ("direction", direction),
+            ("validity", validity),
+            ("reason", reason),
+            ("source_id", first.sample.source_id),
+            ("contract_id", first.sample.contract_id),
+            ("environment", first.sample.environment),
+            ("generation_fingerprint", first.sample.generation_fingerprint),
+            ("timeframe_fingerprint", first.timeframe.fingerprint),
+            ("timeframe_version", first.timeframe.version),
+            ("timeframe_duration_seconds", first.timeframe.duration_seconds),
+            ("window_start", span.window_start),
+            ("window_end", span.window_end),
+            ("event_time", span.event_time),
+            ("knowledge_time", span.knowledge_time),
+            ("wall_receive_time", span.wall_receive_time),
+            ("evaluation_boundary", span.boundary),
+            ("lineage", lineage),
+            ("constituent_revisions", constituent_revisions),
+            ("sample_lineage", sample_lineage),
+            ("authority_lineage", authority_lineage),
+            ("market_state_trust", trust),
+            ("data_authority_state", authority),
+            ("resource_restriction", resource),
+            ("lifecycle_restriction", lifecycle),
+            ("revision", revision),
+            ("predecessor_evidence_fingerprint", predecessor),
+            ("_attestation", None),
+        ):
+            object.__setattr__(instance, name, value)
+        instance._validate_material()
+        object.__setattr__(instance, "_attestation", _evidence_seal(instance))
+        if prior is not None and _transition_material(instance) == _transition_material(prior):
+            raise PatternEvaluationError("revision request carries no behavior or evidence change")
+        return instance
 
     def indeterminate(validity: PatternValidity, reason: str) -> PatternEvidence:
         return build(PatternMatchState.INDETERMINATE, PatternDirection.UNKNOWN, validity, reason)
 
-    supplied = _utc(evaluation_time, "evaluation time") if evaluation_time is not None else None
     if span.validity is not None:
         validity = span.validity
         if validity is PatternValidity.WARMUP:
             boundary_for_maturity = span.expected_end
-            if supplied is not None and supplied >= boundary_for_maturity:
+            if supplied_time is not None and supplied_time >= boundary_for_maturity:
                 validity = PatternValidity.UNKNOWN
                 reason = "REQUIRED_CLOSED_CONSTITUENT_UNAVAILABLE"
             else:
@@ -892,7 +1191,7 @@ def evaluate_pattern(
         else:
             reason = span.reason
         return indeterminate(validity, reason)
-    if supplied is not None and supplied < span.boundary:
+    if supplied_time is not None and supplied_time < span.boundary:
         # Before the canonical boundary MATCHED and NOT_MATCHED are forbidden.
         return indeterminate(PatternValidity.WARMUP, "PRE_CANONICAL_BOUNDARY")
     if trust in {
@@ -918,13 +1217,48 @@ def evaluate_pattern(
     return build(match_state, direction, validity, reason)
 
 
-def canonical_evidence_order(
-    evidences: Iterable[PatternEvidence],
-) -> tuple[PatternEvidence, ...]:
+def evaluate_pattern(
+    pattern: PatternVersion,
+    constituents: Iterable[PatternConstituent],
+    *,
+    evaluation_time: datetime | None = None,
+    state: PatternEvaluationState | None = None,
+) -> PatternEvidence:
+    """Evaluate one frozen pattern over its exact ordered paired constituents.
+
+    The revision and the predecessor fingerprint are never caller-selected.  When a
+    typed ``state`` is supplied the revision is derived as ``head.revision + 1`` and the
+    predecessor as ``head.fingerprint``; otherwise the result is the initial revision
+    ``0`` with no predecessor.
+    """
+
+    if not isinstance(pattern, PatternVersion):
+        raise PatternEvaluationError("PatternVersion is required")
+    if state is not None and not isinstance(state, PatternEvaluationState):
+        raise PatternEvaluationError("typed PatternEvaluationState is required")
+    items = tuple(constituents)
+    if not items:
+        raise PatternEvaluationError("at least one constituent is required")
+    for item in items:
+        if not isinstance(item, PatternConstituent):
+            raise PatternEvaluationError("evaluator input must be paired constituents")
+    return _issue_pattern_evidence(
+        pattern,
+        items,
+        supplied_time=_utc(evaluation_time, "evaluation time")
+        if evaluation_time is not None
+        else None,
+        prior=state.head if state is not None else None,
+    )
+
+
+def canonical_evidence_order(evidences: Iterable[PatternEvidence]) -> tuple[PatternEvidence, ...]:
     """Deterministic sequence ordering; it grants no rank or authority.
 
     Sequence is by timeframe ``duration_seconds`` ascending, then ``window_end``,
-    ``pattern_id``, ``definition_version`` and evidence fingerprint ascending.
+    ``pattern_id``, ``definition_version`` and evidence fingerprint ascending.  Only
+    evaluator-issued evidence is accepted, so tampered or copy-reconstructed material is
+    rejected at the ordering boundary.
     """
 
     def key(item: PatternEvidence) -> tuple[int, str, str, int, str]:
@@ -936,7 +1270,11 @@ def canonical_evidence_order(
             item.fingerprint,
         )
 
-    return tuple(sorted(evidences, key=key))
+    ordered = tuple(sorted(evidences, key=key))
+    for item in ordered:
+        if not isinstance(item, PatternEvidence) or not item._is_attested():
+            raise PatternEvaluationError("canonical sequence requires evaluator-issued evidence")
+    return ordered
 
 
 def evaluate_patterns(
@@ -944,27 +1282,30 @@ def evaluate_patterns(
     constituents: Iterable[PatternConstituent],
     *,
     evaluation_time: datetime | None = None,
-    predecessor_evidence_fingerprints: Mapping[str, str] | None = None,
-    revisions: Mapping[str, int] | None = None,
+    states: Mapping[str, PatternEvaluationState] | None = None,
 ) -> tuple[PatternEvidence, ...]:
     """Evaluate several patterns over the same paired constituents.
 
     Different pattern IDs are retained independently: no winner, suppression,
-    score, ranking or trade preference is applied.
+    score, ranking or trade preference is applied.  Revisions use the same typed
+    ``PatternEvaluationState`` chain mechanism as ``evaluate_pattern``; raw predecessor
+    hashes or revision numbers are not accepted.
     """
 
     items = tuple(constituents)
-    predecessors: dict[str, str] = dict(predecessor_evidence_fingerprints or {})
-    revision_map: dict[str, int] = dict(revisions or {})
+    versions = tuple(patterns)
+    chain: dict[str, PatternEvaluationState] = dict(states or {})
+    unknown = sorted(set(chain) - {item.canonical_id for item in versions})
+    if unknown:
+        raise PatternEvaluationError("chain state is outside the evaluated patterns")
     evidences = [
         evaluate_pattern(
             pattern,
             items,
             evaluation_time=evaluation_time,
-            revision=revision_map.get(pattern.canonical_id, 0),
-            predecessor_evidence_fingerprint=predecessors.get(pattern.canonical_id),
+            state=chain.get(pattern.canonical_id),
         )
-        for pattern in patterns
+        for pattern in versions
     ]
     return canonical_evidence_order(evidences)
 
@@ -983,6 +1324,7 @@ __all__ = [
     "PatternDirection",
     "PatternError",
     "PatternEvaluationError",
+    "PatternEvaluationState",
     "PatternEvidence",
     "PatternMatchState",
     "PatternRegistry",
