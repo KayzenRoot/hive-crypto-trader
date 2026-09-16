@@ -1,15 +1,15 @@
 # Checkpoint
 
-Checkpoint ID: `HCT-CP-0033`
-Status: `IMPLEMENTATION_AUTHORIZED_S2A`
+Checkpoint ID: `HCT-CP-0034`
+Status: `S2A_IMPLEMENTATION_APPROVED_MERGED`
 Canonical branch: `main`
 Risk class: `HIGH_ASSURANCE`
 Functional product planning: `FROZEN`
 Planning Freeze checkpoint: `HCT-CP-0014 / PLANNING_FREEZE_APPROVED`
-Completed implementation slices: `HCT-IMP-0001-S0A`, `HCT-IMP-0002-S0B`, `HCT-IMP-0003-S0C`, `HCT-IMP-0004-S1A`, `HCT-IMP-0005-S1B`, `HCT-IMP-0006-S1C`, `HCT-IMP-0007-S1D`, `HCT-IMP-0008-S1E`, `HCT-IMP-0010-S1F`
-Current implementation authorization: `HCT-IMP-0009-S2A`
-Implementation authorization scope: `[HCT-IMP-0009-S2A]`
-Implementation authorization ceiling: `NON_TRADING_STAGE_2_DETERMINISTIC_FEATURE_INDICATOR_FOUNDATION_ONLY`
+Completed implementation slices: `HCT-IMP-0001-S0A`, `HCT-IMP-0002-S0B`, `HCT-IMP-0003-S0C`, `HCT-IMP-0004-S1A`, `HCT-IMP-0005-S1B`, `HCT-IMP-0006-S1C`, `HCT-IMP-0007-S1D`, `HCT-IMP-0008-S1E`, `HCT-IMP-0010-S1F`, `HCT-IMP-0009-S2A`
+Current implementation authorization: `NONE`
+Implementation authorization scope: `[]`
+Implementation authorization ceiling: `NONE_PENDING_NEXT_GOVERNED_AUTHORIZATION`
 
 ## Current canonical authority
 R12 Planning Freeze remains approved and authoritative. The frozen composite requirements baseline remains governed by `docs/99-r12-frozen-requirements-baseline.md`, `docs/100-r12-requirements-traceability-and-no-loss-proof.md`, the exact nine requirement source blobs recorded by that baseline, and `docs/101-r12-freeze-governance-change-control-and-deferred-decisions.md`.
@@ -24,7 +24,7 @@ Completed and independently approved implementation slices are:
 - `HCT-IMP-0007-S1D - Quota/WebSocket Backpressure Governor Foundation`;
 - `HCT-IMP-0008-S1E - Market Truth Foundation`.
 
-`HCT-CP-0028` records the approved and merged completion of `HCT-IMP-0007-S1D`. `HCT-CP-0029` recorded the separate S1E implementation authorization. `HCT-CP-0030` records the approved and merged completion of `HCT-IMP-0008-S1E`. `HCT-CP-0031` authorized the bounded S1F implementation slice. `HCT-CP-0032` records the independently approved and merged completion of `HCT-IMP-0010-S1F`, consumes that implementation authority and leaves no implementation slice active. `HCT-CP-0033` records the expected-head merge and independent approval of `HCT-IMPL-AUTH-0009`, and authorizes only `HCT-IMP-0009-S2A` under the non-trading Stage-2 deterministic feature/indicator foundation ceiling.
+`HCT-CP-0028` records the approved and merged completion of `HCT-IMP-0007-S1D`. `HCT-CP-0029` recorded the separate S1E implementation authorization. `HCT-CP-0030` records the approved and merged completion of `HCT-IMP-0008-S1E`. `HCT-CP-0031` authorized the bounded S1F implementation slice. `HCT-CP-0032` records the independently approved and merged completion of `HCT-IMP-0010-S1F`, consumes that implementation authority and leaves no implementation slice active. `HCT-CP-0033` records the expected-head merge and independent approval of `HCT-IMPL-AUTH-0009`, and authorized only `HCT-IMP-0009-S2A` under the non-trading Stage-2 deterministic feature/indicator foundation ceiling. `HCT-CP-0034` records the independently approved and expected-head merged completion of `HCT-IMP-0009-S2A`, consumes the CP0033 implementation authorization and leaves no implementation slice active.
 
 ## S2A implementation authorization provenance
 Authorization Issue: `#68`
@@ -60,6 +60,50 @@ CP0033 authorizes exactly one implementation increment:
 - `live_trading_authorized=false`.
 
 The next necessary action is a fresh S2A Context Lock against the exact post-CP0033 canonical main, followed by implementation of only `HCT-IMP-0009-S2A`. The implementation PR must remain OPEN and UNMERGED for fresh independent HIGH_ASSURANCE review. No Module 9/patterns, regime, scanner, strategy/signal, Brain, Risk, Safety, Session Policy, OMS, Execution, credentials, private APIs, persistence, deployment, limited-live or live-trading work is authorized.
+
+## S2A implementation completion provenance
+Implementation Issue: none separately created (`implementation_issue_status=NOT_SEPARATELY_CREATED_HISTORICAL_PROCESS_GAP`)
+Implementation PR: `#74`
+
+Authorized execution base:
+`fecb97b6c9513a6dc0114d22c5e3768017411157`
+
+Exact independently approved implementation head:
+`40e67302fb80e329429be50430584ff9523a12a0`
+
+Governed implementation merge commit:
+`c862e5670465ef0f8d0c77dce163a1ece7c92ac4`
+
+The GitHub HIGH_ASSURANCE independent review receipt is bound to the exact implementation head. Receipt: `5220668487`; verdict: `APPROVED`; unresolved CRITICAL: `0`; unresolved HIGH: `0`; IMP-H001 through IMP-H008: `CLOSED`. The author-side receipt `5691561866` remains `NOT_INDEPENDENT_APPROVAL` and is not relabeled as independent approval. Historical review `5217999812` is superseded and non-authoritative; correction review `5218038625` records the prior head `84bc7fca2be1fc262e460e0e2fb8848d46e1e888`.
+
+Governance acceptance evidence:
+- PR #74 comment `5695052049`.
+
+Exact hosted implementation evidence:
+- workflow: `HCT-IMP-0009-S2A Deterministic Feature Foundation`;
+- run: `35051274810`;
+- check/job: `s2a-quality / 104651988749`;
+- exact head: `40e67302fb80e329429be50430584ff9523a12a0`;
+- event: `pull_request`;
+- result: `completed / success`;
+- backend: `391 passed`, global coverage `90.32%`;
+- focused S2A tests: `90 passed`;
+- changed-file boundary: exactly `8` authorized S2A paths.
+
+Full approval/promotion record: `docs/135-s2a-implementation-approval-and-checkpoint-promotion.md`.
+
+## HCT-CP-0034 authority reset
+`HCT-CP-0034` consumes the CP0033 implementation authorization and authorizes no further implementation increment:
+
+- `implementation_authorized=false`;
+- `implementation_authorization_scope=[]`;
+- `implementation_authorization_ceiling=NONE_PENDING_NEXT_GOVERNED_AUTHORIZATION`;
+- `production_credentials_authorized=false`;
+- `production_deployment_authorized=false`;
+- `limited_live_authorized=false`;
+- `live_trading_authorized=false`.
+
+Any next Stage-2 increment requires its own bounded governance candidate, exact-head governance CI and a fresh independent HIGH_ASSURANCE review before any authorization or implementation.
 
 ## S1E implementation authorization provenance
 Authorization Issue: `#64`
@@ -270,7 +314,7 @@ The following remain blocked:
 Frozen R11 Stage 1 orders:
 `Exchange Abstraction + MEXC adapter -> capability/rule resolver -> universe -> quota/WS governor -> market ingest/quality/Market-State/cache`.
 
-S1A, S1B, S1C, S1D, S1E and S1F are complete. S1F completion is recorded by `HCT-CP-0032`; `HCT-CP-0033` authorizes only `HCT-IMP-0009-S2A` under a non-trading deterministic feature/indicator foundation ceiling. Production credentials, private APIs, persistence, deployment, limited-live and live trading remain forbidden by this checkpoint.
+S1A, S1B, S1C, S1D, S1E, S1F and S2A are complete. S1F completion is recorded by `HCT-CP-0032`. `HCT-CP-0033` authorized only `HCT-IMP-0009-S2A` under a non-trading deterministic feature/indicator foundation ceiling, and `HCT-CP-0034` records the independently approved and merged completion of that increment, consuming the implementation authority. The frozen R11 Stage-2 order places features/indicators/patterns before regime, scanner, strategy/catalog/signal and minimum microstructure, so the next candidate dependency is a bounded Module 9 candlestick and chart pattern foundation, which remains unauthorized pending its own governance candidate and a fresh independent HIGH_ASSURANCE review. Production credentials, private APIs, persistence, deployment, limited-live and live trading remain forbidden by this checkpoint.
 
 ## Prior completion provenance
 S1D is completed under `HCT-CP-0028 / S1D_IMPLEMENTATION_APPROVED_MERGED`, approval record `docs/126-s1d-implementation-approval-and-checkpoint-promotion.md`.
@@ -293,7 +337,7 @@ Planning Freeze remains approved through `HCT-CP-0014`, with frozen source ident
 Historical S0A-S1A workflows contain old whole-tree/path/base assumptions and may fail when later authorized backend paths trigger them. This remains a separate CI-maintenance concern. S1D implementation evidence must execute required prior-stage regressions directly rather than treating those historical workflow statuses as substitute proof.
 
 ## Next necessary action
-Capture a fresh S2A Context Lock against the exact post-CP0033 canonical main, then implement only `HCT-IMP-0009-S2A` from a new bounded implementation branch. Stop with the implementation PR OPEN and UNMERGED after fresh exact-head CI and a complete Evidence Bundle, requiring a fresh independent HIGH_ASSURANCE review before implementation merge or any later stage. Do not implement later modules, add credentials/private APIs/persistence/deployment, activate limited-live or trade.
+Prepare only the bounded S2B candlestick and chart pattern governance candidate `HCT-IMPL-AUTH-0011` / `HCT-IMP-0011-S2B` against the exact post-CP0034 canonical main, keeping it to the four governance files, with exact-head governance CI and a fresh independent HIGH_ASSURANCE review before any S2B authorization or implementation. No S2B runtime implementation, later module, credentials, private APIs, persistence, deployment, limited-live or live trading is authorized.
 
 ## Global chat and prompt delivery policy
 All HCT chats and executor/reviewer handoffs SHALL follow `docs/104-chat-delivery-and-prompt-artifact-policy.md`.
